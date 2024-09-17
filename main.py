@@ -20,19 +20,24 @@ class DisplayTrains(SampleBase):
         self.trains = trains
         self.stop_id = stop_id
         self.font = graphics.Font()
-        self.font.LoadFont("./fonts/7x13.bdf")
+        # self.font.LoadFont("./fonts/7x13.bdf")
+        self.font.LoadFont("./fonts/helvR12.bdf")
 
-    def draw_circle(self, canvas, x, y, color):
+    def draw_filled_circle(self, canvas, x, y, color):
         # Draw circle with lines
-        graphics.DrawLine(canvas, x + 2, y + 0, x + 6, y + 0, color)
-        graphics.DrawLine(canvas, x + 1, y + 1, x + 7, y + 1, color)
-        graphics.DrawLine(canvas, x + 0, y + 2, x + 8, y + 2, color)
-        graphics.DrawLine(canvas, x + 0, y + 3, x + 8, y + 3, color)
-        graphics.DrawLine(canvas, x + 0, y + 4, x + 8, y + 4, color)
-        graphics.DrawLine(canvas, x + 0, y + 5, x + 8, y + 5, color)
-        graphics.DrawLine(canvas, x + 0, y + 6, x + 8, y + 6, color)
-        graphics.DrawLine(canvas, x + 1, y + 7, x + 7, y + 7, color)
-        graphics.DrawLine(canvas, x + 2, y + 8, x + 6, y + 8, color)
+        graphics.DrawLine(canvas, x - 2, y - 6, x + 2, y - 6, color)
+        graphics.DrawLine(canvas, x - 3, y - 5, x + 3, y - 5, color)
+        graphics.DrawLine(canvas, x - 4, y - 4, x + 4, y - 4, color)
+        graphics.DrawLine(canvas, x - 5, y - 3, x + 5, y - 3, color)
+        graphics.DrawLine(canvas, x - 6, y - 2, x + 6, y - 2, color)
+        graphics.DrawLine(canvas, x - 6, y - 1, x + 6, y - 1, color)
+        graphics.DrawLine(canvas, x - 6, y, x + 6, y, color)
+        graphics.DrawLine(canvas, x - 6, y + 1, x + 6, y + 1, color)
+        graphics.DrawLine(canvas, x - 6, y + 2, x + 6, y + 2, color)
+        graphics.DrawLine(canvas, x - 5, y + 3, x + 5, y + 3, color)
+        graphics.DrawLine(canvas, x - 4, y + 4, x + 4, y + 4, color)
+        graphics.DrawLine(canvas, x - 3, y + 5, x + 3, y + 5, color)
+        graphics.DrawLine(canvas, x - 2, y + 6, x + 2, y + 6, color)
 
     def draw_row(self,
                  row_ind,
@@ -43,18 +48,21 @@ class DisplayTrains(SampleBase):
                  arrival_mins):
         # Top line
         if row_ind == 0:
-            circle_y = 3
-            text_y = 11
+            circle_y = 7
+            text_y = 12
         else:
             # Bottom line
-            circle_y = 19
-            text_y = 27
+            circle_y = 23
+            text_y = 28
 
-        self.draw_circle(self.matrix, 2, circle_y, circle_colour)
-        graphics.DrawText(self.matrix, self.font, 5, text_y, graphics.Color(0, 0, 0), route_id)
-        graphics.DrawText(self.matrix, self.font, 14, text_y, text_colour, headsign_text)
-        graphics.DrawText(self.matrix, self.font, 147, text_y, text_colour, str(arrival_mins))
-        graphics.DrawText(self.matrix, self.font, 164, text_y, text_colour, "min")
+        graphics.DrawText(self.matrix, self.font, 2, text_y, text_colour, f'{row_ind+1}')
+        graphics.DrawText(self.matrix, self.font, 8, text_y, text_colour, f'.')
+        # graphics.DrawCircle(self.matrix, 18, circle_y, 7, circle_colour)
+        self.draw_filled_circle(self.matrix, 18, circle_y, circle_colour)
+        graphics.DrawText(self.matrix, self.font, 14, text_y, graphics.Color(0, 0, 0), route_id)
+        graphics.DrawText(self.matrix, self.font, 26, text_y, text_colour, headsign_text)
+        graphics.DrawText(self.matrix, self.font, 156, text_y, text_colour, f'{arrival_mins:2d}')
+        graphics.DrawText(self.matrix, self.font, 169, text_y, text_colour, "min")
 
     def draw_train(self, row_ind):
         train = self.trains[row_ind]
@@ -131,8 +139,8 @@ def main():
     r_trains = get_next_trains(stop_id='R33N')
     display_trains(r_trains, stop_id='R33N')
 
-    # led_display_trains = DisplayTrains(fg_trains, 'F23N')
-    led_display_trains = DisplayTrains(r_trains, 'R33N')
+    led_display_trains = DisplayTrains(fg_trains, 'F23N')
+    # led_display_trains = DisplayTrains(r_trains, 'R33N')
     led_display_trains.process()
 
     pass
