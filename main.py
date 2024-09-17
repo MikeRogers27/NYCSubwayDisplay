@@ -14,11 +14,10 @@ NOW = datetime.now()
 
 
 class DisplayTrains(SampleBase):
-    def __init__(self, trains, stop_id, *args, **kwargs):
+    def __init__(self, stop_ids, *args, **kwargs):
         super(DisplayTrains, self).__init__(*args, **kwargs)
 
-        self.trains = trains
-        self.stop_id = stop_id
+        self.stop_ids = stop_ids
         self.font = graphics.Font()
         # self.font.LoadFont("./fonts/7x13.bdf")
         self.font.LoadFont("./fonts/helvR12.bdf")
@@ -40,6 +39,7 @@ class DisplayTrains(SampleBase):
         graphics.DrawLine(canvas, x - 2, y + 6, x + 2, y + 6, color)
 
     def draw_row(self,
+                 canvas,
                  row_ind,
                  text_colour,
                  circle_colour,
@@ -55,20 +55,21 @@ class DisplayTrains(SampleBase):
             circle_y = 23
             text_y = 28
 
-        graphics.DrawText(self.matrix, self.font, 2, text_y, text_colour, f'{row_ind+1}')
-        graphics.DrawText(self.matrix, self.font, 8, text_y, text_colour, f'.')
-        # graphics.DrawCircle(self.matrix, 18, circle_y, 7, circle_colour)
-        self.draw_filled_circle(self.matrix, 18, circle_y, circle_colour)
-        graphics.DrawText(self.matrix, self.font, 14, text_y, graphics.Color(0, 0, 0), route_id)
-        graphics.DrawText(self.matrix, self.font, 26, text_y, text_colour, headsign_text)
-        graphics.DrawText(self.matrix, self.font, 156, text_y, text_colour, f'{arrival_mins:2d}')
-        graphics.DrawText(self.matrix, self.font, 169, text_y, text_colour, "min")
+        route_id_offset = 4
+        if route_id == 'G':
+            route_id_offset = 5
 
-    def draw_train(self, row_ind):
-        train = self.trains[row_ind]
-        t = arrival_time(train, self.stop_id)
-        tdelta = t - NOW
-        arrival_mins = max(int(tdelta.total_seconds() // 60), 0)
+        graphics.DrawText(canvas, self.font, 2, text_y, text_colour, f'{row_ind+1}')
+        graphics.DrawText(canvas, self.font, 8, text_y, text_colour, f'.')
+        # graphics.DrawCircle(canvas, 18, circle_y, 7, circle_colour)
+        self.draw_filled_circle(canvas, 18, circle_y, circle_colour)
+        graphics.DrawText(canvas, self.font, 18 - route_id_offset, text_y, graphics.Color(0, 0, 0), route_id)
+        graphics.DrawText(canvas, self.font, 26, text_y, text_colour, headsign_text)
+        graphics.DrawText(canvas, self.font, 156, text_y, text_colour, f'{arrival_mins:2d}')
+        graphics.DrawText(canvas, self.font, 169, text_y, text_colour, "min")
+
+    def draw_train(self, row_ind, train, stop_id, canvas):
+        arrival_mins = arrival_minutes(train, stop_id)
         text_color = graphics.Color(0, 110, 0)
         if arrival_mins <= 0:
             text_color = graphics.Color(255, 66, 25)
@@ -83,18 +84,27 @@ class DisplayTrains(SampleBase):
         else:
             circle_color = graphics.Color(252, 204, 10)
 
-        self.draw_row(row_ind=row_ind,
+        self.draw_row(canvas,
+                      row_ind=row_ind,
                       text_colour=text_color,
                       circle_colour=circle_color,
                       route_id=train.route_id,
                       headsign_text=train.headsign_text,
                       arrival_mins=arrival_mins)
 
-    def run(self):
-        self.draw_train(0)
-        self.draw_train(1)
+    def draw_trains(self, trains, stop_id):
+        canvas = self.matrix.CreateFrameCanvas()
+        canvas.Clear()
+        self.draw_train(0, trains[0], stop_id, canvas)
+        self.draw_train(1, trains[1], stop_id, canvas)
+        canvas = self.matrix.SwapOnVSync(canvas)
 
-        time.sleep(10)  # show display for 10 seconds before exit
+    def run(self):
+        while True:
+            for stop_id in self.stop_ids:
+                trains = get_next_trains(stop_id=stop_id)
+                self.draw_trains(trains, stop_id)
+                time.sleep(10)  # show display for 10 seconds before exit
 
 
 def arrival_time(train, stop_id):
@@ -102,6 +112,13 @@ def arrival_time(train, stop_id):
         return datetime(9999, 1, 1, 0, 0, 0)
     return next((stu.arrival for stu in train.stop_time_updates
                  if stu.stop_id == stop_id), datetime(9999, 1, 1, 0, 0, 0))
+
+
+def arrival_minutes(train, stop_id):
+    t = arrival_time(train, stop_id)
+    tdelta = t - NOW
+    arrival_mins = max(round(tdelta.total_seconds() / 60), 0)
+    return arrival_mins
 
 
 def find_next_trains(trains, num_trains, stop_id):
@@ -124,10 +141,8 @@ def get_next_trains(
 
 def display_trains(trains, stop_id):
     for i, train in enumerate(trains):
-        t = arrival_time(train, stop_id)
-        tdelta = t - NOW
-        arrival_mins = max(int(tdelta.total_seconds() // 60), 0)
-        print(f'{i + 1}. {train.route_id} {train.headsign_text: <20s} {arrival_mins:2d}min {t}')
+        arrival_mins = arrival_minutes(train, stop_id)
+        print(f'{i + 1}. {train.route_id} {train.headsign_text: <20s} {arrival_mins:2d}min')
     print()
 
 
@@ -139,8 +154,7 @@ def main():
     r_trains = get_next_trains(stop_id='R33N')
     display_trains(r_trains, stop_id='R33N')
 
-    led_display_trains = DisplayTrains(fg_trains, 'F23N')
-    # led_display_trains = DisplayTrains(r_trains, 'R33N')
+    led_display_trains = DisplayTrains(['F23N', 'R33N'])
     led_display_trains.process()
 
     pass
