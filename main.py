@@ -147,6 +147,9 @@ def display_trains(trains, stop_id):
 
 
 def main():
+    # stop_id reference here:
+    # https://openmobilitydata-data.s3-us-west-1.amazonaws.com/public/feeds/mta/79/20240103/original/stops.txt
+
     # Load the realtime feed from the MTA site
     fg_trains = get_next_trains(stop_id='F23N')
     display_trains(fg_trains, stop_id='F23N')
