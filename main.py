@@ -22,17 +22,17 @@ class DisplayTrains(SampleBase):
         self.font = graphics.Font()
         self.font.LoadFont("./fonts/7x13.bdf")
 
-    def draw_circle(self, canvas,  x, y, color):
+    def draw_circle(self, canvas, x, y, color):
         # Draw circle with lines
-        graphics.DrawLine(canvas, x+2, y+0, x+6, y+0, color)
-        graphics.DrawLine(canvas, x+1, y+1, x+7, y+1, color)
-        graphics.DrawLine(canvas, x+0, y+2, x+8, y+2, color)
-        graphics.DrawLine(canvas, x+0, y+3, x+8, y+3, color)
-        graphics.DrawLine(canvas, x+0, y+4, x+8, y+4, color)
-        graphics.DrawLine(canvas, x+0, y+5, x+8, y+5, color)
-        graphics.DrawLine(canvas, x+0, y+6, x+8, y+6, color)
-        graphics.DrawLine(canvas, x+1, y+7, x+7, y+7, color)
-        graphics.DrawLine(canvas, x+2, y+8, x+6, y+8, color)
+        graphics.DrawLine(canvas, x + 2, y + 0, x + 6, y + 0, color)
+        graphics.DrawLine(canvas, x + 1, y + 1, x + 7, y + 1, color)
+        graphics.DrawLine(canvas, x + 0, y + 2, x + 8, y + 2, color)
+        graphics.DrawLine(canvas, x + 0, y + 3, x + 8, y + 3, color)
+        graphics.DrawLine(canvas, x + 0, y + 4, x + 8, y + 4, color)
+        graphics.DrawLine(canvas, x + 0, y + 5, x + 8, y + 5, color)
+        graphics.DrawLine(canvas, x + 0, y + 6, x + 8, y + 6, color)
+        graphics.DrawLine(canvas, x + 1, y + 7, x + 7, y + 7, color)
+        graphics.DrawLine(canvas, x + 2, y + 8, x + 6, y + 8, color)
 
     def draw_row(self,
                  row_ind,
@@ -41,20 +41,20 @@ class DisplayTrains(SampleBase):
                  route_id,
                  headsign_text,
                  arrival_mins):
-      # Top line
-      if row_ind == 0:
-          circle_y = 3
-          text_y = 11
-      else:
-          # Bottom line
-          circle_y = 19
-          text_y = 27
+        # Top line
+        if row_ind == 0:
+            circle_y = 3
+            text_y = 11
+        else:
+            # Bottom line
+            circle_y = 19
+            text_y = 27
 
-      self.draw_circle(self.matrix, 2, circle_y, circle_colour)
-      graphics.DrawText(self.matrix, self.font, 5, text_y, graphics.Color(0, 0, 0), route_id)
-      graphics.DrawText(self.matrix, self.font, 14, text_y, text_colour, headsign_text)
-      graphics.DrawText(self.matrix, self.font, 147, text_y, text_colour, str(arrival_mins))
-      graphics.DrawText(self.matrix, self.font, 164, text_y, text_colour, "min")
+        self.draw_circle(self.matrix, 2, circle_y, circle_colour)
+        graphics.DrawText(self.matrix, self.font, 5, text_y, graphics.Color(0, 0, 0), route_id)
+        graphics.DrawText(self.matrix, self.font, 14, text_y, text_colour, headsign_text)
+        graphics.DrawText(self.matrix, self.font, 147, text_y, text_colour, str(arrival_mins))
+        graphics.DrawText(self.matrix, self.font, 164, text_y, text_colour, "min")
 
     def draw_train(self, row_ind):
         train = self.trains[row_ind]
@@ -86,18 +86,17 @@ class DisplayTrains(SampleBase):
         self.draw_train(0)
         self.draw_train(1)
 
-        time.sleep(10)   # show display for 10 seconds before exit
+        time.sleep(10)  # show display for 10 seconds before exit
 
 
 def arrival_time(train, stop_id):
     if train.location_status == 'STOPPED_AT' and train.location == stop_id:
         return datetime(9999, 1, 1, 0, 0, 0)
     return next((stu.arrival for stu in train.stop_time_updates
-         if stu.stop_id == stop_id), datetime(9999, 1, 1, 0, 0, 0))
+                 if stu.stop_id == stop_id), datetime(9999, 1, 1, 0, 0, 0))
 
 
 def find_next_trains(trains, num_trains, stop_id):
-
     arrival_times = [arrival_time(train, stop_id) for train in trains]
     train_order = sorted(range(len(arrival_times)), key=lambda k: arrival_times[k])
     return [trains[train_order[i]] for i in range(num_trains)]
@@ -116,12 +115,11 @@ def get_next_trains(
 
 
 def display_trains(trains, stop_id):
-
     for i, train in enumerate(trains):
         t = arrival_time(train, stop_id)
         tdelta = t - NOW
         arrival_mins = max(int(tdelta.total_seconds() // 60), 0)
-        print(f'{i+1}. {train.route_id} {train.headsign_text: <20s} {arrival_mins:2d}min {t}')
+        print(f'{i + 1}. {train.route_id} {train.headsign_text: <20s} {arrival_mins:2d}min {t}')
     print()
 
 
