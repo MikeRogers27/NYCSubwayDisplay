@@ -3,7 +3,7 @@ import time
 import sys
 import os
 
-from RGBMatrixEmulator import RGBMatrix, RGBMatrixOptions
+from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
 
 class SampleBase(object):
