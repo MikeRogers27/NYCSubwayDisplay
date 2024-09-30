@@ -138,8 +138,8 @@ class DisplayTrains(SampleBase):
     def draw_trains(self, trains, stop_id, canvas):
         if len(trains):
             self.draw_train(0, trains[0], stop_id, canvas)
-            # if len(trains) > 1:
-            #     self.draw_train(1, trains[1], stop_id, canvas)
+            if len(trains) > 1:
+                self.draw_train(1, trains[1], stop_id, canvas)
 
             return True, canvas
         else:
@@ -168,10 +168,12 @@ class DisplayTrains(SampleBase):
         canvas = self.matrix.CreateFrameCanvas()
         while True:
             canvas.Clear()
+            print('drawing')
             success, canvas = self.draw_trains(trains, self.stop_ids[0], canvas)
 
             time.sleep(0.05)
             canvas = self.matrix.SwapOnVSync(canvas)
+            print('sleeping')
             time.sleep(10.)
 
 
