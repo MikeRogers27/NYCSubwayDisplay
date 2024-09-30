@@ -149,7 +149,7 @@ class DisplayTrains(SampleBase):
         offscreen_canvas = self.matrix.CreateFrameCanvas()
         # font = graphics.Font()
         # font.LoadFont("../../../fonts/7x13.bdf")
-        textColor = graphics.Color(255, 255, 0)
+        textColor = graphics.Color(0, 255, 0)
         pos = 2  # offscreen_canvas.width
         my_text = 'Test Text'
 
