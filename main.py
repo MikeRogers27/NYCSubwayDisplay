@@ -122,23 +122,23 @@ class DisplayTrains(SampleBase):
                       direction=direction,
                       arrival_mins=arrival_mins)
 
-    def draw_trains(self, trains, stop_id):
-        canvas = self.matrix.CreateFrameCanvas()
+    def draw_trains(self, trains, stop_id, canvas):
         canvas.Clear()
         if len(trains):
             self.draw_train(0, trains[0], stop_id, canvas)
             if len(trains) > 1:
                 self.draw_train(1, trains[1], stop_id, canvas)
             canvas = self.matrix.SwapOnVSync(canvas)
-            return True
+            return True, canvas
         else:
-            return False
+            return False, canvas
 
     def run(self):
+        canvas = self.matrix.CreateFrameCanvas()
         while True:
             for stop_id in self.stop_ids:
                 trains = get_next_trains(stop_id=stop_id)
-                success = self.draw_trains(trains, stop_id)
+                success, canvas = self.draw_trains(trains, stop_id, canvas)
                 if success:
                     time.sleep(10)  # show display for 10 seconds before exit
 
@@ -199,6 +199,10 @@ def main():
     pass
 
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     main()
+
+    # cd ~/src/NYCSubwayDisplay/
+    # export PYTHONPATH=${PYTHONPATH}:${HOME}/src/rpi-rgb-led-matrix/bindings/python
+    # source ~/venv/NYCSubwayDisplay/bin/activate
+    # sudo PYTHONPATH=${PYTHONPATH} /home/pi/venv/NYCSubwayDisplay/bin/python main.py --led-gpio-mapping=adafruit-hat --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=50 --led-slowdown-gpio=2

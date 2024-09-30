@@ -56,7 +56,6 @@ class SampleBase(object):
         options.pixel_mapper_config = self.args.led_pixel_mapper
         options.panel_type = self.args.led_panel_type
 
-
         if self.args.led_show_refresh:
           options.show_refresh_rate = 1
 
