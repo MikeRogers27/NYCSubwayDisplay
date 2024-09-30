@@ -3,6 +3,7 @@ import time
 import sys
 import os
 
+# from RGBMatrixEmulator import RGBMatrix, RGBMatrixOptions
 from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
 
@@ -28,6 +29,7 @@ class SampleBase(object):
         self.parser.add_argument("--led-multiplexing", action="store", help="Multiplexing type: 0=direct; 1=strip; 2=checker; 3=spiral; 4=ZStripe; 5=ZnMirrorZStripe; 6=coreman; 7=Kaler2Scan; 8=ZStripeUneven... (Default: 0)", default=0, type=int)
         self.parser.add_argument("--led-panel-type", action="store", help="Needed to initialize special panels. Supported: 'FM6126A'", default="", type=str)
         self.parser.add_argument("--led-no-drop-privs", dest="drop_privileges", help="Don't drop privileges from 'root' after initializing the hardware.", action='store_false')
+        self.parser.add_argument("--led-limit-refresh", action="store", help="Hz. Default: 0", default=0, type=int)
         self.parser.set_defaults(drop_privileges=True)
 
     def usleep(self, value):
@@ -55,6 +57,7 @@ class SampleBase(object):
         options.led_rgb_sequence = self.args.led_rgb_sequence
         options.pixel_mapper_config = self.args.led_pixel_mapper
         options.panel_type = self.args.led_panel_type
+        options.limit_refresh_rate_hz = self.args.led_limit_refresh
 
         if self.args.led_show_refresh:
           options.show_refresh_rate = 1
