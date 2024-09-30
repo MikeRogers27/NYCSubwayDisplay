@@ -162,6 +162,7 @@ class DisplayTrains(SampleBase):
 
             time.sleep(0.05)
             offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
+            time.sleep(100.)
 
         # trains = get_next_trains(stop_id=self.stop_ids[0])
         # canvas = self.matrix.CreateFrameCanvas()
