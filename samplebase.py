@@ -1,10 +1,15 @@
 import argparse
+import importlib
+import os
 import time
 import sys
-import os
 
-# from RGBMatrixEmulator import RGBMatrix, RGBMatrixOptions
-from rgbmatrix import RGBMatrix, RGBMatrixOptions
+if os.name == 'nt':
+    RGBMatrix = getattr(importlib.import_module('RGBMatrixEmulator'), 'RGBMatrix')
+    RGBMatrixOptions = getattr(importlib.import_module('RGBMatrixEmulator'), 'RGBMatrixOptions')
+else:
+    RGBMatrix = getattr(importlib.import_module('rgbmatrix'), 'RGBMatrix')
+    RGBMatrixOptions = getattr(importlib.import_module('rgbmatrix'), 'RGBMatrixOptions')
 
 
 class SampleBase(object):
@@ -57,7 +62,8 @@ class SampleBase(object):
         options.led_rgb_sequence = self.args.led_rgb_sequence
         options.pixel_mapper_config = self.args.led_pixel_mapper
         options.panel_type = self.args.led_panel_type
-        options.limit_refresh_rate_hz = self.args.led_limit_refresh
+        if os.name != 'nt':
+            options.limit_refresh_rate_hz = self.args.led_limit_refresh
 
         if self.args.led_show_refresh:
           options.show_refresh_rate = 1

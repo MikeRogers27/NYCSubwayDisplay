@@ -1,9 +1,14 @@
 from datetime import datetime
+import importlib
+import os
 import time
 
 from nyct_gtfs import NYCTFeed
-# from RGBMatrixEmulator import graphics
-from rgbmatrix import graphics
+
+if os.name == 'nt':
+    graphics = importlib.import_module('RGBMatrixEmulator', 'graphics')
+else:
+    graphics = importlib.import_module('rgbmatrix', 'graphics')
 
 from samplebase import SampleBase
 
@@ -27,6 +32,7 @@ class DisplayTrains(SampleBase):
         self.circle_font.LoadFont('./fonts/6x10.bdf')
 
     def draw_filled_circle(self, canvas, x, y, color):
+        pass
         # # Draw circle with lines
         # graphics.DrawLine(canvas, x - 2, y - 6, x + 2, y - 6, color)
         # graphics.DrawLine(canvas, x - 3, y - 5, x + 3, y - 5, color)
@@ -42,18 +48,18 @@ class DisplayTrains(SampleBase):
         # graphics.DrawLine(canvas, x - 3, y + 5, x + 3, y + 5, color)
         # graphics.DrawLine(canvas, x - 2, y + 6, x + 2, y + 6, color)
 
-        # Draw circle with lines
-        graphics.DrawLine(canvas, x - 2, y - 5, x + 2, y - 5, color)
-        graphics.DrawLine(canvas, x - 3, y - 4, x + 3, y - 4, color)
-        graphics.DrawLine(canvas, x - 4, y - 3, x + 4, y - 3, color)
-        graphics.DrawLine(canvas, x - 5, y - 2, x + 5, y - 2, color)
-        graphics.DrawLine(canvas, x - 5, y - 1, x + 5, y - 1, color)
-        graphics.DrawLine(canvas, x - 5, y, x + 5, y, color)
-        graphics.DrawLine(canvas, x - 5, y + 1, x + 5, y + 1, color)
-        graphics.DrawLine(canvas, x - 5, y + 2, x + 5, y + 2, color)
-        graphics.DrawLine(canvas, x - 4, y + 3, x + 4, y + 3, color)
-        graphics.DrawLine(canvas, x - 3, y + 4, x + 3, y + 4, color)
-        graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
+        # # Draw circle with lines
+        # graphics.DrawLine(canvas, x - 2, y - 5, x + 2, y - 5, color)
+        # graphics.DrawLine(canvas, x - 3, y - 4, x + 3, y - 4, color)
+        # graphics.DrawLine(canvas, x - 4, y - 3, x + 4, y - 3, color)
+        # graphics.DrawLine(canvas, x - 5, y - 2, x + 5, y - 2, color)
+        # graphics.DrawLine(canvas, x - 5, y - 1, x + 5, y - 1, color)
+        # graphics.DrawLine(canvas, x - 5, y, x + 5, y, color)
+        # graphics.DrawLine(canvas, x - 5, y + 1, x + 5, y + 1, color)
+        # graphics.DrawLine(canvas, x - 5, y + 2, x + 5, y + 2, color)
+        # graphics.DrawLine(canvas, x - 4, y + 3, x + 4, y + 3, color)
+        # graphics.DrawLine(canvas, x - 3, y + 4, x + 3, y + 4, color)
+        # graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
 
     def draw_row(self,
                  canvas,
@@ -186,12 +192,12 @@ def main():
     # stop_id reference here:
     # https://openmobilitydata-data.s3-us-west-1.amazonaws.com/public/feeds/mta/79/20240103/original/stops.txt
 
-    # Load the realtime feed from the MTA site
-    fg_trains = get_next_trains(stop_id='F23N')
-    display_trains(fg_trains, stop_id='F23N')
-
-    r_trains = get_next_trains(stop_id='R33N')
-    display_trains(r_trains, stop_id='R33N')
+    # # Load the realtime feed from the MTA site
+    # fg_trains = get_next_trains(stop_id='F23N')
+    # display_trains(fg_trains, stop_id='F23N')
+    #
+    # r_trains = get_next_trains(stop_id='R33N')
+    # display_trains(r_trains, stop_id='R33N')
 
     led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'])
     led_display_trains.process()
