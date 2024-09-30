@@ -31,12 +31,12 @@ class DisplayTrains(SampleBase):
         self.circle_font = graphics.Font()
         self.circle_font.LoadFont('./fonts/6x10.bdf')
 
-        self.text_color = graphics.Color(0, 110, 0)
-        self.text_color_arriving = graphics.Color(255, 66, 25)
+        self.text_colour = graphics.Color(0, 110, 0)
+        self.text_colour_arriving = graphics.Color(255, 66, 25)
 
-        self.circle_color_bdfm = graphics.Color(255, 66, 25)
-        self.circle_color_g = graphics.Color(108, 190, 69)
-        self.circle_color_qrn = graphics.Color(252, 204, 10)
+        self.circle_colour_bdfm = graphics.Color(255, 66, 25)
+        self.circle_colour_g = graphics.Color(108, 190, 69)
+        self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
 
     def draw_filled_circle(self, canvas, x, y, color):
@@ -109,17 +109,17 @@ class DisplayTrains(SampleBase):
     def draw_train(self, row_ind, train, stop_id, canvas):
         arrival_mins = arrival_minutes(train, stop_id)
         # arrival_mins = 0
-        text_color = self.text_color
+        text_colour = self.text_colour
         if arrival_mins <= 0:
-            text_color = self.text_color_arriving
+            text_colour = self.text_colour_arriving
 
         # see: https://www.6sqft.com/did-you-know-the-mta-uses-pantone-colors-to-distinguish-train-lines/
         if train.route_id in ['B', 'D', 'F', 'M']:
-            circle_color = self.circle_color_bdfm
+            circle_colour = self.circle_colour_bdfm
         elif train.route_id in ['G', ]:
-            circle_color = self.circle_color_g
+            circle_colour = self.circle_colour_g
         else:
-            circle_color = self.circle_color_qrn
+            circle_colour = self.circle_colour_nqrw
 
         if stop_id.endswith('N'):
             direction = 'N'
@@ -128,8 +128,8 @@ class DisplayTrains(SampleBase):
 
         self.draw_row(canvas,
                       row_ind=row_ind,
-                      text_colour=text_color,
-                      circle_colour=circle_color,
+                      text_colour=text_colour,
+                      circle_colour=circle_colour,
                       route_id=train.route_id,
                       headsign_text=train.headsign_text,
                       direction=direction,
