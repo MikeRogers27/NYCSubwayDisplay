@@ -32,21 +32,20 @@ class DisplayTrains(SampleBase):
         self.circle_font.LoadFont('./fonts/6x10.bdf')
 
     def draw_filled_circle(self, canvas, x, y, color):
-        pass
-        # # Draw circle with lines
-        # graphics.DrawLine(canvas, x - 2, y - 6, x + 2, y - 6, color)
-        # graphics.DrawLine(canvas, x - 3, y - 5, x + 3, y - 5, color)
-        # graphics.DrawLine(canvas, x - 4, y - 4, x + 4, y - 4, color)
-        # graphics.DrawLine(canvas, x - 5, y - 3, x + 5, y - 3, color)
-        # graphics.DrawLine(canvas, x - 6, y - 2, x + 6, y - 2, color)
-        # graphics.DrawLine(canvas, x - 6, y - 1, x + 6, y - 1, color)
-        # graphics.DrawLine(canvas, x - 6, y, x + 6, y, color)
-        # graphics.DrawLine(canvas, x - 6, y + 1, x + 6, y + 1, color)
-        # graphics.DrawLine(canvas, x - 6, y + 2, x + 6, y + 2, color)
-        # graphics.DrawLine(canvas, x - 5, y + 3, x + 5, y + 3, color)
-        # graphics.DrawLine(canvas, x - 4, y + 4, x + 4, y + 4, color)
-        # graphics.DrawLine(canvas, x - 3, y + 5, x + 3, y + 5, color)
-        # graphics.DrawLine(canvas, x - 2, y + 6, x + 2, y + 6, color)
+        # Draw circle with lines
+        graphics.DrawLine(canvas, x - 2, y - 6, x + 2, y - 6, color)
+        graphics.DrawLine(canvas, x - 3, y - 5, x + 3, y - 5, color)
+        graphics.DrawLine(canvas, x - 4, y - 4, x + 4, y - 4, color)
+        graphics.DrawLine(canvas, x - 5, y - 3, x + 5, y - 3, color)
+        graphics.DrawLine(canvas, x - 6, y - 2, x + 6, y - 2, color)
+        graphics.DrawLine(canvas, x - 6, y - 1, x + 6, y - 1, color)
+        graphics.DrawLine(canvas, x - 6, y, x + 6, y, color)
+        graphics.DrawLine(canvas, x - 6, y + 1, x + 6, y + 1, color)
+        graphics.DrawLine(canvas, x - 6, y + 2, x + 6, y + 2, color)
+        graphics.DrawLine(canvas, x - 5, y + 3, x + 5, y + 3, color)
+        graphics.DrawLine(canvas, x - 4, y + 4, x + 4, y + 4, color)
+        graphics.DrawLine(canvas, x - 3, y + 5, x + 3, y + 5, color)
+        graphics.DrawLine(canvas, x - 2, y + 6, x + 2, y + 6, color)
 
         # # Draw circle with lines
         # graphics.DrawLine(canvas, x - 2, y - 5, x + 2, y - 5, color)
@@ -141,12 +140,17 @@ class DisplayTrains(SampleBase):
 
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
+        trains = get_next_trains(stop_id=self.stop_ids[0])
         while True:
-            for stop_id in self.stop_ids:
-                trains = get_next_trains(stop_id=stop_id)
-                success, canvas = self.draw_trains(trains, stop_id, canvas)
-                if success:
-                    time.sleep(10)  # show display for 10 seconds before exit
+            time.sleep(0.05)
+            success, canvas = self.draw_trains(trains, self.stop_ids[0], canvas)
+
+        # while True:
+        #     for stop_id in self.stop_ids:
+        #         trains = get_next_trains(stop_id=stop_id)
+        #         success, canvas = self.draw_trains(trains, stop_id, canvas)
+        #         if success:
+        #             time.sleep(10)  # show display for 10 seconds before exit
 
 
 def arrival_time(train, stop_id):
