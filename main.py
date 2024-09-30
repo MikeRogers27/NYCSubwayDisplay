@@ -30,7 +30,7 @@ class DisplayTrains(SampleBase):
         self.font.LoadFont("./fonts/helvR12.bdf")
         self.circle_font = graphics.Font()
         self.circle_font.LoadFont('./fonts/6x10.bdf')
-        
+
         self.text_color = graphics.Color(0, 110, 0)
         self.text_color_arriving = graphics.Color(255, 66, 25)
 
@@ -94,20 +94,20 @@ class DisplayTrains(SampleBase):
 
         graphics.DrawText(canvas, self.font, 1, text_y, text_colour, f'{row_ind+1}')
         graphics.DrawText(canvas, self.font, 7, text_y, text_colour, f'.')
-        # # graphics.DrawCircle(canvas, 16, circle_y, 5, circle_colour)
-        # self.draw_filled_circle(canvas, 16, circle_y, circle_colour)
-        # graphics.DrawText(canvas, self.circle_font, 16 - route_id_offset, text_y-1, graphics.Color(0, 0, 0), route_id)
-        # # graphics.DrawText(canvas, self.font, 26, text_y, text_colour, headsign_text)
-        # if direction == 'N':
-        #     graphics.DrawText(canvas, self.circle_font, 23, text_y - 1, text_colour, '↑')
-        # else:
-        #     graphics.DrawText(canvas, self.circle_font, 23, text_y - 1, text_colour, '↓')
-        # graphics.DrawText(canvas, self.font, 43 - minutes_width, text_y, text_colour, minutes_text)
-        # graphics.DrawText(canvas, self.font, 43, text_y, text_colour, "min")
+        # graphics.DrawCircle(canvas, 16, circle_y, 5, circle_colour)
+        self.draw_filled_circle(canvas, 16, circle_y, circle_colour)
+        graphics.DrawText(canvas, self.circle_font, 16 - route_id_offset, text_y-1, graphics.Color(0, 0, 0), route_id)
+        # graphics.DrawText(canvas, self.font, 26, text_y, text_colour, headsign_text)
+        if direction == 'N':
+            graphics.DrawText(canvas, self.circle_font, 23, text_y - 1, text_colour, '↑')
+        else:
+            graphics.DrawText(canvas, self.circle_font, 23, text_y - 1, text_colour, '↓')
+        graphics.DrawText(canvas, self.font, 43 - minutes_width, text_y, text_colour, minutes_text)
+        graphics.DrawText(canvas, self.font, 43, text_y, text_colour, "min")
 
     def draw_train(self, row_ind, train, stop_id, canvas):
-        # arrival_mins = arrival_minutes(train, stop_id)
-        arrival_mins = 0
+        arrival_mins = arrival_minutes(train, stop_id)
+        # arrival_mins = 0
         text_color = self.text_color
         if arrival_mins <= 0:
             text_color = self.text_color_arriving
