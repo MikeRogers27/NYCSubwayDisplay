@@ -133,6 +133,8 @@ class DisplayTrains(SampleBase):
             self.draw_train(0, trains[0], stop_id, canvas)
             if len(trains) > 1:
                 self.draw_train(1, trains[1], stop_id, canvas)
+
+            time.sleep(0.05)
             canvas = self.matrix.SwapOnVSync(canvas)
             return True, canvas
         else:
