@@ -98,7 +98,8 @@ class DisplayTrains(SampleBase):
         # graphics.DrawText(canvas, self.font, 43, text_y, text_colour, "min")
 
     def draw_train(self, row_ind, train, stop_id, canvas):
-        arrival_mins = arrival_minutes(train, stop_id)
+        # arrival_mins = arrival_minutes(train, stop_id)
+        arrival_mins = 0
         text_color = graphics.Color(0, 110, 0)
         if arrival_mins <= 0:
             text_color = graphics.Color(255, 66, 25)
@@ -130,8 +131,8 @@ class DisplayTrains(SampleBase):
     def draw_trains(self, trains, stop_id, canvas):
         if len(trains):
             self.draw_train(0, trains[0], stop_id, canvas)
-            if len(trains) > 1:
-                self.draw_train(1, trains[1], stop_id, canvas)
+            # if len(trains) > 1:
+            #     self.draw_train(1, trains[1], stop_id, canvas)
 
             return True, canvas
         else:
