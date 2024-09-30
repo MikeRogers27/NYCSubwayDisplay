@@ -156,7 +156,7 @@ class DisplayTrains(SampleBase):
         while True:
             offscreen_canvas.Clear()
             len = graphics.DrawText(offscreen_canvas, self.font, pos, 10, textColor, my_text)
-            pos -= 1
+            # pos -= 1
             if (pos + len < 0):
                 pos = offscreen_canvas.width
 
