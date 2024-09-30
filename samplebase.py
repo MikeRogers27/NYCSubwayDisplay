@@ -8,8 +8,7 @@ if os.name == 'nt':
     RGBMatrix = getattr(importlib.import_module('RGBMatrixEmulator'), 'RGBMatrix')
     RGBMatrixOptions = getattr(importlib.import_module('RGBMatrixEmulator'), 'RGBMatrixOptions')
 else:
-    RGBMatrix = getattr(importlib.import_module('rgbmatrix'), 'RGBMatrix')
-    RGBMatrixOptions = getattr(importlib.import_module('rgbmatrix'), 'RGBMatrixOptions')
+    from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
 
 class SampleBase(object):

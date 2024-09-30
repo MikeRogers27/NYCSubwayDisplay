@@ -8,7 +8,7 @@ from nyct_gtfs import NYCTFeed
 if os.name == 'nt':
     graphics = importlib.import_module('RGBMatrixEmulator', 'graphics')
 else:
-    graphics = importlib.import_module('rgbmatrix', 'graphics')
+    from rgbmatrix import graphics
 
 from samplebase import SampleBase
 
