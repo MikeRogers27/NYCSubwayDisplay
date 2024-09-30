@@ -150,7 +150,7 @@ class DisplayTrains(SampleBase):
         # font = graphics.Font()
         # font.LoadFont("../../../fonts/7x13.bdf")
         textColor = graphics.Color(255, 255, 0)
-        pos = offscreen_canvas.width
+        pos = 2  # offscreen_canvas.width
         my_text = 'Test Text'
 
         while True:
