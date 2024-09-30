@@ -167,7 +167,14 @@ class DisplayTrains(SampleBase):
         canvas = self.matrix.CreateFrameCanvas()
         while True:
             canvas.Clear()
-            success, canvas = self.draw_trains(trains, self.stop_ids[0], canvas)
+            # success, canvas = self.draw_trains(trains, self.stop_ids[0], canvas)
+
+            text_y = 12
+            arrival_mins = 1
+            minutes_width = 16
+            minutes_text = f'{arrival_mins:2d}'
+            graphics.DrawText(canvas, self.font, 43 - minutes_width, text_y, self.text_colour, minutes_text)
+            graphics.DrawText(canvas, self.font, 43, text_y, self.text_colour, "min")
 
             time.sleep(0.05)
             canvas = self.matrix.SwapOnVSync(canvas)
