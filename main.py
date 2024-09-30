@@ -146,39 +146,33 @@ class DisplayTrains(SampleBase):
             return False, canvas
 
     def run(self):
-        offscreen_canvas = self.matrix.CreateFrameCanvas()
-        # font = graphics.Font()
-        # font.LoadFont("../../../fonts/7x13.bdf")
-        textColor = graphics.Color(0, 255, 0)
-        pos = 2  # offscreen_canvas.width
-        my_text = 'Test Text'
-
-        while True:
-            offscreen_canvas.Clear()
-            len = graphics.DrawText(offscreen_canvas, self.font, pos, 10, textColor, my_text)
-            # pos -= 1
-            if (pos + len < 0):
-                pos = offscreen_canvas.width
-
-            time.sleep(0.05)
-            offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
-            time.sleep(100.)
-
-        # trains = get_next_trains(stop_id=self.stop_ids[0])
-        # canvas = self.matrix.CreateFrameCanvas()
-        # while True:
-        #     canvas.Clear()
-        #     # success, canvas = self.draw_trains(trains, self.stop_ids[0], canvas)
+        # offscreen_canvas = self.matrix.CreateFrameCanvas()
+        # # font = graphics.Font()
+        # # font.LoadFont("../../../fonts/7x13.bdf")
+        # textColor = graphics.Color(0, 255, 0)
+        # pos = 2  # offscreen_canvas.width
+        # my_text = 'Test Text'
         #
-        #     text_y = 12
-        #     arrival_mins = 1
-        #     minutes_width = 16
-        #     minutes_text = f'{arrival_mins:2d}'
-        #     graphics.DrawText(canvas, self.font, 43 - minutes_width, text_y, self.text_colour, minutes_text)
-        #     graphics.DrawText(canvas, self.font, 43, text_y, self.text_colour, "min")
+        # while True:
+        #     offscreen_canvas.Clear()
+        #     len = graphics.DrawText(offscreen_canvas, self.font, pos, 10, textColor, my_text)
+        #     # pos -= 1
+        #     if (pos + len < 0):
+        #         pos = offscreen_canvas.width
         #
         #     time.sleep(0.05)
-        #     canvas = self.matrix.SwapOnVSync(canvas)
+        #     offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
+        #     time.sleep(100.)
+
+        trains = get_next_trains(stop_id=self.stop_ids[0])
+        canvas = self.matrix.CreateFrameCanvas()
+        while True:
+            canvas.Clear()
+            success, canvas = self.draw_trains(trains, self.stop_ids[0], canvas)
+
+            time.sleep(0.05)
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(10.)
 
 
         # while True:
