@@ -30,6 +30,14 @@ class DisplayTrains(SampleBase):
         self.font.LoadFont("./fonts/helvR12.bdf")
         self.circle_font = graphics.Font()
         self.circle_font.LoadFont('./fonts/6x10.bdf')
+        
+        self.text_color = graphics.Color(0, 110, 0)
+        self.text_color_arriving = graphics.Color(255, 66, 25)
+
+        self.circle_color_bdfm = graphics.Color(255, 66, 25)
+        self.circle_color_g = graphics.Color(108, 190, 69)
+        self.circle_color_qrn = graphics.Color(252, 204, 10)
+
 
     def draw_filled_circle(self, canvas, x, y, color):
         # Draw circle with lines
@@ -100,19 +108,17 @@ class DisplayTrains(SampleBase):
     def draw_train(self, row_ind, train, stop_id, canvas):
         # arrival_mins = arrival_minutes(train, stop_id)
         arrival_mins = 0
-        text_color = graphics.Color(0, 110, 0)
+        text_color = self.text_color
         if arrival_mins <= 0:
-            text_color = graphics.Color(255, 66, 25)
+            text_color = self.text_color_arriving
 
         # see: https://www.6sqft.com/did-you-know-the-mta-uses-pantone-colors-to-distinguish-train-lines/
-        if arrival_mins <= 0:
-            circle_color = graphics.Color(255, 66, 25)
-        elif train.route_id in ['B', 'D', 'F', 'M']:
-            circle_color = graphics.Color(255, 66, 25)
+        if train.route_id in ['B', 'D', 'F', 'M']:
+            circle_color = self.circle_color_bdfm
         elif train.route_id in ['G', ]:
-            circle_color = graphics.Color(108, 190, 69)
+            circle_color = self.circle_color_g
         else:
-            circle_color = graphics.Color(252, 204, 10)
+            circle_color = self.circle_color_qrn
 
         if stop_id.endswith('N'):
             direction = 'N'
