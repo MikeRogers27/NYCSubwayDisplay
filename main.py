@@ -52,19 +52,19 @@ class DisplayTrains(SampleBase):
 
     def draw_filled_circle(self, canvas, x, y, color):
         # Draw circle with lines
-        graphics.DrawLine(canvas, x - 2, y - 6, x + 2, y - 6, color)
+        graphics.DrawLine(canvas, x - 1, y - 6, x + 1, y - 6, color)
         graphics.DrawLine(canvas, x - 3, y - 5, x + 3, y - 5, color)
         graphics.DrawLine(canvas, x - 4, y - 4, x + 4, y - 4, color)
         graphics.DrawLine(canvas, x - 5, y - 3, x + 5, y - 3, color)
-        graphics.DrawLine(canvas, x - 6, y - 2, x + 6, y - 2, color)
+        graphics.DrawLine(canvas, x - 5, y - 2, x + 5, y - 2, color)
         graphics.DrawLine(canvas, x - 6, y - 1, x + 6, y - 1, color)
         graphics.DrawLine(canvas, x - 6, y, x + 6, y, color)
         graphics.DrawLine(canvas, x - 6, y + 1, x + 6, y + 1, color)
-        graphics.DrawLine(canvas, x - 6, y + 2, x + 6, y + 2, color)
+        graphics.DrawLine(canvas, x - 5, y + 2, x + 5, y + 2, color)
         graphics.DrawLine(canvas, x - 5, y + 3, x + 5, y + 3, color)
         graphics.DrawLine(canvas, x - 4, y + 4, x + 4, y + 4, color)
         graphics.DrawLine(canvas, x - 3, y + 5, x + 3, y + 5, color)
-        graphics.DrawLine(canvas, x - 2, y + 6, x + 2, y + 6, color)
+        graphics.DrawLine(canvas, x - 1, y + 6, x + 1, y + 6, color)
 
         # # Draw circle with lines
         # graphics.DrawLine(canvas, x - 2, y - 5, x + 2, y - 5, color)
@@ -235,6 +235,7 @@ if __name__ == '__main__':
 
     # script is here:
     # /home/pi/run-matrix.sh
+    # configure brightness and other matrix options in here
 
     # systemd setup to auto-run follows this:
     # https://www.dexterindustries.com/howto/run-a-program-on-your-raspberry-pi-at-startup/
