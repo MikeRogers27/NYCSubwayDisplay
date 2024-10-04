@@ -15,10 +15,10 @@ from samplebase import SampleBase
 
 FEEDS = [
     NYCTFeed("F"),
-    NYCTFeed("G"),
+    # NYCTFeed("G"),
     NYCTFeed("R"),
 ]
-NOW = datetime.now()
+NOW = None
 
 
 class GracefulKiller:
@@ -178,7 +178,7 @@ class DisplayTrains(SampleBase):
 
 def arrival_time(train, stop_id):
     if train.location_status == 'STOPPED_AT' and train.location == stop_id:
-        return datetime(9999, 1, 1, 0, 0, 0)
+        return NOW
     return next((stu.arrival for stu in train.stop_time_updates
                  if stu.stop_id == stop_id), datetime(9999, 1, 1, 0, 0, 0))
 
@@ -186,7 +186,7 @@ def arrival_time(train, stop_id):
 def arrival_minutes(train, stop_id):
     t = arrival_time(train, stop_id)
     tdelta = t - NOW
-    arrival_mins = max(round(tdelta.total_seconds() / 60), 0)
+    arrival_mins = max(int(tdelta.total_seconds() / 60), 0)
     return arrival_mins
 
 
@@ -200,6 +200,11 @@ def get_next_trains(
         num_trains=2,
         stop_id='F23N'
 ):
+    # time from now
+    global NOW
+    NOW = datetime.now()
+
+    # update all feeds
     all_trains = []
     for feed in FEEDS:
         feed.refresh()
@@ -220,13 +225,15 @@ def main():
     # https://openmobilitydata-data.s3-us-west-1.amazonaws.com/public/feeds/mta/79/20240103/original/stops.txt
 
     # # Load the realtime feed from the MTA site
-    # fg_trains = get_next_trains(stop_id='F23N')
-    # display_trains(fg_trains, stop_id='F23N')
-    #
+    # while True:
+    #     fg_trains = get_next_trains(stop_id='F23N')
+    #     display_trains(fg_trains, stop_id='F23N')
+    #     time.sleep(5)
+
     # r_trains = get_next_trains(stop_id='R33N')
     # display_trains(r_trains, stop_id='R33N')
 
-    # led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'])
+    # # led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'])
     led_display_trains = DisplayTrains(['F23N', 'R33N', ])
     led_display_trains.process()
 
