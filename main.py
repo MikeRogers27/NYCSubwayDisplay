@@ -42,8 +42,10 @@ class DisplayTrains(SampleBase):
         self.circle_font = graphics.Font()
         self.circle_font.LoadFont('./fonts/6x10.bdf')
 
-        self.text_colour = graphics.Color(0, 110, 0)
-        self.text_colour_arriving = graphics.Color(255, 66, 25)
+        # self.text_colour = graphics.Color(0, 110, 0)
+        # self.text_colour_arriving = graphics.Color(255, 66, 25)
+        self.text_colour = graphics.Color(179, 214, 9)
+        self.text_colour_arriving = graphics.Color(247, 137, 99)
 
         self.circle_colour_bdfm = graphics.Color(255, 99, 25)
         self.circle_colour_g = graphics.Color(108, 190, 69)
@@ -131,7 +133,7 @@ class DisplayTrains(SampleBase):
 
         if arrival_mins <= 0:
             text_colour = self.text_colour_arriving
-            circle_colour = self.text_colour_arriving
+            # circle_colour = self.text_colour_arriving
 
         if stop_id.endswith('N'):
             direction = 'N'
