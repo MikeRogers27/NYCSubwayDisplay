@@ -2,6 +2,7 @@ from datetime import datetime
 import importlib
 import os
 import time
+import signal
 
 from nyct_gtfs import NYCTFeed
 
@@ -18,6 +19,16 @@ FEEDS = [
     NYCTFeed("R"),
 ]
 NOW = datetime.now()
+
+
+class GracefulKiller:
+    def __init__(self):
+        self.kill_now = False
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+    def exit_gracefully(self, signum, frame):
+        self.kill_now = True
 
 
 class DisplayTrains(SampleBase):
@@ -145,9 +156,10 @@ class DisplayTrains(SampleBase):
             return False, canvas
 
     def run(self):
-
         canvas = self.matrix.CreateFrameCanvas()
-        while True:
+
+        graceful_killer = GracefulKiller()
+        while not graceful_killer.kill_now:
             for stop_id in self.stop_ids:
                 trains = get_next_trains(stop_id=stop_id)
 
@@ -221,7 +233,17 @@ def main():
 if __name__ == '__main__':
     main()
 
-    # cd ~/src/NYCSubwayDisplay/
-    # export PYTHONPATH=${PYTHONPATH}:${HOME}/src/rpi-rgb-led-matrix/bindings/python
-    # source ~/venv/NYCSubwayDisplay/bin/activate
-    # sudo PYTHONPATH=${PYTHONPATH} /home/pi/venv/NYCSubwayDisplay/bin/python main.py --led-gpio-mapping=adafruit-hat --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=50 --led-slowdown-gpio=2
+    # script is here:
+    # /home/pi/run-matrix.sh
+
+    # systemd setup to auto-run follows this:
+    # https://www.dexterindustries.com/howto/run-a-program-on-your-raspberry-pi-at-startup/
+    #
+    # /lib/systemd/system/matrix.service
+    #
+    # to enable
+    # sudo systemctl daemon-reload
+    # sudo systemctl enable sample.service
+    # sudo reboot
+    #
+    # commands disable, start, stop etc
