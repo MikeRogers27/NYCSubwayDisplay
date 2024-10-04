@@ -145,44 +145,20 @@ class DisplayTrains(SampleBase):
             return False, canvas
 
     def run(self):
-        # offscreen_canvas = self.matrix.CreateFrameCanvas()
-        # # font = graphics.Font()
-        # # font.LoadFont("../../../fonts/7x13.bdf")
-        # textColor = graphics.Color(0, 255, 0)
-        # pos = 2  # offscreen_canvas.width
-        # my_text = 'Test Text'
-        #
-        # while True:
-        #     offscreen_canvas.Clear()
-        #     len = graphics.DrawText(offscreen_canvas, self.font, pos, 10, textColor, my_text)
-        #     # pos -= 1
-        #     if (pos + len < 0):
-        #         pos = offscreen_canvas.width
-        #
-        #     time.sleep(0.05)
-        #     offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
-        #     time.sleep(100.)
-
-        # trains = get_next_trains(stop_id=self.stop_ids[0])
-        # canvas = self.matrix.CreateFrameCanvas()
-        # while True:
-        #     canvas.Clear()
-        #     print('drawing')
-        #     success, canvas = self.draw_trains(trains, self.stop_ids[0], canvas)
-        #
-        #     time.sleep(0.05)
-        #     canvas = self.matrix.SwapOnVSync(canvas)
-        #     print('sleeping')
-        #     time.sleep(10.)
 
         canvas = self.matrix.CreateFrameCanvas()
         while True:
             for stop_id in self.stop_ids:
                 trains = get_next_trains(stop_id=stop_id)
+
+                canvas.Clear()
                 success, canvas = self.draw_trains(trains, stop_id, canvas)
-                canvas = self.matrix.SwapOnVSync(canvas)
+
                 if success:
-                    time.sleep(10)  # show display for 10 seconds before exit
+                    time.sleep(0.05)
+                    canvas = self.matrix.SwapOnVSync(canvas)
+
+                time.sleep(10)  # show display for 10 seconds before exit
 
 
 def arrival_time(train, stop_id):
