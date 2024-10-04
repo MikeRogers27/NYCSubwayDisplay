@@ -180,6 +180,7 @@ class DisplayTrains(SampleBase):
             for stop_id in self.stop_ids:
                 trains = get_next_trains(stop_id=stop_id)
                 success, canvas = self.draw_trains(trains, stop_id, canvas)
+                canvas = self.matrix.SwapOnVSync(canvas)
                 if success:
                     time.sleep(10)  # show display for 10 seconds before exit
 
@@ -234,7 +235,8 @@ def main():
     # r_trains = get_next_trains(stop_id='R33N')
     # display_trains(r_trains, stop_id='R33N')
 
-    led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'])
+    # led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'])
+    led_display_trains = DisplayTrains(['F23N', 'R33N', ])
     led_display_trains.process()
 
     pass
