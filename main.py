@@ -131,9 +131,8 @@ class DisplayTrains(SampleBase):
         else:
             circle_colour = self.circle_colour_nqrw
 
-        if arrival_mins <= 90:
+        if arrival_mins <= 0:
             text_colour = self.text_colour_arriving
-            # circle_colour = self.text_colour_arriving
 
         if stop_id.endswith('N'):
             direction = 'N'
