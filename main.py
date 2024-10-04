@@ -120,8 +120,6 @@ class DisplayTrains(SampleBase):
         arrival_mins = arrival_minutes(train, stop_id)
         # arrival_mins = 0
         text_colour = self.text_colour
-        if arrival_mins <= 0:
-            text_colour = self.text_colour_arriving
 
         # see: https://www.6sqft.com/did-you-know-the-mta-uses-pantone-colors-to-distinguish-train-lines/
         if train.route_id in ['B', 'D', 'F', 'M']:
@@ -130,6 +128,10 @@ class DisplayTrains(SampleBase):
             circle_colour = self.circle_colour_g
         else:
             circle_colour = self.circle_colour_nqrw
+
+        if arrival_mins <= 0:
+            text_colour = self.text_colour_arriving
+            circle_colour = self.text_colour_arriving
 
         if stop_id.endswith('N'):
             direction = 'N'
