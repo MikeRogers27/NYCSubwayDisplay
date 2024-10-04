@@ -45,7 +45,7 @@ class DisplayTrains(SampleBase):
         # self.text_colour = graphics.Color(0, 110, 0)
         # self.text_colour_arriving = graphics.Color(255, 66, 25)
         self.text_colour = graphics.Color(74, 214, 9)
-        self.text_colour_arriving = graphics.Color(247, 137, 99)
+        self.text_colour_arriving = graphics.Color(247, 100, 45)
 
         self.circle_colour_bdfm = graphics.Color(255, 99, 25)
         self.circle_colour_g = graphics.Color(108, 190, 69)
@@ -131,7 +131,7 @@ class DisplayTrains(SampleBase):
         else:
             circle_colour = self.circle_colour_nqrw
 
-        if arrival_mins <= 0:
+        if arrival_mins <= 90:
             text_colour = self.text_colour_arriving
             # circle_colour = self.text_colour_arriving
 
