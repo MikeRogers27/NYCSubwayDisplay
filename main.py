@@ -102,8 +102,8 @@ class DisplayTrains(SampleBase):
             graphics.DrawText(canvas, self.circle_font, 24, text_y - 1, text_colour, '↑')
         else:
             graphics.DrawText(canvas, self.circle_font, 24, text_y - 1, text_colour, '↓')
-        graphics.DrawText(canvas, self.font, 42 - minutes_width, text_y, text_colour, minutes_text)
-        graphics.DrawText(canvas, self.font, 42, text_y, text_colour, "min")
+        graphics.DrawText(canvas, self.font, 44 - minutes_width, text_y, text_colour, minutes_text)
+        graphics.DrawText(canvas, self.font, 44, text_y, text_colour, "min")
 
     def draw_train(self, row_ind, train, stop_id, canvas):
         arrival_mins = arrival_minutes(train, stop_id)
