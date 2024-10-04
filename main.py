@@ -45,7 +45,7 @@ class DisplayTrains(SampleBase):
         # self.text_colour = graphics.Color(0, 110, 0)
         # self.text_colour_arriving = graphics.Color(255, 66, 25)
         self.text_colour = graphics.Color(74, 214, 9)
-        self.text_colour_arriving = graphics.Color(247, 100, 25)
+        self.text_colour_arriving = graphics.Color(247, 75, 25)
 
         self.circle_colour_bdfm = graphics.Color(255, 99, 25)
         self.circle_colour_g = graphics.Color(108, 190, 69)
