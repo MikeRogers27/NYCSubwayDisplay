@@ -118,7 +118,7 @@ class DisplayTrains(SampleBase):
             graphics.DrawText(canvas, self.font, 45 - minutes_width, text_y, text_colour, minutes_text)
             graphics.DrawText(canvas, self.font, 45, text_y, text_colour, "min")
         else:
-            graphics.DrawText(canvas, self.font, 34, text_y, text_colour, arrival_mins)
+            graphics.DrawText(canvas, self.font, 32, text_y, text_colour, arrival_mins)
 
 
     def draw_train(self, row_ind, train, stop_id, canvas):
@@ -144,7 +144,7 @@ class DisplayTrains(SampleBase):
 
         # more than one minute late report as delay
         if arrival_mins < -1:
-            arrival_mins = 'Delay'
+            arrival_mins = 'delay'
 
         if stop_id.endswith('N'):
             direction = 'N'
@@ -224,8 +224,7 @@ def arrival_minutes(train, stop_id):
     t = arrival_time(train, stop_id)
     tdelta = t - NOW
     arrival_mins = int(tdelta.total_seconds() / 60)
-    # return arrival_mins
-    return -2
+    return arrival_mins
 
 
 def find_next_trains(trains, num_trains, stop_id):
