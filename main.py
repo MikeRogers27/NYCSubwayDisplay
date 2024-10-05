@@ -200,7 +200,7 @@ class DisplayTrains(SampleBase):
             return True, canvas
 
     def what_should_we_display(self):
-        return 'trains'
+        return ['clock', 'trains']
 
         timestamp = datetime.now().time()
         # display trains between 7am and 9am
@@ -213,33 +213,63 @@ class DisplayTrains(SampleBase):
 
         return 'off'
 
+    def display_trains(self, canvas):
+        update_feeds()
+        for stop_id in self.stop_ids:
+            trains = get_next_trains(stop_id=stop_id)
+
+            canvas.Clear()
+            success, canvas = self.draw_trains(trains, stop_id, canvas)
+            if success:
+                time.sleep(0.05)
+                canvas = self.matrix.SwapOnVSync(canvas)
+
+            # show display for 10 seconds before update
+            time.sleep(10)
+
+    def display_clock(self, canvas):
+        text_y_top = 13
+        text_y_bottom = 28
+        clock_pos = 1
+
+        start_time = datetime.now()
+        show_colon = True
+        while (datetime.now() - start_time).total_seconds() < 10:
+            canvas.Clear()
+
+            current_time = datetime.now()
+
+            # draw time
+            graphics.DrawText(canvas, self.font, clock_pos, text_y_top, self.text_colour,
+                              current_time.strftime('%H'))
+            if show_colon:
+                graphics.DrawText(canvas, self.font, clock_pos+14, text_y_top-1, self.text_colour,':')
+            graphics.DrawText(canvas, self.font, clock_pos+17, text_y_top, self.text_colour,
+                              current_time.strftime('%M'))
+
+            # draw date
+            date_str = current_time.strftime('%a ') + f'{current_time.day} ' + current_time.strftime('%b')
+            graphics.DrawText(canvas, self.font, 1, text_y_bottom, self.text_colour, date_str)
+
+            canvas = self.matrix.SwapOnVSync(canvas)
+            show_colon = not show_colon
+            time.sleep(0.5)
+
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
 
         graceful_killer = GracefulKiller()
         while not graceful_killer.kill_now:
-            display_this = self.what_should_we_display()
-            if display_this == 'trains':
-                for stop_id in self.stop_ids:
-                    trains = get_next_trains(stop_id=stop_id)
-
+            display_items = self.what_should_we_display()
+            for display_item in display_items:
+                if display_item == 'trains':
+                    self.display_trains(canvas)
+                elif display_item == 'clock':
+                    self.display_clock(canvas)
+                else:
+                    # nothing
                     canvas.Clear()
-                    success, canvas = self.draw_trains(trains, stop_id, canvas)
-                    if success:
-                        time.sleep(0.05)
-                        canvas = self.matrix.SwapOnVSync(canvas)
-
-                    # show display for 10 seconds before update
-                    time.sleep(10)
-            elif display_this == 'clock':
-                # TODO: clock!
-                canvas.Clear()
-                time.sleep(600)  # check again in 10 mins
-                pass
-            else:
-                # nothing
-                canvas.Clear()
-                time.sleep(600)  # check again in 10 mins
+                    time.sleep(600)  # check again in 10 mins
 
 
 def arrival_time(train, stop_id):
@@ -269,14 +299,19 @@ def get_next_trains(
     # time from now
     global NOW
     NOW = datetime.now()
+    # get all feeds
+    all_trains = []
+    for feed in FEEDS:
+        all_trains.extend(feed.filter_trips(headed_for_stop_id=stop_id))
 
+    return find_next_trains(all_trains, num_trains, stop_id)
+
+
+def update_feeds():
     # update all feeds
     all_trains = []
     for feed in FEEDS:
         feed.refresh()
-        all_trains.extend(feed.filter_trips(headed_for_stop_id=stop_id))
-
-    return find_next_trains(all_trains, num_trains, stop_id)
 
 
 def display_trains(trains, stop_id):
