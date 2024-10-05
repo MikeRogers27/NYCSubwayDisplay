@@ -51,7 +51,6 @@ class DisplayTrains(SampleBase):
         self.circle_colour_g = graphics.Color(108, 190, 69)
         self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
-
     def draw_filled_circle(self, canvas, x, y, color):
         # Draw circle with lines
         graphics.DrawLine(canvas, x - 1, y - 6, x + 1, y - 6, color)
@@ -102,11 +101,11 @@ class DisplayTrains(SampleBase):
         route_id_offset_width = self.circle_font.CharacterWidth(ord(route_id))
         route_id_offset = int(route_id_offset_width / 2) - 1
 
-        graphics.DrawText(canvas, self.font, 1, text_y, text_colour, f'{row_ind+1}')
+        graphics.DrawText(canvas, self.font, 1, text_y, text_colour, f'{row_ind + 1}')
         graphics.DrawText(canvas, self.font, 7, text_y, text_colour, f'.')
         # graphics.DrawCircle(canvas, 16, circle_y, 5, circle_colour)
         self.draw_filled_circle(canvas, 15, circle_y, circle_colour)
-        graphics.DrawText(canvas, self.circle_font, 15 - route_id_offset, text_y-1, graphics.Color(0, 0, 0), route_id)
+        graphics.DrawText(canvas, self.circle_font, 15 - route_id_offset, text_y - 1, graphics.Color(0, 0, 0), route_id)
         # graphics.DrawText(canvas, self.font, 26, text_y, text_colour, headsign_text)
         if direction == 'N':
             graphics.DrawText(canvas, self.circle_font, 24, text_y - 1, text_colour, '↑')
@@ -119,7 +118,6 @@ class DisplayTrains(SampleBase):
             graphics.DrawText(canvas, self.font, 45, text_y, text_colour, "min")
         else:
             graphics.DrawText(canvas, self.font, 32, text_y, text_colour, arrival_mins)
-
 
     def draw_train(self, row_ind, train, stop_id, canvas):
         arrival_mins = arrival_minutes(train, stop_id)
@@ -160,6 +158,36 @@ class DisplayTrains(SampleBase):
                       direction=direction,
                       arrival_mins=arrival_mins)
 
+    def draw_no_trains(self,
+                       stop_id,
+                       canvas,
+                       ):
+        # Top line
+        text_y_top = 13
+        text_y_bottom = 28
+
+        if stop_id.startswith('F23'):
+            stop_name = '4 Av'
+        elif stop_id.startswith('R33'):
+            stop_name = '9 St'
+
+        if stop_id.endswith('N'):
+            direction = '↑'
+        else:
+            direction = '↓'
+
+        graphics.DrawText(canvas, self.font, 1, text_y_top, self.text_colour, f'{stop_name} {direction}')
+        if stop_id.startswith('F23'):
+            graphics.DrawText(canvas, self.circle_font, 44, text_y_top - 1, self.circle_colour_bdfm, 'F')
+            graphics.DrawText(canvas, self.circle_font, 50, text_y_top - 1, self.circle_colour_g, 'G')
+        else:
+            graphics.DrawText(canvas, self.circle_font, 38, text_y_top - 1, self.circle_colour_nqrw, 'R')
+            graphics.DrawText(canvas, self.circle_font, 44, text_y_top - 1, self.circle_colour_nqrw, 'W')
+            graphics.DrawText(canvas, self.circle_font, 50, text_y_top - 1, self.circle_colour_nqrw, 'N')
+            graphics.DrawText(canvas, self.circle_font, 56, text_y_top - 1, self.circle_colour_bdfm, 'D')
+
+        graphics.DrawText(canvas, self.font, 1, text_y_bottom, self.text_colour, '*no trains*')
+
     def draw_trains(self, trains, stop_id, canvas):
         if len(trains):
             self.draw_train(0, trains[0], stop_id, canvas)
@@ -168,7 +196,8 @@ class DisplayTrains(SampleBase):
 
             return True, canvas
         else:
-            return False, canvas
+            self.draw_no_trains(stop_id, canvas)
+            return True, canvas
 
     def what_should_we_display(self):
         return 'trains'
@@ -196,12 +225,12 @@ class DisplayTrains(SampleBase):
 
                     canvas.Clear()
                     success, canvas = self.draw_trains(trains, stop_id, canvas)
-
                     if success:
                         time.sleep(0.05)
                         canvas = self.matrix.SwapOnVSync(canvas)
 
-                    time.sleep(10)  # show display for 10 seconds before exit
+                    # show display for 10 seconds before update
+                    time.sleep(10)
             elif display_this == 'clock':
                 # TODO: clock!
                 canvas.Clear()
@@ -263,15 +292,15 @@ def main():
 
     # # Load the realtime feed from the MTA site
     # while True:
-    #     fg_trains = get_next_trains(stop_id='F23N')
-    #     display_trains(fg_trains, stop_id='F23N')
+    #     fg_trains = get_next_trains(stop_id='F23S')
+    #     display_trains(fg_trains, stop_id='F23S')
     #     time.sleep(5)
 
     # r_trains = get_next_trains(stop_id='R33N')
     # display_trains(r_trains, stop_id='R33N')
 
-    # # led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'])
-    led_display_trains = DisplayTrains(['F23N', 'R33N', ])
+    led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'])
+    # led_display_trains = DisplayTrains(['F23S', ])
     led_display_trains.process()
 
     pass
