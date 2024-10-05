@@ -5,6 +5,7 @@ import time
 import signal
 
 from nyct_gtfs import NYCTFeed
+from pyowm import OWM
 
 if os.name == 'nt':
     graphics = importlib.import_module('RGBMatrixEmulator', 'graphics')
@@ -19,6 +20,11 @@ FEEDS = [
     NYCTFeed("R"),
 ]
 NOW = None
+owm = OWM('09e258070bffcd29e09274a8e3c53ada')
+mgr = owm.weather_manager()
+WEATHER = None
+FORECAST = None
+WEATHER_TIMESTAMP = None
 
 
 class GracefulKiller:
@@ -232,6 +238,8 @@ class DisplayTrains(SampleBase):
         text_y_bottom = 28
         clock_pos = 1
 
+        w, _ = get_weather()
+
         start_time = datetime.now()
         show_colon = True
         while (datetime.now() - start_time).total_seconds() < 10:
@@ -246,6 +254,11 @@ class DisplayTrains(SampleBase):
                 graphics.DrawText(canvas, self.font, clock_pos+14, text_y_top-1, self.text_colour,':')
             graphics.DrawText(canvas, self.font, clock_pos+17, text_y_top, self.text_colour,
                               current_time.strftime('%M'))
+
+            # draw temp
+            graphics.DrawText(canvas, self.circle_font, clock_pos+44, text_y_top-1, self.text_colour,
+                              f'{round(w.temp["temp"]-273.15):d}c')
+
 
             # draw date
             date_str = current_time.strftime('%a ') + f'{current_time.day} ' + current_time.strftime('%b')
@@ -319,6 +332,22 @@ def display_trains(trains, stop_id):
         arrival_mins = arrival_minutes(train, stop_id)
         print(f'{i + 1}. {train.route_id} {train.headsign_text: <20s} {arrival_mins:2d}min')
     print()
+
+
+def get_weather():
+    global WEATHER
+    global FORECAST
+    global WEATHER_TIMESTAMP
+
+    # we only get the weather every 4 hours
+    if WEATHER_TIMESTAMP is None or \
+            (datetime.now() - WEATHER_TIMESTAMP).total_seconds() / 3600 > 4:
+        observation = mgr.weather_at_place('New York')
+        WEATHER = observation.weather
+        FORECAST = mgr.forecast_at_place('New York', '3h')
+        WEATHER_TIMESTAMP = datetime.now()
+
+    return WEATHER, FORECAST
 
 
 def main():

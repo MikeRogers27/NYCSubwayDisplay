@@ -9,7 +9,7 @@ mgr = owm.weather_manager()
 
 
 # Search for current weather in London (Great Britain) and get details
-observation = mgr.weather_at_place('London,GB')
+observation = mgr.weather_at_place('New York')
 w = observation.weather
 
 w.detailed_status         # 'clouds'
@@ -21,7 +21,7 @@ w.heat_index              # None
 w.clouds                  # 75
 
 # Will it be clear tomorrow at this time in Milan (Italy) ?
-forecast = mgr.forecast_at_place('Milan,IT', 'daily')
+forecast = mgr.forecast_at_place('New York', '3h')
 answer = forecast.will_be_clear_at(timestamps.tomorrow())
 
 # ---------- PAID API KEY example ---------------------
