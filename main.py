@@ -15,7 +15,7 @@ from samplebase import SampleBase
 
 FEEDS = [
     NYCTFeed("F"),
-    # NYCTFeed("G"),
+    NYCTFeed("G"),
     NYCTFeed("R"),
 ]
 NOW = None
@@ -102,9 +102,6 @@ class DisplayTrains(SampleBase):
         route_id_offset_width = self.circle_font.CharacterWidth(ord(route_id))
         route_id_offset = int(route_id_offset_width / 2) - 1
 
-        minutes_text = f'{arrival_mins:2d}'
-        minutes_width = sum(self.font.CharacterWidth(ord(letter)) for letter in minutes_text)
-
         graphics.DrawText(canvas, self.font, 1, text_y, text_colour, f'{row_ind+1}')
         graphics.DrawText(canvas, self.font, 7, text_y, text_colour, f'.')
         # graphics.DrawCircle(canvas, 16, circle_y, 5, circle_colour)
@@ -115,8 +112,14 @@ class DisplayTrains(SampleBase):
             graphics.DrawText(canvas, self.circle_font, 24, text_y - 1, text_colour, '↑')
         else:
             graphics.DrawText(canvas, self.circle_font, 24, text_y - 1, text_colour, '↓')
-        graphics.DrawText(canvas, self.font, 45 - minutes_width, text_y, text_colour, minutes_text)
-        graphics.DrawText(canvas, self.font, 45, text_y, text_colour, "min")
+        if isinstance(arrival_mins, int):
+            minutes_text = f'{arrival_mins:2d}'
+            minutes_width = sum(self.font.CharacterWidth(ord(letter)) for letter in minutes_text)
+            graphics.DrawText(canvas, self.font, 45 - minutes_width, text_y, text_colour, minutes_text)
+            graphics.DrawText(canvas, self.font, 45, text_y, text_colour, "min")
+        else:
+            graphics.DrawText(canvas, self.font, 34, text_y, text_colour, arrival_mins)
+
 
     def draw_train(self, row_ind, train, stop_id, canvas):
         arrival_mins = arrival_minutes(train, stop_id)
@@ -131,8 +134,17 @@ class DisplayTrains(SampleBase):
         else:
             circle_colour = self.circle_colour_nqrw
 
+        # 0 mins is arriving
         if arrival_mins <= 0:
             text_colour = self.text_colour_arriving
+
+        # one minute late just report as arriving
+        if arrival_mins == -1:
+            arrival_mins = 0
+
+        # more than one minute late report as delay
+        if arrival_mins < -1:
+            arrival_mins = 'Delay'
 
         if stop_id.endswith('N'):
             direction = 'N'
@@ -158,27 +170,52 @@ class DisplayTrains(SampleBase):
         else:
             return False, canvas
 
+    def what_should_we_display(self):
+        return 'trains'
+
+        timestamp = datetime.now().time()
+        # display trains between 7am and 9am
+        if timestamp > datetime.time(7, 0) and timestamp < datetime.time(9, 0):
+            return 'trains+clock'
+        if timestamp >= datetime.time(9, 0) and timestamp < datetime.time(19, 0):
+            return 'trains'
+        if timestamp >= datetime.time(20, 0):
+            return 'clock'
+
+        return 'off'
+
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
 
         graceful_killer = GracefulKiller()
         while not graceful_killer.kill_now:
-            for stop_id in self.stop_ids:
-                trains = get_next_trains(stop_id=stop_id)
+            display_this = self.what_should_we_display()
+            if display_this == 'trains':
+                for stop_id in self.stop_ids:
+                    trains = get_next_trains(stop_id=stop_id)
 
+                    canvas.Clear()
+                    success, canvas = self.draw_trains(trains, stop_id, canvas)
+
+                    if success:
+                        time.sleep(0.05)
+                        canvas = self.matrix.SwapOnVSync(canvas)
+
+                    time.sleep(10)  # show display for 10 seconds before exit
+            elif display_this == 'clock':
+                # TODO: clock!
                 canvas.Clear()
-                success, canvas = self.draw_trains(trains, stop_id, canvas)
-
-                if success:
-                    time.sleep(0.05)
-                    canvas = self.matrix.SwapOnVSync(canvas)
-
-                time.sleep(10)  # show display for 10 seconds before exit
+                time.sleep(600)  # check again in 10 mins
+                pass
+            else:
+                # nothing
+                canvas.Clear()
+                time.sleep(600)  # check again in 10 mins
 
 
 def arrival_time(train, stop_id):
     if train.location_status == 'STOPPED_AT' and train.location == stop_id:
-        return NOW
+        return datetime(9999, 1, 1, 0, 0, 0)
     return next((stu.arrival for stu in train.stop_time_updates
                  if stu.stop_id == stop_id), datetime(9999, 1, 1, 0, 0, 0))
 
@@ -186,8 +223,9 @@ def arrival_time(train, stop_id):
 def arrival_minutes(train, stop_id):
     t = arrival_time(train, stop_id)
     tdelta = t - NOW
-    arrival_mins = max(int(tdelta.total_seconds() / 60), 0)
-    return arrival_mins
+    arrival_mins = int(tdelta.total_seconds() / 60)
+    # return arrival_mins
+    return -2
 
 
 def find_next_trains(trains, num_trains, stop_id):
