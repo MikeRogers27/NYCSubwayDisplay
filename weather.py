@@ -24,11 +24,4 @@ w.clouds                  # 75
 forecast = mgr.forecast_at_place('New York', '3h')
 answer = forecast.will_be_clear_at(timestamps.tomorrow())
 
-# ---------- PAID API KEY example ---------------------
-
-config_dict = config.get_default_config_for_subscription_type('professional')
-owm = OWM('your paid OWM API key', config_dict)
-
-# What's the current humidity in Berlin (Germany) ?
-one_call_object = mgr.one_call(lat=52.5244, lon=13.4105)
-one_call_object.current.humidity
+pass

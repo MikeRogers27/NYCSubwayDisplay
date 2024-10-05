@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time as dt_time
 import importlib
 import os
 import time
@@ -6,6 +6,7 @@ import signal
 
 from nyct_gtfs import NYCTFeed
 from pyowm import OWM
+from PIL import Image
 
 if os.name == 'nt':
     graphics = importlib.import_module('RGBMatrixEmulator', 'graphics')
@@ -206,15 +207,16 @@ class DisplayTrains(SampleBase):
             return True, canvas
 
     def what_should_we_display(self):
+        return ['weather']
         return ['clock', 'trains']
 
         timestamp = datetime.now().time()
         # display trains between 7am and 9am
-        if timestamp > datetime.time(7, 0) and timestamp < datetime.time(9, 0):
+        if timestamp > time(7, 0) and timestamp < time(9, 0):
             return 'trains+clock'
-        if timestamp >= datetime.time(9, 0) and timestamp < datetime.time(19, 0):
+        if timestamp >= time(9, 0) and timestamp < time(19, 0):
             return 'trains'
-        if timestamp >= datetime.time(20, 0):
+        if timestamp >= time(20, 0):
             return 'clock'
 
         return 'off'
@@ -232,6 +234,8 @@ class DisplayTrains(SampleBase):
 
             # show display for 10 seconds before update
             time.sleep(10)
+
+        return canvas
 
     def display_clock(self, canvas):
         text_y_top = 13
@@ -268,6 +272,39 @@ class DisplayTrains(SampleBase):
             show_colon = not show_colon
             time.sleep(0.5)
 
+        return canvas
+
+    def display_weather(self, canvas):
+        text_y_top = 10
+        text_y_middle = 20
+        text_y_bottom = 30
+
+        timestamp = datetime.now().time()
+        if timestamp < dt_time(13, 0):  # before 12 show today's forecast
+            min_temp, max_temp, icon_file = todays_forecast()
+            head_str = 'Today'
+        elif timestamp < dt_time(19, 0):  # before 7pm show the evening forecast
+            min_temp, max_temp, icon_file = evening_forecast()
+            head_str = 'Eve'
+        else:
+            min_temp, max_temp, icon_file = tomorrows_forecast()
+            head_str = 'Tom'
+
+        canvas.Clear()
+
+        im = Image.open(icon_file)
+
+        graphics.DrawText(canvas, self.circle_font, 32, text_y_top, self.text_colour, head_str)
+        graphics.DrawText(canvas, self.circle_font, 32, text_y_middle, self.text_colour,
+                          f'↓{min_temp}c')
+        graphics.DrawText(canvas, self.circle_font, 32, text_y_bottom, self.text_colour,
+                          f'↑{max_temp}c')
+        canvas.SetImage(im)
+
+        canvas = self.matrix.SwapOnVSync(canvas)
+        time.sleep(10)
+        return canvas
+
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
 
@@ -276,9 +313,11 @@ class DisplayTrains(SampleBase):
             display_items = self.what_should_we_display()
             for display_item in display_items:
                 if display_item == 'trains':
-                    self.display_trains(canvas)
+                    canvas = self.display_trains(canvas)
                 elif display_item == 'clock':
-                    self.display_clock(canvas)
+                    canvas = self.display_clock(canvas)
+                elif display_item == 'weather':
+                    canvas = self.display_weather(canvas)
                 else:
                     # nothing
                     canvas.Clear()
@@ -334,6 +373,23 @@ def display_trains(trains, stop_id):
     print()
 
 
+def k_to_c(k):
+    return round(k - 273.15)
+
+
+def icon_name_to_file(icon_name):
+    if icon_name == '01d':
+        icon_file = 'icons/32/sun.xbm'
+    elif icon_name == '01n':
+        icon_file = 'icons/32/moon.xbm'
+    elif icon_name == '02d':
+        icon_file = 'icons/32/cloud_sun.xbm'
+    else:
+        icon_file = 'icons/32/sun.xbm'
+
+    return icon_file
+
+
 def get_weather():
     global WEATHER
     global FORECAST
@@ -348,6 +404,35 @@ def get_weather():
         WEATHER_TIMESTAMP = datetime.now()
 
     return WEATHER, FORECAST
+
+
+def todays_forecast():
+    min_temp = 0
+    max_temp = 20
+    icon = 'icons/32/sun.xbm'
+
+    w, forecast = get_weather()
+    max_temp = k_to_c(w.temp['temp'])
+    min_temp = max_temp
+    icon = icon_name_to_file(w.weather_icon_name)
+
+    return min_temp, max_temp, icon
+
+
+def evening_forecast():
+    min_temp = 0
+    max_temp = 20
+    icon = 'icons/32/sun.xbm'
+
+    return min_temp, max_temp, icon
+
+
+def tomorrows_forecast():
+    min_temp = 0
+    max_temp = 20
+    icon = 'icons/32/sun.xbm'
+
+    return min_temp, max_temp, icon
 
 
 def main():
