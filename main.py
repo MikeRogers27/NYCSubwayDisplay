@@ -186,7 +186,7 @@ class DisplayTrains(SampleBase):
             graphics.DrawText(canvas, self.circle_font, 50, text_y_top - 1, self.circle_colour_nqrw, 'N')
             graphics.DrawText(canvas, self.circle_font, 56, text_y_top - 1, self.circle_colour_bdfm, 'D')
 
-        graphics.DrawText(canvas, self.font, 1, text_y_bottom, self.text_colour, '*no trains*')
+        graphics.DrawText(canvas, self.font, 3, text_y_bottom, self.text_colour, '*no trains*')
 
     def draw_trains(self, trains, stop_id, canvas):
         if len(trains):
