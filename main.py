@@ -21,7 +21,7 @@ FEEDS = [
     NYCTFeed("R"),
 ]
 NOW = None
-owm = OWM('09e258070bffcd29e09274a8e3c53ada')
+owm = OWM(os.environ['OWM_API_KEY'])
 mgr = owm.weather_manager()
 WEATHER = None
 FORECAST = None
@@ -207,19 +207,21 @@ class DisplayTrains(SampleBase):
             return True, canvas
 
     def what_should_we_display(self):
-        return ['weather']
-        return ['clock', 'trains']
+        # return ['weather']
+        # return ['clock', 'trains']
 
         timestamp = datetime.now().time()
-        # display trains between 7am and 9am
-        if timestamp > time(7, 0) and timestamp < time(9, 0):
-            return 'trains+clock'
-        if timestamp >= time(9, 0) and timestamp < time(19, 0):
-            return 'trains'
-        if timestamp >= time(20, 0):
-            return 'clock'
+        # display trains and clock between 7am and 9am
+        if timestamp > dt_time(7, 0) and timestamp < dt_time(9, 0):
+            return ['trains, clock']
+        # only trains during the day
+        if timestamp >= dt_time(9, 0) and timestamp < dt_time(20, 0):
+            return ['trains']
+        # only clok after 8
+        if timestamp >= dt_time(20, 0):
+            return ['clock']
 
-        return 'off'
+        return ['off']
 
     def display_trains(self, canvas):
         update_feeds()
@@ -377,13 +379,59 @@ def k_to_c(k):
     return round(k - 273.15)
 
 
-def icon_name_to_file(icon_name):
-    if icon_name == '01d':
-        icon_file = 'icons/32/sun.xbm'
-    elif icon_name == '01n':
-        icon_file = 'icons/32/moon.xbm'
-    elif icon_name == '02d':
-        icon_file = 'icons/32/cloud_sun.xbm'
+def weather_to_icon(weather):
+    is_day = weather.weather_icon_name.endswith('d')
+
+    if weather.weather_code in [201, 202]:
+        icon_file = 'icons/32/rain_lightning.xbm'
+    elif weather.weather_code in [200, 210, 211, 212, 221, 230, 231, 232]:
+        icon_file = 'icons/32/lightning.xbm'
+
+    elif weather.weather_code in [300, 301, 302, 310, 311, 312, 313, 314, 321]:
+        icon_file = 'icons/32/rain0.xbm'
+
+    elif weather.weather_code in [500, 501, ]:
+        icon_file = 'icons/32/rain1.xbm'
+
+    elif weather.weather_code in [502, 503, 504]:
+        icon_file = 'icons/32/rain2.xbm'
+
+    elif weather.weather_code in [511, 611, 612, 613, 615, 616, ]:
+        icon_file = 'icons/32/rain_snow.xbm'
+
+    elif weather.weather_code in [520, 521, 522, 531]:
+        if is_day:
+            icon_file = 'icons/32/rain1_sun.xbm'
+        else:
+            icon_file = 'icons/32/rain1_moon.xbm'
+
+    elif weather.weather_code in [600, 601, 602, ]:
+        icon_file = 'icons/32/snow.xbm'
+
+    elif weather.weather_code in [620, 621, 622, ]:
+        if is_day:
+            icon_file = 'icons/32/snow_sun.xbm'
+        else:
+            icon_file = 'icons/32/snow_moon.xbm'
+
+    elif weather.weather_code in [701, 711, 721, 731, 741, 751, 761, 762, 771, 781]:
+        icon_file = 'icons/32/cloud_wind.xbm.xbm'
+
+    elif weather.weather_code in [800]:
+        if is_day:
+            icon_file = 'icons/32/sun.xbm'
+        else:
+            icon_file = 'icons/32/moon.xbm'
+    elif weather.weather_code in [801]:
+        if is_day:
+            icon_file = 'icons/32/cloud_sun.xbm'
+        else:
+            icon_file = 'icons/32/cloud_moon.xbm'
+    elif weather.weather_code in [802]:
+        icon_file = 'icons/32/cloud.xbm'
+    elif weather.weather_code in [803, 804]:
+        icon_file = 'icons/32/clouds.xbm'
+
     else:
         icon_file = 'icons/32/sun.xbm'
 
@@ -414,7 +462,7 @@ def todays_forecast():
     w, forecast = get_weather()
     max_temp = k_to_c(w.temp['temp'])
     min_temp = max_temp
-    icon = icon_name_to_file(w.weather_icon_name)
+    icon = weather_to_icon(w)
 
     return min_temp, max_temp, icon
 
@@ -423,6 +471,13 @@ def evening_forecast():
     min_temp = 0
     max_temp = 20
     icon = 'icons/32/sun.xbm'
+
+    w, forecast = get_weather()
+    max_temp = k_to_c(w.temp['temp'])
+    min_temp = max_temp
+    icon = weather_to_icon(w)
+
+
 
     return min_temp, max_temp, icon
 
