@@ -395,84 +395,79 @@ def k_to_c(k):
 def weather_to_icon(weather):
     # see: https://openweathermap.org/weather-conditions
     # icons from: https://www.iconpacks.net/free-icon-pack/free-weather-forecast-icon-pack-201.html
+
+    # sun and moon: ffaf00
+    # light cloud: 9ba0b4
+    # dark cloud: 5e616c
+    # blue moon: 6a88ff
+
     is_day = weather.weather_icon_name.endswith('d')
 
     if weather.weather_code in [200, 201, 202, 230, 231, 232]:
-        icon_file = 'icons/32/lightning-and-blue-rain-cloud-16533.png'
+        icon_file = 'icons/32/rain_lightning.png'
     elif weather.weather_code in [210, 211, 212, 221]:
-        icon_file = 'icons/32/cloud-and-yellow-lightning-16534.png'
+        icon_file = 'icons/32/lightning.png'
 
     elif weather.weather_code in [300, 301, 302, 310, 311, 312]:
-        icon_file = 'icons/32/rainy-and-cloudy-day-16532.png'
+        icon_file = 'icons/32/rain0.png'
     elif weather.weather_code in [313, 314, 321]:
         if is_day:
-            icon_file = 'icons/32/yellow-sun-and-blue-rain-cloud-16535.png'
+            icon_file = 'icons/32/rain0_sun.png'
         else:
-            icon_file = 'icons/32/rainy-night-and-clouds-with-moon-16539.png'
+            icon_file = 'icons/32/rain0.png'
 
     elif weather.weather_code in [500, ]:
-        icon_file = 'icons/32/rainy-and-cloudy-day-16532.png'
+        icon_file = 'icons/32/rain0.png'
 
     elif weather.weather_code in [501, 502,]:
-        icon_file = 'icons/32/rain-and-blue-cloud-16530.png'
+        icon_file = 'icons/32/rain1.png'
 
     elif weather.weather_code in [503, 504, ]:
-        icon_file = 'icons/32/downpour-rainy-day-16531.png'
+        icon_file = 'icons/32/rain2.png'
 
-    elif weather.weather_code in [511, 611, 615]:
-        icon_file = 'icons/32/hail-and-blue-winter-cloud-16558.png'
+    elif weather.weather_code in [511, 611]:
+        icon_file = 'icons/32/rain_hail.png'
 
     elif weather.weather_code in [520, 521, 522, 531]:
         if is_day:
-            icon_file = 'icons/32/yellow-sun-and-blue-rain-cloud-16535.png'
+            icon_file = 'icons/32/rain1_sun.png'
         else:
-            icon_file = 'icons/32/rainy-night-and-clouds-with-moon-16539.png'
+            icon_file = 'icons/32/rain1_moon.png'
 
-    elif weather.weather_code in [601, ]:
-        icon_file = 'icons/32/snowfall-and-blue-cloud-16541.png'
+    elif weather.weather_code in [600, 601, 602, ]:
+        icon_file = 'icons/32/snow.png'
 
-    elif weather.weather_code in [602, ]:
-        icon_file = 'icons/32/snow-and-blue-cloud-16540.png'
-
-    elif weather.weather_code in [612, 613, ]:
+    elif weather.weather_code in [612, 613, 620, 621, 622]:
         if is_day:
-            icon_file = 'icons/32/yellow-sun-and-snow-with-blue-cloud-16542.png'
+            icon_file = 'icons/32/snow_sun.png'
         else:
-            icon_file = 'icons/32/blue-moon-and-snowy-night-16543.png'
+            icon_file = 'icons/32/snow_moon.png'
 
-    elif weather.weather_code in [616, ]:
-        icon_file = 'icons/32/hail-weather-and-winter-cloud-16559.png'
-
-    elif weather.weather_code in [620, 621, 622]:
-        if is_day:
-            icon_file = 'icons/32/yellow-sun-and-snow-with-blue-cloud-16542.png'
-        else:
-            icon_file = 'icons/32/blue-moon-and-snowy-night-16543.png'
+    elif weather.weather_code in [615, 616, ]:
+        icon_file = 'icons/32/rain_snow.png'
 
     elif weather.weather_code in [701, 711, 721, 731, 741, 751, 761, 762, 771, 781]:
-        icon_file = 'icons/32/sunset-and-blue-sea-16545.png'
+        icon_file = 'icons/32/fog.png'
 
     elif weather.weather_code in [781]:
-        icon_file = 'icons/32/blue-storm-sign-16551.png'
+        icon_file = 'icons/32/tornado.png'
 
     elif weather.weather_code in [800]:
         if is_day:
-            icon_file = 'icons/32/yellow-sun-16526.png'
+            icon_file = 'icons/32/sun.png'
         else:
-            icon_file = 'icons/32/yellow-moon-16536.png'
-    elif weather.weather_code in [801,]:
+            icon_file = 'icons/32/moon.png'
+    elif weather.weather_code in [801, ]:
         if is_day:
-            icon_file = 'icons/32/yellow-sun-and-blue-cloud-16528.png'
+            icon_file = 'icons/32/cloud_sun.png'
         else:
-            icon_file = 'icons/32/moon-and-cloudy-night-16537.png'
-    elif weather.weather_code in [802,]:
-        if is_day:
-            icon_file = 'icons/32/blue-clouds-and-yellow-sun-16529.png'
-        else:
-            icon_file = 'icons/32/blue-clouds-and-blue-moon-16538.png'
+            icon_file = 'icons/32/cloud_moon.png'
+
+    elif weather.weather_code in [802, ]:
+        icon_file = 'icons/32/cloud.png'
 
     elif weather.weather_code in [803, 804]:
-        icon_file = 'icons/32/blue-cloud-and-weather-16527.png'
+        icon_file = 'icons/32/clouds.png'
 
     else:
         icon_file = 'icons/32/weather-forecast-sign-16552.png'
