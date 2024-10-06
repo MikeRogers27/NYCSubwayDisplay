@@ -6,6 +6,7 @@ import signal
 
 from nyct_gtfs import NYCTFeed
 from pyowm import OWM
+
 # from PIL import Image
 
 if os.name == 'nt':
@@ -21,8 +22,8 @@ FEEDS = [
     NYCTFeed("R"),
 ]
 NOW = None
-owm = OWM(os.environ['OWM_API_KEY'])
-mgr = owm.weather_manager()
+# owm = OWM(os.environ['OWM_API_KEY'])
+# mgr = owm.weather_manager()
 WEATHER = None
 FORECAST = None
 WEATHER_TIMESTAMP = None
@@ -208,7 +209,7 @@ class DisplayTrains(SampleBase):
 
     def what_should_we_display(self):
         # return ['weather']
-        # return ['clock', 'trains']
+        return ['clock', 'trains']
 
         timestamp = datetime.now().time()
         # display trains and clock between 7am and 9am
@@ -257,14 +258,17 @@ class DisplayTrains(SampleBase):
             graphics.DrawText(canvas, self.font, clock_pos, text_y_top, self.text_colour,
                               current_time.strftime('%H'))
             if show_colon:
-                graphics.DrawText(canvas, self.font, clock_pos+14, text_y_top-1, self.text_colour,':')
-            graphics.DrawText(canvas, self.font, clock_pos+17, text_y_top, self.text_colour,
+                graphics.DrawText(canvas, self.font, clock_pos + 14, text_y_top - 1, self.text_colour, ':')
+            graphics.DrawText(canvas, self.font, clock_pos + 17, text_y_top, self.text_colour,
                               current_time.strftime('%M'))
 
             # draw temp
-            graphics.DrawText(canvas, self.circle_font, clock_pos+44, text_y_top-1, self.text_colour,
-                              f'{round(w.temp["temp"]-273.15):d}c')
-
+            if w is not None:
+                graphics.DrawText(canvas, self.circle_font, clock_pos + 44, text_y_top - 1, self.text_colour,
+                                  f'{k_to_c(w.temp["temp"]):d}c')
+            else:
+                graphics.DrawText(canvas, self.circle_font, clock_pos + 44, text_y_top - 1, self.text_colour,
+                                  '--c')
 
             # draw date
             date_str = current_time.strftime('%a ') + f'{current_time.day} ' + current_time.strftime('%b')
@@ -439,6 +443,8 @@ def weather_to_icon(weather):
 
 
 def get_weather():
+    return None, None
+
     global WEATHER
     global FORECAST
     global WEATHER_TIMESTAMP
@@ -476,8 +482,6 @@ def evening_forecast():
     max_temp = k_to_c(w.temp['temp'])
     min_temp = max_temp
     icon = weather_to_icon(w)
-
-
 
     return min_temp, max_temp, icon
 
