@@ -7,7 +7,6 @@ import signal
 from nyct_gtfs import NYCTFeed
 from pyowm import OWM
 
-# from PIL import Image
 
 if os.name == 'nt':
     graphics = importlib.import_module('RGBMatrixEmulator', 'graphics')
@@ -22,8 +21,7 @@ FEEDS = [
     NYCTFeed("R"),
 ]
 NOW = None
-# owm = OWM(os.environ['OWM_API_KEY'])
-# mgr = owm.weather_manager()
+WEATHER_MGR = None
 WEATHER = None
 FORECAST = None
 WEATHER_TIMESTAMP = None
@@ -208,7 +206,7 @@ class DisplayTrains(SampleBase):
             return True, canvas
 
     def what_should_we_display(self):
-        # return ['weather']
+        return ['weather']
         return ['clock', 'trains']
 
         timestamp = datetime.now().time()
@@ -281,6 +279,8 @@ class DisplayTrains(SampleBase):
         return canvas
 
     def display_weather(self, canvas):
+        from PIL import Image
+
         text_y_top = 10
         text_y_middle = 20
         text_y_bottom = 30
@@ -296,16 +296,25 @@ class DisplayTrains(SampleBase):
             min_temp, max_temp, icon_file = tomorrows_forecast()
             head_str = 'Tom'
 
+        if min_temp is None:
+            min_temp = '-'
+
+        if max_temp is None:
+            max_temp = '-'
+
         canvas.Clear()
 
-        im = Image.open(icon_file)
+        if icon_file is not None:
+            im = Image.open(icon_file)
+            if im.width != 32:
+                im.thumbnail((32, 32), Image.Resampling.LANCZOS)
+            canvas.SetImage(im)
 
-        graphics.DrawText(canvas, self.circle_font, 32, text_y_top, self.text_colour, head_str)
-        graphics.DrawText(canvas, self.circle_font, 32, text_y_middle, self.text_colour,
+        graphics.DrawText(canvas, self.circle_font, 33, text_y_top, self.text_colour, head_str)
+        graphics.DrawText(canvas, self.circle_font, 33, text_y_middle, self.text_colour,
                           f'↓{min_temp}c')
-        graphics.DrawText(canvas, self.circle_font, 32, text_y_bottom, self.text_colour,
+        graphics.DrawText(canvas, self.circle_font, 33, text_y_bottom, self.text_colour,
                           f'↑{max_temp}c')
-        canvas.SetImage(im)
 
         canvas = self.matrix.SwapOnVSync(canvas)
         time.sleep(10)
@@ -423,9 +432,9 @@ def weather_to_icon(weather):
 
     elif weather.weather_code in [800]:
         if is_day:
-            icon_file = 'icons/32/sun.xbm'
+            icon_file = 'icons/32/yellow-sun-16526.png'
         else:
-            icon_file = 'icons/32/moon.xbm'
+            icon_file = 'icons/32/yellow-moon-16536.png'
     elif weather.weather_code in [801]:
         if is_day:
             icon_file = 'icons/32/cloud_sun.xbm'
@@ -443,55 +452,61 @@ def weather_to_icon(weather):
 
 
 def get_weather():
-    return None, None
-
+    global WEATHER_MGR
     global WEATHER
     global FORECAST
     global WEATHER_TIMESTAMP
 
-    # we only get the weather every 4 hours
+    if WEATHER_MGR is None:
+        owm = OWM(os.environ['OWM_API_KEY'])
+        WEATHER_MGR = owm.weather_manager()
+
+    # we only get the weather every 0.5 hours
     if WEATHER_TIMESTAMP is None or \
-            (datetime.now() - WEATHER_TIMESTAMP).total_seconds() / 3600 > 4:
-        observation = mgr.weather_at_place('New York')
-        WEATHER = observation.weather
-        FORECAST = mgr.forecast_at_place('New York', '3h')
+            (datetime.now() - WEATHER_TIMESTAMP).total_seconds() / 3600 > 0.5:
         WEATHER_TIMESTAMP = datetime.now()
+        try:
+            observation = WEATHER_MGR.weather_at_place('New York')
+            WEATHER = observation.weather
+            FORECAST = WEATHER_MGR.forecast_at_place('New York', '3h')
+        except Exception as e:
+            WEATHER = None
+            FORECAST = None
 
     return WEATHER, FORECAST
 
 
-def todays_forecast():
-    min_temp = 0
-    max_temp = 20
-    icon = 'icons/32/sun.xbm'
-
+def get_forecast(time_start, time_end):
     w, forecast = get_weather()
+    if w is None:
+        return None, None, 'icons/32/weather-forecast-sign-16552.png'
+
     max_temp = k_to_c(w.temp['temp'])
     min_temp = max_temp
     icon = weather_to_icon(w)
 
     return min_temp, max_temp, icon
+
+
+def todays_forecast():
+    # today's forecast is between 9am and 7pm
+    start_time = datetime.today().replace(hour=9, minute=0, second=0)
+    end_time = datetime.today().replace(hour=19, minute=0, second=0)
+    return get_forecast(start_time, end_time)
 
 
 def evening_forecast():
-    min_temp = 0
-    max_temp = 20
-    icon = 'icons/32/sun.xbm'
-
-    w, forecast = get_weather()
-    max_temp = k_to_c(w.temp['temp'])
-    min_temp = max_temp
-    icon = weather_to_icon(w)
-
-    return min_temp, max_temp, icon
+    # evening forecast is between 7pm and midnight
+    start_time = datetime.today().replace(hour=19, minute=0, second=0)
+    end_time = datetime.today().replace(hour=0, minute=0, second=0) + datetime.timedelta(days=1)
+    return get_forecast(start_time, end_time)
 
 
 def tomorrows_forecast():
-    min_temp = 0
-    max_temp = 20
-    icon = 'icons/32/sun.xbm'
-
-    return min_temp, max_temp, icon
+    # evening forecast is between 7am and 7pm tomorrow
+    start_time = datetime.today().replace(hour=7, minute=0, second=0) + datetime.timedelta(days=1)
+    end_time = datetime.today().replace(hour=19, minute=0, second=0) + datetime.timedelta(days=1)
+    return get_forecast(start_time, end_time)
 
 
 def main():
