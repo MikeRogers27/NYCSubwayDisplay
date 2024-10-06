@@ -6,7 +6,7 @@ import signal
 
 from nyct_gtfs import NYCTFeed
 from pyowm import OWM
-from PIL import Image
+# from PIL import Image
 
 if os.name == 'nt':
     graphics = importlib.import_module('RGBMatrixEmulator', 'graphics')
