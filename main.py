@@ -3,6 +3,7 @@ import importlib
 import os
 import time
 import signal
+import warnings
 
 from nyct_gtfs import NYCTFeed
 from pyowm import OWM
@@ -16,11 +17,7 @@ else:
 
 from samplebase import SampleBase
 
-FEEDS = [
-    NYCTFeed("F"),
-    NYCTFeed("G"),
-    NYCTFeed("R"),
-]
+FEEDS = None
 NOW = None
 # owm = OWM(os.environ['OWM_API_KEY'])
 # mgr = owm.weather_manager()
@@ -359,17 +356,40 @@ def get_next_trains(
     NOW = datetime.now()
     # get all feeds
     all_trains = []
-    for feed in FEEDS:
+    for feed in get_mta_feeds():
         all_trains.extend(feed.filter_trips(headed_for_stop_id=stop_id))
 
     return find_next_trains(all_trains, num_trains, stop_id)
 
 
+def get_mta_feeds():
+    import requests
+    global FEEDS
+
+    if FEEDS is None:
+        try:
+            FEEDS = [
+                NYCTFeed("F"),
+                NYCTFeed("G"),
+                NYCTFeed("R"),
+            ]
+        except requests.exceptions.ConnectionError as e:
+            warnings.warn(f'ConnectionError: {e}')
+            return []
+
+    return FEEDS
+
+
 def update_feeds():
+    import requests
+
     # update all feeds
-    all_trains = []
-    for feed in FEEDS:
-        feed.refresh()
+    for feed in get_mta_feeds():
+        try:
+            feed.refresh()
+        except requests.exceptions.ConnectionError as e:
+            warnings.warn(f'ConnectionError: {e}')
+            pass
 
 
 def display_trains(trains, stop_id):
