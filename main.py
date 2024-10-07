@@ -1,4 +1,4 @@
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dt_time, timedelta
 import importlib
 import os
 import time
@@ -227,16 +227,26 @@ class DisplayTrains(SampleBase):
         if trains is None:
             self.draw_no_data(stop_id, canvas)
         elif len(trains):
-            self.draw_train(0, trains[0], stop_id, canvas)
-            if len(trains) > 1:
-                self.draw_train(1, trains[1], stop_id, canvas)
+            # check we don't have stale data
+            now = datetime.now()
+            last_update_time = now - timedelta(minutes=60)
+            for train in trains:
+                if train.last_position_update > last_update_time:
+                    last_update_time = train.last_position_update
+            # if the latest update was more than 15 minutes ago, the data is stale
+            if last_update_time < now - timedelta(minutes=15):
+                self.draw_no_trains(stop_id, canvas)
+            else:
+                self.draw_train(0, trains[0], stop_id, canvas)
+                if len(trains) > 1:
+                    self.draw_train(1, trains[1], stop_id, canvas)
         else:
             self.draw_no_trains(stop_id, canvas)
 
         return True, canvas
 
     def what_should_we_display(self):
-        # return ['weather']
+        return ['trains']
         return ['clock', 'trains']
 
         timestamp = datetime.now().time()
@@ -402,7 +412,6 @@ def get_mta_feeds():
 
     if FEEDS is None:
         try:
-            raise requests.exceptions.ConnectionError
             FEEDS = [
                 NYCTFeed("F"),
                 NYCTFeed("G"),
