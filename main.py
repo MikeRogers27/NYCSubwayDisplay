@@ -571,6 +571,7 @@ def main():
     # r_trains = get_next_trains(stop_id='R33N')
     # display_trains(r_trains, stop_id='R33N')
 
+    get_mta_feeds()
     led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'])
     # led_display_trains = DisplayTrains(['F23S', ])
     led_display_trains.process()
