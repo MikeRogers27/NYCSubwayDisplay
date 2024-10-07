@@ -163,14 +163,8 @@ class DisplayTrains(SampleBase):
                       direction=direction,
                       arrival_mins=arrival_mins)
 
-    def draw_no_data(self,
-                       stop_id,
-                       canvas,
-                       ):
-        # Top line
-        text_y_top = 13
-        text_y_bottom = 28
-
+    @staticmethod
+    def get_stop_name_and_direction( stop_id):
         if stop_id.startswith('F23'):
             stop_name = '4 Av'
         elif stop_id.startswith('R33'):
@@ -180,6 +174,18 @@ class DisplayTrains(SampleBase):
             direction = '↑'
         else:
             direction = '↓'
+
+        return stop_name, direction
+
+    def draw_no_train_data(self,
+                           stop_id,
+                           canvas,
+                           ):
+        # Top line
+        text_y_top = 13
+        text_y_bottom = 28
+
+        stop_name, direction = self.get_stop_name_and_direction(stop_id)
 
         graphics.DrawText(canvas, self.font, 1, text_y_top, self.text_colour, f'{stop_name} {direction}')
         if stop_id.startswith('F23'):
@@ -201,15 +207,7 @@ class DisplayTrains(SampleBase):
         text_y_top = 13
         text_y_bottom = 28
 
-        if stop_id.startswith('F23'):
-            stop_name = '4 Av'
-        elif stop_id.startswith('R33'):
-            stop_name = '9 St'
-
-        if stop_id.endswith('N'):
-            direction = '↑'
-        else:
-            direction = '↓'
+        stop_name, direction = self.get_stop_name_and_direction(stop_id)
 
         graphics.DrawText(canvas, self.font, 1, text_y_top, self.text_colour, f'{stop_name} {direction}')
         if stop_id.startswith('F23'):
@@ -225,7 +223,7 @@ class DisplayTrains(SampleBase):
 
     def draw_trains(self, trains, stop_id, canvas):
         if trains is None:
-            self.draw_no_data(stop_id, canvas)
+            self.draw_no_train_data(stop_id, canvas)
         elif len(trains):
             # check we don't have stale data
             now = datetime.now()
