@@ -163,6 +163,36 @@ class DisplayTrains(SampleBase):
                       direction=direction,
                       arrival_mins=arrival_mins)
 
+    def draw_no_data(self,
+                       stop_id,
+                       canvas,
+                       ):
+        # Top line
+        text_y_top = 13
+        text_y_bottom = 28
+
+        if stop_id.startswith('F23'):
+            stop_name = '4 Av'
+        elif stop_id.startswith('R33'):
+            stop_name = '9 St'
+
+        if stop_id.endswith('N'):
+            direction = '↑'
+        else:
+            direction = '↓'
+
+        graphics.DrawText(canvas, self.font, 1, text_y_top, self.text_colour, f'{stop_name} {direction}')
+        if stop_id.startswith('F23'):
+            graphics.DrawText(canvas, self.circle_font, 44, text_y_top - 1, self.circle_colour_bdfm, 'F')
+            graphics.DrawText(canvas, self.circle_font, 50, text_y_top - 1, self.circle_colour_g, 'G')
+        else:
+            graphics.DrawText(canvas, self.circle_font, 38, text_y_top - 1, self.circle_colour_nqrw, 'R')
+            graphics.DrawText(canvas, self.circle_font, 44, text_y_top - 1, self.circle_colour_nqrw, 'W')
+            graphics.DrawText(canvas, self.circle_font, 50, text_y_top - 1, self.circle_colour_nqrw, 'N')
+            graphics.DrawText(canvas, self.circle_font, 56, text_y_top - 1, self.circle_colour_bdfm, 'D')
+
+        graphics.DrawText(canvas, self.font, 7, text_y_bottom, self.text_colour, '*no data*')
+
     def draw_no_trains(self,
                        stop_id,
                        canvas,
@@ -194,15 +224,16 @@ class DisplayTrains(SampleBase):
         graphics.DrawText(canvas, self.font, 3, text_y_bottom, self.text_colour, '*no trains*')
 
     def draw_trains(self, trains, stop_id, canvas):
-        if len(trains):
+        if trains is None:
+            self.draw_no_data(stop_id, canvas)
+        elif len(trains):
             self.draw_train(0, trains[0], stop_id, canvas)
             if len(trains) > 1:
                 self.draw_train(1, trains[1], stop_id, canvas)
-
-            return True, canvas
         else:
             self.draw_no_trains(stop_id, canvas)
-            return True, canvas
+
+        return True, canvas
 
     def what_should_we_display(self):
         # return ['weather']
@@ -355,11 +386,14 @@ def get_next_trains(
     global NOW
     NOW = datetime.now()
     # get all feeds
-    all_trains = []
-    for feed in get_mta_feeds():
-        all_trains.extend(feed.filter_trips(headed_for_stop_id=stop_id))
-
-    return find_next_trains(all_trains, num_trains, stop_id)
+    feeds = get_mta_feeds()
+    if feeds is not None:
+        all_trains = []
+        for feed in feeds:
+            all_trains.extend(feed.filter_trips(headed_for_stop_id=stop_id))
+        return find_next_trains(all_trains, num_trains, stop_id)
+    else:
+        return None
 
 
 def get_mta_feeds():
@@ -368,6 +402,7 @@ def get_mta_feeds():
 
     if FEEDS is None:
         try:
+            raise requests.exceptions.ConnectionError
             FEEDS = [
                 NYCTFeed("F"),
                 NYCTFeed("G"),
@@ -375,7 +410,7 @@ def get_mta_feeds():
             ]
         except requests.exceptions.ConnectionError as e:
             warnings.warn(f'ConnectionError: {e}')
-            return []
+            return None
 
     return FEEDS
 
@@ -384,12 +419,14 @@ def update_feeds():
     import requests
 
     # update all feeds
-    for feed in get_mta_feeds():
-        try:
-            feed.refresh()
-        except requests.exceptions.ConnectionError as e:
-            warnings.warn(f'ConnectionError: {e}')
-            pass
+    feeds = get_mta_feeds()
+    if feeds is not None:
+        for feed in feeds:
+            try:
+                feed.refresh()
+            except requests.exceptions.ConnectionError as e:
+                warnings.warn(f'ConnectionError: {e}')
+                pass
 
 
 def display_trains(trains, stop_id):
@@ -545,6 +582,23 @@ if __name__ == '__main__':
     # https://www.dexterindustries.com/howto/run-a-program-on-your-raspberry-pi-at-startup/
     #
     # /lib/systemd/system/matrix.service
+    #
+    # Contents:
+    # [Unit]
+    # Description=LED Matrix Runner
+    # Wants=network.target network-online.target
+    # After=multi-user.target network.target network-online.target
+    #
+    # [Service]
+    # Type=idle
+    # ExecStart=/home/pi/run-matrix.sh
+    # User=pi
+    # Group=pi
+    # StandardOutput=append:/home/pi/logs/matrix.log
+    # StandardError=append:/home/pi/logs/matrix_err.log
+    #
+    # [Install]
+    # WantedBy=multi-user.target
     #
     # to enable
     # sudo systemctl daemon-reload
