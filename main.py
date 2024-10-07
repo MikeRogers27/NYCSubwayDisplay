@@ -233,7 +233,7 @@ class DisplayTrains(SampleBase):
                     last_update_time = train.last_position_update
             # if the latest update was more than 15 minutes ago, the data is stale
             if last_update_time < now - timedelta(minutes=15):
-                self.draw_no_trains(stop_id, canvas)
+                self.draw_no_train_data(stop_id, canvas)
             else:
                 self.draw_train(0, trains[0], stop_id, canvas)
                 if len(trains) > 1:
