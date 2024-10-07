@@ -1,4 +1,4 @@
-from datetime import datetime, time as dt_time
+from datetime import datetime, timedelta, time as dt_time
 import importlib
 import os
 import time
@@ -522,14 +522,14 @@ def todays_forecast():
 def evening_forecast():
     # evening forecast is between 7pm and midnight
     start_time = datetime.today().replace(hour=19, minute=0, second=0)
-    end_time = datetime.today().replace(hour=0, minute=0, second=0) + datetime.timedelta(days=1)
+    end_time = datetime.today().replace(hour=0, minute=0, second=0) + timedelta(days=1)
     return get_forecast(start_time, end_time)
 
 
 def tomorrows_forecast():
     # evening forecast is between 7am and 7pm tomorrow
-    start_time = datetime.today().replace(hour=7, minute=0, second=0) + datetime.timedelta(days=1)
-    end_time = datetime.today().replace(hour=19, minute=0, second=0) + datetime.timedelta(days=1)
+    start_time = datetime.today().replace(hour=7, minute=0, second=0) + timedelta(days=1)
+    end_time = datetime.today().replace(hour=19, minute=0, second=0) + timedelta(days=1)
     return get_forecast(start_time, end_time)
 
 
