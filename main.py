@@ -246,15 +246,15 @@ class DisplayTrains(SampleBase):
         return True, canvas
 
     def what_should_we_display(self):
-        return ['trains']
-        return ['clock', 'trains']
+        # return ['trains']
+        # return ['clock', 'trains']
 
         timestamp = datetime.now().time()
         # display trains and clock between 7am and 9am
-        if timestamp > dt_time(7, 0) and timestamp < dt_time(9, 0):
+        if dt_time(7, 0) <= timestamp < dt_time(9, 0):
             return ['trains, clock']
         # only trains during the day
-        if timestamp >= dt_time(9, 0) and timestamp < dt_time(20, 0):
+        if dt_time(9, 0) <= timestamp < dt_time(20, 0):
             return ['trains']
         # only clok after 8
         if timestamp >= dt_time(20, 0):
