@@ -1,8 +1,9 @@
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dt_time, timedelta
 import importlib
 import os
 import time
 import signal
+import warnings
 
 from nyct_gtfs import NYCTFeed
 from pyowm import OWM
@@ -16,11 +17,7 @@ else:
 
 from samplebase import SampleBase
 
-FEEDS = [
-    NYCTFeed("F"),
-    NYCTFeed("G"),
-    NYCTFeed("R"),
-]
+FEEDS = None
 NOW = None
 # owm = OWM(os.environ['OWM_API_KEY'])
 # mgr = owm.weather_manager()
@@ -166,14 +163,8 @@ class DisplayTrains(SampleBase):
                       direction=direction,
                       arrival_mins=arrival_mins)
 
-    def draw_no_trains(self,
-                       stop_id,
-                       canvas,
-                       ):
-        # Top line
-        text_y_top = 13
-        text_y_bottom = 28
-
+    @staticmethod
+    def get_stop_name_and_direction( stop_id):
         if stop_id.startswith('F23'):
             stop_name = '4 Av'
         elif stop_id.startswith('R33'):
@@ -183,6 +174,40 @@ class DisplayTrains(SampleBase):
             direction = '↑'
         else:
             direction = '↓'
+
+        return stop_name, direction
+
+    def draw_no_train_data(self,
+                           stop_id,
+                           canvas,
+                           ):
+        # Top line
+        text_y_top = 13
+        text_y_bottom = 28
+
+        stop_name, direction = self.get_stop_name_and_direction(stop_id)
+
+        graphics.DrawText(canvas, self.font, 1, text_y_top, self.text_colour, f'{stop_name} {direction}')
+        if stop_id.startswith('F23'):
+            graphics.DrawText(canvas, self.circle_font, 44, text_y_top - 1, self.circle_colour_bdfm, 'F')
+            graphics.DrawText(canvas, self.circle_font, 50, text_y_top - 1, self.circle_colour_g, 'G')
+        else:
+            graphics.DrawText(canvas, self.circle_font, 38, text_y_top - 1, self.circle_colour_nqrw, 'R')
+            graphics.DrawText(canvas, self.circle_font, 44, text_y_top - 1, self.circle_colour_nqrw, 'W')
+            graphics.DrawText(canvas, self.circle_font, 50, text_y_top - 1, self.circle_colour_nqrw, 'N')
+            graphics.DrawText(canvas, self.circle_font, 56, text_y_top - 1, self.circle_colour_bdfm, 'D')
+
+        graphics.DrawText(canvas, self.font, 7, text_y_bottom, self.text_colour, '*no data*')
+
+    def draw_no_trains(self,
+                       stop_id,
+                       canvas,
+                       ):
+        # Top line
+        text_y_top = 13
+        text_y_bottom = 28
+
+        stop_name, direction = self.get_stop_name_and_direction(stop_id)
 
         graphics.DrawText(canvas, self.font, 1, text_y_top, self.text_colour, f'{stop_name} {direction}')
         if stop_id.startswith('F23'):
@@ -197,26 +222,37 @@ class DisplayTrains(SampleBase):
         graphics.DrawText(canvas, self.font, 3, text_y_bottom, self.text_colour, '*no trains*')
 
     def draw_trains(self, trains, stop_id, canvas):
-        if len(trains):
-            self.draw_train(0, trains[0], stop_id, canvas)
-            if len(trains) > 1:
-                self.draw_train(1, trains[1], stop_id, canvas)
-
-            return True, canvas
+        if trains is None:
+            self.draw_no_train_data(stop_id, canvas)
+        elif len(trains):
+            # check we don't have stale data
+            now = datetime.now()
+            last_update_time = now - timedelta(minutes=60)
+            for train in trains:
+                if train.last_position_update > last_update_time:
+                    last_update_time = train.last_position_update
+            # if the latest update was more than 15 minutes ago, the data is stale
+            if last_update_time < now - timedelta(minutes=15):
+                self.draw_no_train_data(stop_id, canvas)
+            else:
+                self.draw_train(0, trains[0], stop_id, canvas)
+                if len(trains) > 1:
+                    self.draw_train(1, trains[1], stop_id, canvas)
         else:
             self.draw_no_trains(stop_id, canvas)
-            return True, canvas
+
+        return True, canvas
 
     def what_should_we_display(self):
-        # return ['weather']
-        return ['clock', 'trains']
+        # return ['trains']
+        # return ['clock', 'trains']
 
         timestamp = datetime.now().time()
         # display trains and clock between 7am and 9am
-        if timestamp > dt_time(7, 0) and timestamp < dt_time(9, 0):
+        if dt_time(7, 0) <= timestamp < dt_time(9, 0):
             return ['trains, clock']
         # only trains during the day
-        if timestamp >= dt_time(9, 0) and timestamp < dt_time(20, 0):
+        if dt_time(9, 0) <= timestamp < dt_time(20, 0):
             return ['trains']
         # only clok after 8
         if timestamp >= dt_time(20, 0):
@@ -358,18 +394,46 @@ def get_next_trains(
     global NOW
     NOW = datetime.now()
     # get all feeds
-    all_trains = []
-    for feed in FEEDS:
-        all_trains.extend(feed.filter_trips(headed_for_stop_id=stop_id))
+    feeds = get_mta_feeds()
+    if feeds is not None:
+        all_trains = []
+        for feed in feeds:
+            all_trains.extend(feed.filter_trips(headed_for_stop_id=stop_id))
+        return find_next_trains(all_trains, num_trains, stop_id)
+    else:
+        return None
 
-    return find_next_trains(all_trains, num_trains, stop_id)
+
+def get_mta_feeds():
+    import requests
+    global FEEDS
+
+    if FEEDS is None:
+        try:
+            FEEDS = [
+                NYCTFeed("F"),
+                NYCTFeed("G"),
+                NYCTFeed("R"),
+            ]
+        except requests.exceptions.ConnectionError as e:
+            warnings.warn(f'ConnectionError: {e}')
+            return None
+
+    return FEEDS
 
 
 def update_feeds():
+    import requests
+
     # update all feeds
-    all_trains = []
-    for feed in FEEDS:
-        feed.refresh()
+    feeds = get_mta_feeds()
+    if feeds is not None:
+        for feed in feeds:
+            try:
+                feed.refresh()
+            except requests.exceptions.ConnectionError as e:
+                warnings.warn(f'ConnectionError: {e}')
+                pass
 
 
 def display_trains(trains, stop_id):
@@ -525,6 +589,23 @@ if __name__ == '__main__':
     # https://www.dexterindustries.com/howto/run-a-program-on-your-raspberry-pi-at-startup/
     #
     # /lib/systemd/system/matrix.service
+    #
+    # Contents:
+    # [Unit]
+    # Description=LED Matrix Runner
+    # Wants=network.target network-online.target
+    # After=multi-user.target network.target network-online.target
+    #
+    # [Service]
+    # Type=idle
+    # ExecStart=/home/pi/run-matrix.sh
+    # User=pi
+    # Group=pi
+    # StandardOutput=append:/home/pi/logs/matrix.log
+    # StandardError=append:/home/pi/logs/matrix_err.log
+    #
+    # [Install]
+    # WantedBy=multi-user.target
     #
     # to enable
     # sudo systemctl daemon-reload
