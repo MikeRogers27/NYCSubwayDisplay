@@ -467,7 +467,7 @@ def k_to_c(k):
 
 def weather_to_icon(weather):
     # see: https://openweathermap.org/weather-conditions
-    # icons from: https://www.iconpacks.net/free-icon-pack/free-weather-forecast-icon-pack-201.html
+    # icons from: https://github.com/Dhole/weather-pixel-icons
 
     # sun and moon: ffaf00
     # light cloud: 9ba0b4
@@ -543,7 +543,7 @@ def weather_to_icon(weather):
         icon_file = 'icons/32/clouds.png'
 
     else:
-        icon_file = 'icons/32/weather-forecast-sign-16552.png'
+        icon_file = 'icons/32/weather-forecast.png'
 
     return icon_file
 
