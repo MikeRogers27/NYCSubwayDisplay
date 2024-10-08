@@ -36,10 +36,11 @@ class GracefulKiller:
 
 
 class DisplayTrains(SampleBase):
-    def __init__(self, stop_ids, *args, **kwargs):
+    def __init__(self, stop_ids, uptown_stop_ids, *args, **kwargs):
         super(DisplayTrains, self).__init__(*args, **kwargs)
 
         self.stop_ids = stop_ids
+        self.uptown_stop_ids = uptown_stop_ids
         self.font = graphics.Font()
         # self.font.LoadFont("./fonts/7x13.bdf")
         self.font.LoadFont("./fonts/helvR12.bdf")
@@ -228,7 +229,7 @@ class DisplayTrains(SampleBase):
             now = datetime.now()
             last_update_time = now - timedelta(minutes=60)
             for train in trains:
-                if train.last_position_update > last_update_time:
+                if train.underway and train.last_position_update > last_update_time:
                     last_update_time = train.last_position_update
             # if the latest update was more than 15 minutes ago, the data is stale
             if last_update_time < now - timedelta(minutes=15):
@@ -243,25 +244,26 @@ class DisplayTrains(SampleBase):
         return True, canvas
 
     def what_should_we_display(self):
-        return ['weather']
-        return ['clock', 'trains']
 
         timestamp = datetime.now().time()
         # display trains and clock between 7am and 9am
         if dt_time(7, 0) <= timestamp < dt_time(9, 0):
-            return ['trains, clock']
+            return ['trains_uptown, clock', 'weather'], 5
         # only trains during the day
         if dt_time(9, 0) <= timestamp < dt_time(20, 0):
-            return ['trains']
+            return ['trains', 'weather'], 10
         # only clok after 8
         if timestamp >= dt_time(20, 0):
-            return ['clock']
+            return ['clock', 'weather'], 10
 
         return ['off']
 
-    def display_trains(self, canvas):
+    def display_trains(self, canvas, display_time=10, uptown_only=False):
         update_feeds()
-        for stop_id in self.stop_ids:
+        stop_ids = self.stop_ids
+        if uptown_only:
+            stop_ids = self.uptown_stop_ids
+        for stop_id in stop_ids:
             trains = get_next_trains(stop_id=stop_id)
 
             canvas.Clear()
@@ -271,11 +273,11 @@ class DisplayTrains(SampleBase):
                 canvas = self.matrix.SwapOnVSync(canvas)
 
             # show display for 10 seconds before update
-            time.sleep(10)
+            time.sleep(display_time)
 
         return canvas
 
-    def display_clock(self, canvas):
+    def display_clock(self, canvas, display_time=10):
         text_y_top = 13
         text_y_bottom = 28
         clock_pos = 1
@@ -284,7 +286,7 @@ class DisplayTrains(SampleBase):
 
         start_time = datetime.now()
         show_colon = True
-        while (datetime.now() - start_time).total_seconds() < 10:
+        while (datetime.now() - start_time).total_seconds() < display_time:
             canvas.Clear()
 
             current_time = datetime.now()
@@ -315,7 +317,7 @@ class DisplayTrains(SampleBase):
 
         return canvas
 
-    def display_weather(self, canvas):
+    def display_weather(self, canvas, display_time=10):
         text_y_top = 10
         text_y_middle = 20
         text_y_bottom = 30
@@ -358,7 +360,7 @@ class DisplayTrains(SampleBase):
                           f'{min_temp}c')
 
         canvas = self.matrix.SwapOnVSync(canvas)
-        time.sleep(10)
+        time.sleep(display_time)
         return canvas
 
     def run(self):
@@ -366,14 +368,16 @@ class DisplayTrains(SampleBase):
 
         graceful_killer = GracefulKiller()
         while not graceful_killer.kill_now:
-            display_items = self.what_should_we_display()
+            display_items, display_time = self.what_should_we_display()
             for display_item in display_items:
                 if display_item == 'trains':
-                    canvas = self.display_trains(canvas)
+                    canvas = self.display_trains(canvas, display_time=display_time)
+                elif display_item == 'trains_uptown':
+                    canvas = self.display_trains(canvas, display_time=display_time, uptown_only=True)
                 elif display_item == 'clock':
-                    canvas = self.display_clock(canvas)
+                    canvas = self.display_clock(canvas, display_time=display_time)
                 elif display_item == 'weather':
-                    canvas = self.display_weather(canvas)
+                    canvas = self.display_weather(canvas, display_time=display_time)
                 else:
                     # nothing
                     canvas.Clear()
@@ -639,8 +643,8 @@ def main():
     # r_trains = get_next_trains(stop_id='R33N')
     # display_trains(r_trains, stop_id='R33N')
 
-    get_mta_feeds()
-    led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'])
+    # get_mta_feeds()
+    led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
     # led_display_trains = DisplayTrains(['F23S', ])
     led_display_trains.process()
 
