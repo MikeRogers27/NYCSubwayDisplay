@@ -564,14 +564,38 @@ def get_weather():
     return WEATHER, FORECAST
 
 
+def pick_worst_weather(w1, w2):
+    order_of_weather_codes = [
+        781,  # tornado
+        200, 201, 202, 210, 211, 212, 221, 230, 231, 232,  # thunderstorms!
+        615, 602, 616, 601, 600, 621, 611, 613, 620, 612, 622,  # snow
+        511, 504, 503, 502, 501, 500, 531, 522, 521, 520,  # rain
+        312, 301, 311, 301, 310, 300, 314, 321, 313,  # drizzle
+        771, 762, 761, 751, 741, 731, 721, 711, 701,  # atmosphere
+        804, 803, 802, 801,  # clouds
+        800,  # clear
+    ]
+    if order_of_weather_codes.index(w1.weather_code) < order_of_weather_codes.index(w2.weather_code):
+        return w1
+    else:
+        return w2
+
+
 def get_forecast(time_start, time_end):
     w, forecast = get_weather()
     if w is None:
         return None, None, 'icons/32/weather-forecast-sign-16552.png'
 
-    max_temp = k_to_c(w.temp['temp'])
-    min_temp = max_temp
-    icon = weather_to_icon(w)
+    max_temp = k_to_c(w.temp['temp_max'])
+    min_temp = k_to_c(w.temp['temp_min'])
+    icon_weather = w
+
+    for w in forecast.forecast.weathers:
+        if time_start.timestamp() <= w.reference_time() <= time_end.timestamp():
+            max_temp = max(max_temp, k_to_c(w.temp['temp_max']))
+            min_temp = min(k_to_c(w.temp['temp_min']), min_temp)
+            icon_weather = pick_worst_weather(icon_weather, w)
+    icon = weather_to_icon(icon_weather)
 
     return min_temp, max_temp, icon
 
