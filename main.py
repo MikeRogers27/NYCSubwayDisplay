@@ -1,6 +1,7 @@
 from datetime import datetime, time as dt_time, timedelta
 import importlib
 import os
+import requests
 import time
 import signal
 import warnings
@@ -20,11 +21,11 @@ from samplebase import SampleBase
 
 FEEDS = None
 NOW = None
-# owm = OWM(os.environ['OWM_API_KEY'])
-# mgr = owm.weather_manager()
 WEATHER = None
 FORECAST = None
 WEATHER_TIMESTAMP = None
+
+MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
 
 
 class GracefulKiller:
@@ -559,6 +560,26 @@ def tomorrows_forecast():
     return min_temp, max_temp, icon
 
 
+def get_todays_mlb_games():
+    starts_after = datetime.now() - timedelta(days=2)
+    response = requests.get(
+        f'https://api.sportsgameodds.com/v1/events?leagueID=MLB&'
+        f'finalized=true&'
+        f'startsAfter={starts_after}&'
+        f'oddIDs=points-home-game-sp-home',
+        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+    )
+    data = response.json()
+
+    games = []
+    for game in data['data']:
+        if game['teams']['away']['teamID'] in MLB_TEAMS or \
+                game['teams']['away']['teamID'] in MLB_TEAMS:
+            games.append(game)
+
+    return games
+
+
 def main():
     # stop_id reference here:
     # https://openmobilitydata-data.s3-us-west-1.amazonaws.com/public/feeds/mta/79/20240103/original/stops.txt
@@ -572,24 +593,16 @@ def main():
     # r_trains = get_next_trains(stop_id='R33N')
     # display_trains(r_trains, stop_id='R33N')
 
-    import requests
-    headers = {
-        'X-Api-Key': '60abefb8a2ae81cb525baac7bc022881'
-    }
-    url = 'https://api.sportsgameodds.com/v1/sports/'
-    response = requests.get(url, headers=headers)
-    print(response.json())
-    data = response.json()
+    # headers = {
+    #     'X-Api-Key': os.environ['SGO_API_KEY']
+    # }
+    # url = 'https://api.sportsgameodds.com/v1/sports/'
+    # response = requests.get(url, headers=headers)
+    # print(response.json())
+    # data = response.json()
 
-    starts_after = datetime.now() - timedelta(days=2)
-    response = requests.get(
-        f'https://api.sportsgameodds.com/v1/events?leagueID=MLB&'
-        f'finalized=true&'
-        f'startsAfter={starts_after}&'
-        f'oddIDs=',
-        headers={'X-Api-Key': '60abefb8a2ae81cb525baac7bc022881'}
-    )
-    data = response.json()
+    games = get_todays_mlb_games()
+    pass
 
     get_mta_feeds()
     led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'])
