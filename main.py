@@ -671,7 +671,7 @@ if __name__ == '__main__':
     #
     # # run
     # export PYTHONPATH=${PYTHONPATH}:${HOME}/src/rpi-rgb-led-matrix/bindings/python
-    # export OWM_API_KEY=b7bea4a6dea2cbecda4e4f98216b00b6
+    # export OWM_API_KEY=<Key from https://home.openweathermap.org/api_keys>
     # source ${HOME}/venv/NYCSubwayDisplay/bin/activate
     # sudo --preserve-env=PYTHONPATH,OWM_API_KEY /home/pi/venv/NYCSubwayDisplay/bin/python main.py --led-gpio-mapping=adafruit-hat-pwm --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=40 --led-slowdown-gpio=1  --led-no-drop-privs
 
