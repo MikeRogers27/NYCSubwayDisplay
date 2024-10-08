@@ -6,7 +6,8 @@ import signal
 import warnings
 
 from nyct_gtfs import NYCTFeed
-from pyowm import OWM
+# from pyowm import OWM
+from ohmysportsfeedspy import MySportsFeeds
 
 # from PIL import Image
 
@@ -570,6 +571,25 @@ def main():
 
     # r_trains = get_next_trains(stop_id='R33N')
     # display_trains(r_trains, stop_id='R33N')
+
+    import requests
+    headers = {
+        'X-Api-Key': '60abefb8a2ae81cb525baac7bc022881'
+    }
+    url = 'https://api.sportsgameodds.com/v1/sports/'
+    response = requests.get(url, headers=headers)
+    print(response.json())
+    data = response.json()
+
+    starts_after = datetime.now() - timedelta(days=2)
+    response = requests.get(
+        f'https://api.sportsgameodds.com/v1/events?leagueID=MLB&'
+        f'finalized=true&'
+        f'startsAfter={starts_after}&'
+        f'oddIDs=',
+        headers={'X-Api-Key': '60abefb8a2ae81cb525baac7bc022881'}
+    )
+    data = response.json()
 
     get_mta_feeds()
     led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'])
