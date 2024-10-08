@@ -8,8 +8,7 @@ import warnings
 
 from PIL import Image
 from nyct_gtfs import NYCTFeed
-# from pyowm import OWM
-from ohmysportsfeedspy import MySportsFeeds
+from pyowm import OWM
 
 
 if os.name == 'nt':
@@ -248,6 +247,7 @@ class DisplayTrains(SampleBase):
         return True, canvas
 
     def what_should_we_display(self):
+        return ['sports'], 10
 
         timestamp = datetime.now().time()
         # display trains and clock between 7am and 9am
@@ -367,6 +367,65 @@ class DisplayTrains(SampleBase):
         time.sleep(display_time)
         return canvas
 
+    def draw_mlb_game(self, canvas, game):
+        text_y_top = 10
+        text_y_middle = 20
+        text_y_bottom = 30
+
+        icon_file = get_game_icon(game)
+        im = Image.open(icon_file)
+        canvas.SetImage(im)
+
+        if game['teams']['away']['teamID'] in MLB_TEAMS:
+            title_symbol = '@'
+            title_str = game['teams']['home']['names']['short']
+            if game['teams']['away']['score'] > game['teams']['home']['score']:
+                score_prefix = 'W'
+            elif game['teams']['away']['score'] == game['teams']['home']['score']:
+                score_prefix = 'D'
+            else:
+                score_prefix = 'L'
+            team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
+        else:
+            title_symbol = 'v'
+            title_str = game['teams']['away']['names']['short']
+            if game['teams']['home']['score'] > game['teams']['away']['score']:
+                score_prefix = 'W'
+            elif game['teams']['home']['score'] == game['teams']['away']['score']:
+                score_prefix = 'D'
+            else:
+                score_prefix = 'L'
+            team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
+
+        score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
+        date_str = datetime.strptime(game['status']['startsAt'], '%Y-%m-%dT%H:%M:%S.000Z').strftime('%m/%d')
+
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
+
+        return canvas
+
+    def draw_game(self, canvas, game):
+        if game['leagueID'] == 'MLB':
+            return self.draw_mlb_game(canvas, game)
+        elif game['leagueID'] == 'NHL':
+            return None
+        else:  # NFL
+            return None
+
+    def display_sports(self, canvas, display_time=10):
+        games = get_todays_mlb_games()
+        game_time = max(5, round(display_time / len(games)))
+        for game in games:
+            canvas.Clear()
+            canvas = self.draw_game(canvas, game)
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(game_time)
+        return canvas
+
+
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
 
@@ -382,6 +441,8 @@ class DisplayTrains(SampleBase):
                     canvas = self.display_clock(canvas, display_time=display_time)
                 elif display_item == 'weather':
                     canvas = self.display_weather(canvas, display_time=display_time)
+                elif display_item == 'sports':
+                    canvas = self.display_sports(canvas, display_time=display_time)
                 else:
                     # nothing
                     canvas.Clear()
@@ -634,7 +695,29 @@ def tomorrows_forecast():
     return get_forecast(start_time, end_time)
 
 
+def hex_to_rgb(h):
+    h = h.lstrip('#')
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def get_game_icon(game):
+
+    if game['teams']['away']['teamID'] == MLB_TEAMS:
+        icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
+    else:
+        icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
+
+    return icon_file
+
+
 def get_todays_mlb_games():
+    import pickle
+    cache_file = r'c:\temp\mlb.pickle'
+    if os.path.exists(cache_file):
+        with open(cache_file, 'rb') as file:
+            games = pickle.load(file)
+        return games
+
     starts_after = datetime.now() - timedelta(days=2)
     response = requests.get(
         f'https://api.sportsgameodds.com/v1/events?leagueID=MLB&'
@@ -650,6 +733,9 @@ def get_todays_mlb_games():
         if game['teams']['away']['teamID'] in MLB_TEAMS or \
                 game['teams']['away']['teamID'] in MLB_TEAMS:
             games.append(game)
+
+    with open(cache_file, 'wb') as file:
+        pickle.dump(games, file)
 
     return games
 
