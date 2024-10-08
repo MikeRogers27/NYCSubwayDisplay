@@ -38,9 +38,9 @@ class GracefulKiller:
         self.kill_now = True
 
 
-class DisplayTrains(SampleBase):
+class RunMatrix(SampleBase):
     def __init__(self, stop_ids, uptown_stop_ids, *args, **kwargs):
-        super(DisplayTrains, self).__init__(*args, **kwargs)
+        super(RunMatrix, self).__init__(*args, **kwargs)
 
         self.stop_ids = stop_ids
         self.uptown_stop_ids = uptown_stop_ids
@@ -368,6 +368,9 @@ class DisplayTrains(SampleBase):
         return canvas
 
     def draw_mlb_game(self, canvas, game):
+        import pytz
+        from dateutil.parser import parse
+
         text_y_top = 10
         text_y_middle = 20
         text_y_bottom = 30
@@ -376,29 +379,46 @@ class DisplayTrains(SampleBase):
         im = Image.open(icon_file)
         canvas.SetImage(im)
 
+        new_tz = pytz.timezone('America/New_York')
+        start_time = parse(game['status']['startsAt'])
+        start_time = start_time.astimezone(new_tz)
+
         if game['teams']['away']['teamID'] in MLB_TEAMS:
             title_symbol = '@'
             title_str = game['teams']['home']['names']['short']
-            if game['teams']['away']['score'] > game['teams']['home']['score']:
-                score_prefix = 'W'
-            elif game['teams']['away']['score'] == game['teams']['home']['score']:
-                score_prefix = 'D'
+            if game['status']['finalized']:
+                if game['teams']['away']['score'] > game['teams']['home']['score']:
+                    score_prefix = 'W'
+                elif game['teams']['away']['score'] == game['teams']['home']['score']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
             else:
-                score_prefix = 'L'
+                score_prefix = ''
             team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
         else:
             title_symbol = 'v'
             title_str = game['teams']['away']['names']['short']
-            if game['teams']['home']['score'] > game['teams']['away']['score']:
-                score_prefix = 'W'
-            elif game['teams']['home']['score'] == game['teams']['away']['score']:
-                score_prefix = 'D'
+            if game['status']['finalized']:
+                if game['teams']['home']['score'] > game['teams']['away']['score']:
+                    score_prefix = 'W'
+                elif game['teams']['home']['score'] == game['teams']['away']['score']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
             else:
-                score_prefix = 'L'
+                score_prefix = ''
             team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
 
-        score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
-        date_str = datetime.strptime(game['status']['startsAt'], '%Y-%m-%dT%H:%M:%S.000Z').strftime('%m/%d')
+        if game['status']['finalized']:
+            score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
+        else:
+            score_str = start_time.strftime('%H:%M')
+
+        if os.name == 'nt':
+            date_str = start_time.strftime('%#m/%#d')
+        else:
+            date_str = start_time.strftime('%-m/%-d')
 
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
         graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
@@ -416,7 +436,7 @@ class DisplayTrains(SampleBase):
             return None
 
     def display_sports(self, canvas, display_time=10):
-        games = get_todays_mlb_games()
+        games = get_mlb_games()
         game_time = max(5, round(display_time / len(games)))
         for game in games:
             canvas.Clear()
@@ -710,7 +730,7 @@ def get_game_icon(game):
     return icon_file
 
 
-def get_todays_mlb_games():
+def get_mlb_games():
     import pickle
     cache_file = r'c:\temp\mlb.pickle'
     if os.path.exists(cache_file):
@@ -718,10 +738,10 @@ def get_todays_mlb_games():
             games = pickle.load(file)
         return games
 
-    starts_after = datetime.now() - timedelta(days=2)
+    starts_after = datetime.now() - timedelta(days=1)
     response = requests.get(
         f'https://api.sportsgameodds.com/v1/events?leagueID=MLB&'
-        f'finalized=true&'
+        #  f'finalized=true&'
         f'startsAfter={starts_after}&'
         f'oddIDs=points-home-game-sp-home',
         headers={'X-Api-Key': os.environ['SGO_API_KEY']}
@@ -754,7 +774,7 @@ def main():
     # display_trains(r_trains, stop_id='R33N')
 
     # get_mta_feeds()
-    led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
+    led_display_trains = RunMatrix(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
     # led_display_trains = DisplayTrains(['F23S', ])
     led_display_trains.process()
 
