@@ -346,11 +346,17 @@ class DisplayTrains(SampleBase):
                 im.thumbnail((32, 32), Image.Resampling.LANCZOS)
             canvas.SetImage(im)
 
-        graphics.DrawText(canvas, self.circle_font, 33, text_y_top, self.text_colour, head_str)
-        graphics.DrawText(canvas, self.circle_font, 33, text_y_middle, self.text_colour,
-                          f'↓{min_temp}c')
-        graphics.DrawText(canvas, self.circle_font, 33, text_y_bottom, self.text_colour,
-                          f'↑{max_temp}c')
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, head_str)
+        hot_colour = graphics.Color(247, 92, 92)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, hot_colour,
+                          '↑')
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_middle, self.text_colour,
+                          f'{max_temp}c')
+        cold_colour = graphics.Color(92, 172, 247)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, cold_colour,
+                          '↓')
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_bottom, self.text_colour,
+                          f'{min_temp}c')
 
         canvas = self.matrix.SwapOnVSync(canvas)
         time.sleep(10)
