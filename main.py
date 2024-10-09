@@ -548,6 +548,9 @@ def get_next_trains(
 
 
 def get_stop_name_and_direction(stop_id):
+    # stop_id reference here:
+    # https://openmobilitydata-data.s3-us-west-1.amazonaws.com/public/feeds/mta/79/20240103/original/stops.txt
+
     if stop_id.startswith('F23'):
         stop_name = '4 Av'
     elif stop_id.startswith('R33'):
@@ -717,21 +720,8 @@ def weather_to_icon(weather):
 
 
 def main():
-    # stop_id reference here:
-    # https://openmobilitydata-data.s3-us-west-1.amazonaws.com/public/feeds/mta/79/20240103/original/stops.txt
 
-    # # Load the realtime feed from the MTA site
-    # while True:
-    #     fg_trains = get_next_trains(stop_id='F23S')
-    #     display_trains(fg_trains, stop_id='F23S')
-    #     time.sleep(5)
-
-    # r_trains = get_next_trains(stop_id='R33N')
-    # display_trains(r_trains, stop_id='R33N')
-
-    # get_mta_feeds()
     led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
-    # led_display_trains = DisplayTrains(['F23S', ])
     led_display_trains.process()
 
     pass
@@ -746,6 +736,9 @@ if __name__ == '__main__':
     #
     # Contents:
     # #!/bin/bash
+    #
+    # # wait to see if we're online
+    # for i in {1..50}; do ping -c1 www.google.com &> /dev/null && break; done
     #
     # # add ssh credentials
     # eval "$(ssh-agent -s)"
