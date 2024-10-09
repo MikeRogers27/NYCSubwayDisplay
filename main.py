@@ -435,6 +435,9 @@ class DisplayTrains(SampleBase):
         while not graceful_killer.kill_now:
             display_items, display_time = self.what_should_we_display()
             for display_item in display_items:
+                # break out early if required
+                if graceful_killer.kill_now:
+                    break
                 if display_item == 'trains':
                     canvas = self.display_trains(canvas, display_time=display_time)
                 elif display_item == 'trains_uptown':
