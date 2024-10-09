@@ -730,12 +730,13 @@ def get_game_icon(game):
 
 
 def get_mlb_games():
-    import pickle
-    cache_file = r'c:\temp\mlb.pickle'
-    if os.path.exists(cache_file):
-        with open(cache_file, 'rb') as file:
-            games = pickle.load(file)
-        return games
+    if os.name == 'nt':
+        import pickle
+        cache_file = r'c:\temp\mlb.pickle'
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as file:
+                games = pickle.load(file)
+            return games
 
     local = pytz.timezone("America/New_York")
     starts_after = datetime.now() - timedelta(days=1)
@@ -760,8 +761,9 @@ def get_mlb_games():
                 game['teams']['home']['teamID'] in MLB_TEAMS:
             games.append(game)
 
-    with open(cache_file, 'wb') as file:
-        pickle.dump(games, file)
+    if os.name == 'nt':
+        with open(cache_file, 'wb') as file:
+            pickle.dump(games, file)
 
     return games
 
