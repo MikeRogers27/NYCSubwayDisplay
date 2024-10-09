@@ -27,6 +27,7 @@ FORECAST = None
 WEATHER_TIMESTAMP = None
 
 MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
+NHL_TEAMS = ['NEW_YORK_RANGERS_MLB', 'NEW_YORK_ISLANDERS_MLB', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
 
 
 class GracefulKiller:
@@ -333,10 +334,10 @@ class RunMatrix(SampleBase):
             head_str = 'Today'
         elif timestamp < dt_time(19, 0):  # before 7pm show the evening forecast
             min_temp, max_temp, icon_file = evening_forecast()
-            head_str = 'Eve'
+            head_str = 'Eve.'
         else:
             min_temp, max_temp, icon_file = tomorrows_forecast()
-            head_str = 'Tom'
+            head_str = 'Tom.'
 
         if min_temp is None:
             min_temp = '-'
@@ -426,16 +427,76 @@ class RunMatrix(SampleBase):
 
         return canvas
 
+
+    def draw_nhl_game(self, canvas, game):
+
+        text_y_top = 10
+        text_y_middle = 20
+        text_y_bottom = 30
+
+        icon_file = get_game_icon(game)
+        im = Image.open(icon_file)
+        canvas.SetImage(im)
+
+        new_tz = pytz.timezone('America/New_York')
+        start_time = parse(game['status']['startsAt'])
+        start_time = start_time.astimezone(new_tz)
+
+        if game['teams']['away']['teamID'] in MLB_TEAMS:
+            title_symbol = '@'
+            title_str = game['teams']['home']['names']['short']
+            if game['status']['ended']:
+                if game['teams']['away']['score'] > game['teams']['home']['score']:
+                    score_prefix = 'W'
+                elif game['teams']['away']['score'] == game['teams']['home']['score']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+            team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
+        else:
+            title_symbol = 'v'
+            title_str = game['teams']['away']['names']['short']
+            if game['status']['ended']:
+                if game['teams']['home']['score'] > game['teams']['away']['score']:
+                    score_prefix = 'W'
+                elif game['teams']['home']['score'] == game['teams']['away']['score']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+            team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
+
+        if game['status']['started'] or game['status']['ended']:
+            score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
+        else:
+            score_str = start_time.strftime('%H:%M')
+
+        if os.name == 'nt':
+            date_str = start_time.strftime('%#m/%#d')
+        else:
+            date_str = start_time.strftime('%-m/%-d')
+
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
+
+        return canvas
+
+
     def draw_game(self, canvas, game):
         if game['leagueID'] == 'MLB':
             return self.draw_mlb_game(canvas, game)
         elif game['leagueID'] == 'NHL':
-            return None
+            return self.draw_nhl_game(canvas, game)
         else:  # NFL
             return None
 
     def display_sports(self, canvas, display_time=10):
-        games = get_mlb_games()
+        games = get_sports_games()
         game_time = max(5, round(display_time / len(games)))
         for game in games:
             canvas.Clear()
@@ -765,6 +826,51 @@ def get_mlb_games():
         with open(cache_file, 'wb') as file:
             pickle.dump(games, file)
 
+    return games
+
+
+def get_nhl_games():
+    if os.name == 'nt':
+        import pickle
+        cache_file = r'c:\temp\nhl.pickle'
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as file:
+                games = pickle.load(file)
+            return games
+
+    local = pytz.timezone("America/New_York")
+    starts_after = datetime.now() - timedelta(days=1)
+    starts_before = datetime.now() + timedelta(days=1)
+    starts_after = local.localize(starts_after, is_dst=None)
+    starts_after = starts_after.astimezone(pytz.utc)
+    starts_before = local.localize(starts_before, is_dst=None)
+    starts_before = starts_before.astimezone(pytz.utc)
+
+    response = requests.get(
+        f'https://api.sportsgameodds.com/v1/events?leagueID=NHL&'
+        f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
+        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
+        f'oddIDs=points-home-game-sp-home',
+        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+    )
+    data = response.json()
+
+    games = []
+    for game in data['data']:
+        if game['teams']['away']['teamID'] in NHL_TEAMS or \
+                game['teams']['home']['teamID'] in NHL_TEAMS:
+            games.append(game)
+
+    if os.name == 'nt':
+        with open(cache_file, 'wb') as file:
+            pickle.dump(games, file)
+
+    return games
+
+
+def get_sports_games():
+    games = get_mlb_games()
+    games.extend(get_nhl_games())
     return games
 
 
