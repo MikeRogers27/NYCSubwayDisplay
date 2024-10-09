@@ -28,7 +28,7 @@ FORECAST = None
 WEATHER_TIMESTAMP = None
 
 MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
-NHL_TEAMS = ['NEW_YORK_RANGERS_MLB', 'NEW_YORK_ISLANDERS_MLB', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
+NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
 
 
 class GracefulKiller:
@@ -64,14 +64,12 @@ class RunMatrix(SampleBase):
 
     def draw_game(self, canvas, game):
         if game['leagueID'] == 'MLB':
-            return self.draw_game_mlb(canvas, game)
+            league_teams = MLB_TEAMS
         elif game['leagueID'] == 'NHL':
-            return self.draw_game_nhl(canvas, game)
+            league_teams = NHL_TEAMS
         else:  # NFL
             return None
 
-    def draw_game_mlb(self, canvas, game):
-
         text_y_top = 10
         text_y_middle = 20
         text_y_bottom = 30
@@ -80,69 +78,9 @@ class RunMatrix(SampleBase):
         im = Image.open(icon_file)
         canvas.SetImage(im)
 
-        new_tz = pytz.timezone('America/New_York')
-        start_time = parse(game['status']['startsAt'])
-        start_time = start_time.astimezone(new_tz)
+        start_time = to_local_tz(parse(game['status']['startsAt']))
 
-        if game['teams']['away']['teamID'] in MLB_TEAMS:
-            title_symbol = '@'
-            title_str = game['teams']['home']['names']['short']
-            if game['status']['ended']:
-                if game['teams']['away']['score'] > game['teams']['home']['score']:
-                    score_prefix = 'W'
-                elif game['teams']['away']['score'] == game['teams']['home']['score']:
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
-            team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
-        else:
-            title_symbol = 'v'
-            title_str = game['teams']['away']['names']['short']
-            if game['status']['ended']:
-                if game['teams']['home']['score'] > game['teams']['away']['score']:
-                    score_prefix = 'W'
-                elif game['teams']['home']['score'] == game['teams']['away']['score']:
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
-            team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
-
-        if game['status']['started'] or game['status']['ended']:
-            score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
-        else:
-            score_str = start_time.strftime('%H:%M')
-
-        if os.name == 'nt':
-            date_str = start_time.strftime('%#m/%#d')
-        else:
-            date_str = start_time.strftime('%-m/%-d')
-
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
-        graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
-
-        return canvas
-
-    def draw_game_nhl(self, canvas, game):
-
-        text_y_top = 10
-        text_y_middle = 20
-        text_y_bottom = 30
-
-        icon_file = get_game_icon(game)
-        im = Image.open(icon_file)
-        canvas.SetImage(im)
-
-        new_tz = pytz.timezone('America/New_York')
-        start_time = parse(game['status']['startsAt'])
-        start_time = start_time.astimezone(new_tz)
-
-        if game['teams']['away']['teamID'] in MLB_TEAMS:
+        if game['teams']['away']['teamID'] in league_teams:
             title_symbol = '@'
             title_str = game['teams']['home']['names']['short']
             if game['status']['ended']:
@@ -523,6 +461,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
+        return ['sports'], 5
 
         timestamp = datetime.now().time()
         # display trains and clock between 7am and 9am
@@ -709,7 +648,7 @@ def get_mta_stop_name_and_direction(stop_id):
 
 
 def get_game_icon(game):
-    if game['teams']['away']['teamID'] in MLB_TEAMS:
+    if game['teams']['away']['teamID'] in MLB_TEAMS + NHL_TEAMS:
         icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
     else:
         icon_file = 'icons/32/' + game['teams']['home']['teamID'] + '.png'
@@ -718,8 +657,9 @@ def get_game_icon(game):
 
 
 def get_games():
-    games = get_games_mlb()
-    games.extend(get_games_nhl())
+    # games = get_games_mlb()
+    # games.extend(get_games_nhl())
+    games = get_games_nhl()
     return games
 
 
@@ -772,17 +712,13 @@ def get_games_nhl():
             return games
 
     local = pytz.timezone("America/New_York")
-    starts_after = datetime.now() - timedelta(days=1)
-    starts_before = datetime.now() + timedelta(days=1)
-    starts_after = local.localize(starts_after, is_dst=None)
-    starts_after = starts_after.astimezone(pytz.utc)
-    starts_before = local.localize(starts_before, is_dst=None)
-    starts_before = starts_before.astimezone(pytz.utc)
+    starts_after = to_utc_tz(datetime.now() - timedelta(days=1))
+    starts_before = to_utc_tz(datetime.now() + timedelta(days=1))
 
     response = requests.get(
         f'https://api.sportsgameodds.com/v1/events?leagueID=NHL&'
         f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
-        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
+        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&',
         f'oddIDs=points-home-game-sp-home',
         headers={'X-Api-Key': os.environ['SGO_API_KEY']}
     )
@@ -853,13 +789,15 @@ def pick_worst_weather(w1, w2):
 
 
 def to_utc_tz(date_time):
-    date_time = LOCAL_TZ.localize(date_time, is_dst=None)
+    if date_time.tzinfo is None:
+        date_time = LOCAL_TZ.localize(date_time, is_dst=None)
     date_time = date_time.astimezone(pytz.utc)
     return date_time
 
 
 def to_local_tz(date_time):
-    date_time = pytz.utc.localize(date_time, is_dst=None)
+    if date_time.tzinfo is None:
+        date_time = pytz.utc.localize(date_time, is_dst=None)
     date_time = date_time.astimezone(LOCAL_TZ)
     return date_time
 
@@ -962,7 +900,7 @@ def weather_to_icon(weather):
 
 
 def main():
-    led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
+    led_display_trains = RunMatrix(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
     led_display_trains.process()
 
     pass
