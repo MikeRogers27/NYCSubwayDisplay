@@ -62,35 +62,129 @@ class RunMatrix(SampleBase):
         self.circle_colour_g = graphics.Color(108, 190, 69)
         self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
-    @staticmethod
-    def draw_filled_circle(canvas, x, y, color):
-        # Draw circle with lines
-        graphics.DrawLine(canvas, x - 1, y - 6, x + 1, y - 6, color)
-        graphics.DrawLine(canvas, x - 3, y - 5, x + 3, y - 5, color)
-        graphics.DrawLine(canvas, x - 4, y - 4, x + 4, y - 4, color)
-        graphics.DrawLine(canvas, x - 5, y - 3, x + 5, y - 3, color)
-        graphics.DrawLine(canvas, x - 5, y - 2, x + 5, y - 2, color)
-        graphics.DrawLine(canvas, x - 6, y - 1, x + 6, y - 1, color)
-        graphics.DrawLine(canvas, x - 6, y, x + 6, y, color)
-        graphics.DrawLine(canvas, x - 6, y + 1, x + 6, y + 1, color)
-        graphics.DrawLine(canvas, x - 5, y + 2, x + 5, y + 2, color)
-        graphics.DrawLine(canvas, x - 5, y + 3, x + 5, y + 3, color)
-        graphics.DrawLine(canvas, x - 4, y + 4, x + 4, y + 4, color)
-        graphics.DrawLine(canvas, x - 3, y + 5, x + 3, y + 5, color)
-        graphics.DrawLine(canvas, x - 1, y + 6, x + 1, y + 6, color)
+    def draw_game(self, canvas, game):
+        if game['leagueID'] == 'MLB':
+            return self.draw_game_mlb(canvas, game)
+        elif game['leagueID'] == 'NHL':
+            return self.draw_game_nhl(canvas, game)
+        else:  # NFL
+            return None
 
-        # # Draw circle with lines
-        # graphics.DrawLine(canvas, x - 2, y - 5, x + 2, y - 5, color)
-        # graphics.DrawLine(canvas, x - 3, y - 4, x + 3, y - 4, color)
-        # graphics.DrawLine(canvas, x - 4, y - 3, x + 4, y - 3, color)
-        # graphics.DrawLine(canvas, x - 5, y - 2, x + 5, y - 2, color)
-        # graphics.DrawLine(canvas, x - 5, y - 1, x + 5, y - 1, color)
-        # graphics.DrawLine(canvas, x - 5, y, x + 5, y, color)
-        # graphics.DrawLine(canvas, x - 5, y + 1, x + 5, y + 1, color)
-        # graphics.DrawLine(canvas, x - 5, y + 2, x + 5, y + 2, color)
-        # graphics.DrawLine(canvas, x - 4, y + 3, x + 4, y + 3, color)
-        # graphics.DrawLine(canvas, x - 3, y + 4, x + 3, y + 4, color)
-        # graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
+    def draw_game_mlb(self, canvas, game):
+
+        text_y_top = 10
+        text_y_middle = 20
+        text_y_bottom = 30
+
+        icon_file = get_game_icon(game)
+        im = Image.open(icon_file)
+        canvas.SetImage(im)
+
+        new_tz = pytz.timezone('America/New_York')
+        start_time = parse(game['status']['startsAt'])
+        start_time = start_time.astimezone(new_tz)
+
+        if game['teams']['away']['teamID'] in MLB_TEAMS:
+            title_symbol = '@'
+            title_str = game['teams']['home']['names']['short']
+            if game['status']['ended']:
+                if game['teams']['away']['score'] > game['teams']['home']['score']:
+                    score_prefix = 'W'
+                elif game['teams']['away']['score'] == game['teams']['home']['score']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+            team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
+        else:
+            title_symbol = 'v'
+            title_str = game['teams']['away']['names']['short']
+            if game['status']['ended']:
+                if game['teams']['home']['score'] > game['teams']['away']['score']:
+                    score_prefix = 'W'
+                elif game['teams']['home']['score'] == game['teams']['away']['score']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+            team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
+
+        if game['status']['started'] or game['status']['ended']:
+            score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
+        else:
+            score_str = start_time.strftime('%H:%M')
+
+        if os.name == 'nt':
+            date_str = start_time.strftime('%#m/%#d')
+        else:
+            date_str = start_time.strftime('%-m/%-d')
+
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
+
+        return canvas
+
+    def draw_game_nhl(self, canvas, game):
+
+        text_y_top = 10
+        text_y_middle = 20
+        text_y_bottom = 30
+
+        icon_file = get_game_icon(game)
+        im = Image.open(icon_file)
+        canvas.SetImage(im)
+
+        new_tz = pytz.timezone('America/New_York')
+        start_time = parse(game['status']['startsAt'])
+        start_time = start_time.astimezone(new_tz)
+
+        if game['teams']['away']['teamID'] in MLB_TEAMS:
+            title_symbol = '@'
+            title_str = game['teams']['home']['names']['short']
+            if game['status']['ended']:
+                if game['teams']['away']['score'] > game['teams']['home']['score']:
+                    score_prefix = 'W'
+                elif game['teams']['away']['score'] == game['teams']['home']['score']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+            team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
+        else:
+            title_symbol = 'v'
+            title_str = game['teams']['away']['names']['short']
+            if game['status']['ended']:
+                if game['teams']['home']['score'] > game['teams']['away']['score']:
+                    score_prefix = 'W'
+                elif game['teams']['home']['score'] == game['teams']['away']['score']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+            team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
+
+        if game['status']['started'] or game['status']['ended']:
+            score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
+        else:
+            score_str = start_time.strftime('%H:%M')
+
+        if os.name == 'nt':
+            date_str = start_time.strftime('%#m/%#d')
+        else:
+            date_str = start_time.strftime('%-m/%-d')
+
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
+
+        return canvas
 
     def draw_train_row(self,
                        canvas,
@@ -116,7 +210,7 @@ class RunMatrix(SampleBase):
         graphics.DrawText(canvas, self.font, 1, text_y, text_colour, f'{row_ind + 1}')
         graphics.DrawText(canvas, self.font, 7, text_y, text_colour, f'.')
         # graphics.DrawCircle(canvas, 16, circle_y, 5, circle_colour)
-        self.draw_filled_circle(canvas, 15, circle_y, circle_colour)
+        self._draw_filled_circle(canvas, 15, circle_y, circle_colour)
         graphics.DrawText(canvas, self.circle_font, 15 - route_id_offset, text_y - 1, graphics.Color(0, 0, 0), route_id)
         # graphics.DrawText(canvas, self.font, 26, text_y, text_colour, headsign_text)
         if direction == 'N':
@@ -178,7 +272,7 @@ class RunMatrix(SampleBase):
         text_y_top = 13
         text_y_bottom = 28
 
-        stop_name, direction = get_stop_name_and_direction(stop_id)
+        stop_name, direction = get_mta_stop_name_and_direction(stop_id)
 
         graphics.DrawText(canvas, self.font, 1, text_y_top, self.text_colour, f'{stop_name} {direction}')
         if stop_id.startswith('F23'):
@@ -200,7 +294,7 @@ class RunMatrix(SampleBase):
         text_y_top = 13
         text_y_bottom = 28
 
-        stop_name, direction = get_stop_name_and_direction(stop_id)
+        stop_name, direction = get_mta_stop_name_and_direction(stop_id)
 
         graphics.DrawText(canvas, self.font, 1, text_y_top, self.text_colour, f'{stop_name} {direction}')
         if stop_id.startswith('F23'):
@@ -369,7 +463,7 @@ class RunMatrix(SampleBase):
         if uptown_only:
             stop_ids = self.uptown_stop_ids
         for stop_id in stop_ids:
-            trains = get_next_trains(stop_id=stop_id)
+            trains = get_mta_next_trains(stop_id=stop_id)
 
             canvas.Clear()
             success, canvas = self.draw_trains(trains, stop_id, canvas)
@@ -380,6 +474,16 @@ class RunMatrix(SampleBase):
             # show display for 10 seconds before update
             time.sleep(display_time)
 
+        return canvas
+
+    def display_sports(self, canvas, display_time=10):
+        games = get_games()
+        game_time = max(5, round(display_time / len(games)))
+        for game in games:
+            canvas.Clear()
+            canvas = self.draw_game(canvas, game)
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(game_time)
         return canvas
 
     def display_weather(self, canvas, display_time=10):
@@ -432,142 +536,7 @@ class RunMatrix(SampleBase):
             return ['clock', 'weather'], 10
 
         return ['off']
-   def draw_mlb_game(self, canvas, game):
 
-        text_y_top = 10
-        text_y_middle = 20
-        text_y_bottom = 30
-
-        icon_file = get_game_icon(game)
-        im = Image.open(icon_file)
-        canvas.SetImage(im)
-
-        new_tz = pytz.timezone('America/New_York')
-        start_time = parse(game['status']['startsAt'])
-        start_time = start_time.astimezone(new_tz)
-
-        if game['teams']['away']['teamID'] in MLB_TEAMS:
-            title_symbol = '@'
-            title_str = game['teams']['home']['names']['short']
-            if game['status']['ended']:
-                if game['teams']['away']['score'] > game['teams']['home']['score']:
-                    score_prefix = 'W'
-                elif game['teams']['away']['score'] == game['teams']['home']['score']:
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
-            team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
-        else:
-            title_symbol = 'v'
-            title_str = game['teams']['away']['names']['short']
-            if game['status']['ended']:
-                if game['teams']['home']['score'] > game['teams']['away']['score']:
-                    score_prefix = 'W'
-                elif game['teams']['home']['score'] == game['teams']['away']['score']:
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
-            team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
-
-        if game['status']['started'] or game['status']['ended']:
-            score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
-        else:
-            score_str = start_time.strftime('%H:%M')
-
-        if os.name == 'nt':
-            date_str = start_time.strftime('%#m/%#d')
-        else:
-            date_str = start_time.strftime('%-m/%-d')
-
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
-        graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
-
-        return canvas
-
-
-    def draw_nhl_game(self, canvas, game):
-
-        text_y_top = 10
-        text_y_middle = 20
-        text_y_bottom = 30
-
-        icon_file = get_game_icon(game)
-        im = Image.open(icon_file)
-        canvas.SetImage(im)
-
-        new_tz = pytz.timezone('America/New_York')
-        start_time = parse(game['status']['startsAt'])
-        start_time = start_time.astimezone(new_tz)
-
-        if game['teams']['away']['teamID'] in MLB_TEAMS:
-            title_symbol = '@'
-            title_str = game['teams']['home']['names']['short']
-            if game['status']['ended']:
-                if game['teams']['away']['score'] > game['teams']['home']['score']:
-                    score_prefix = 'W'
-                elif game['teams']['away']['score'] == game['teams']['home']['score']:
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
-            team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
-        else:
-            title_symbol = 'v'
-            title_str = game['teams']['away']['names']['short']
-            if game['status']['ended']:
-                if game['teams']['home']['score'] > game['teams']['away']['score']:
-                    score_prefix = 'W'
-                elif game['teams']['home']['score'] == game['teams']['away']['score']:
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
-            team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
-
-        if game['status']['started'] or game['status']['ended']:
-            score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
-        else:
-            score_str = start_time.strftime('%H:%M')
-
-        if os.name == 'nt':
-            date_str = start_time.strftime('%#m/%#d')
-        else:
-            date_str = start_time.strftime('%-m/%-d')
-
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
-        graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
-
-        return canvas
-
-
-    def draw_game(self, canvas, game):
-        if game['leagueID'] == 'MLB':
-            return self.draw_mlb_game(canvas, game)
-        elif game['leagueID'] == 'NHL':
-            return self.draw_nhl_game(canvas, game)
-        else:  # NFL
-            return None
-
-    def display_sports(self, canvas, display_time=10):
-        games = get_sports_games()
-        game_time = max(5, round(display_time / len(games)))
-        for game in games:
-            canvas.Clear()
-            canvas = self.draw_game(canvas, game)
-            canvas = self.matrix.SwapOnVSync(canvas)
-            time.sleep(game_time)
-        return canvas
-        
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
 
@@ -592,6 +561,36 @@ class RunMatrix(SampleBase):
                     # nothing
                     canvas.Clear()
                     time.sleep(600)  # check again in 10 mins
+
+    @staticmethod
+    def _draw_filled_circle(canvas, x, y, color):
+        # Draw circle with lines
+        graphics.DrawLine(canvas, x - 1, y - 6, x + 1, y - 6, color)
+        graphics.DrawLine(canvas, x - 3, y - 5, x + 3, y - 5, color)
+        graphics.DrawLine(canvas, x - 4, y - 4, x + 4, y - 4, color)
+        graphics.DrawLine(canvas, x - 5, y - 3, x + 5, y - 3, color)
+        graphics.DrawLine(canvas, x - 5, y - 2, x + 5, y - 2, color)
+        graphics.DrawLine(canvas, x - 6, y - 1, x + 6, y - 1, color)
+        graphics.DrawLine(canvas, x - 6, y, x + 6, y, color)
+        graphics.DrawLine(canvas, x - 6, y + 1, x + 6, y + 1, color)
+        graphics.DrawLine(canvas, x - 5, y + 2, x + 5, y + 2, color)
+        graphics.DrawLine(canvas, x - 5, y + 3, x + 5, y + 3, color)
+        graphics.DrawLine(canvas, x - 4, y + 4, x + 4, y + 4, color)
+        graphics.DrawLine(canvas, x - 3, y + 5, x + 3, y + 5, color)
+        graphics.DrawLine(canvas, x - 1, y + 6, x + 1, y + 6, color)
+
+        # # Draw circle with lines
+        # graphics.DrawLine(canvas, x - 2, y - 5, x + 2, y - 5, color)
+        # graphics.DrawLine(canvas, x - 3, y - 4, x + 3, y - 4, color)
+        # graphics.DrawLine(canvas, x - 4, y - 3, x + 4, y - 3, color)
+        # graphics.DrawLine(canvas, x - 5, y - 2, x + 5, y - 2, color)
+        # graphics.DrawLine(canvas, x - 5, y - 1, x + 5, y - 1, color)
+        # graphics.DrawLine(canvas, x - 5, y, x + 5, y, color)
+        # graphics.DrawLine(canvas, x - 5, y + 1, x + 5, y + 1, color)
+        # graphics.DrawLine(canvas, x - 5, y + 2, x + 5, y + 2, color)
+        # graphics.DrawLine(canvas, x - 4, y + 3, x + 4, y + 3, color)
+        # graphics.DrawLine(canvas, x - 3, y + 4, x + 3, y + 4, color)
+        # graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
 
 
 def arrival_time(train, stop_id):
@@ -674,7 +673,7 @@ def get_mta_feeds():
     return FEEDS
 
 
-def get_next_trains(
+def get_mta_next_trains(
         num_trains=2,
         stop_id='F23N'
 ):
@@ -692,7 +691,7 @@ def get_next_trains(
         return None
 
 
-def get_stop_name_and_direction(stop_id):
+def get_mta_stop_name_and_direction(stop_id):
     # stop_id reference here:
     # https://openmobilitydata-data.s3-us-west-1.amazonaws.com/public/feeds/mta/79/20240103/original/stops.txt
 
@@ -707,6 +706,99 @@ def get_stop_name_and_direction(stop_id):
         direction = '↓'
 
     return stop_name, direction
+
+
+def get_game_icon(game):
+    if game['teams']['away']['teamID'] in MLB_TEAMS:
+        icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
+    else:
+        icon_file = 'icons/32/' + game['teams']['home']['teamID'] + '.png'
+
+    return icon_file
+
+
+def get_games():
+    games = get_games_mlb()
+    games.extend(get_games_nhl())
+    return games
+
+
+def get_games_mlb():
+    if os.name == 'nt':
+        import pickle
+        cache_file = r'c:\temp\mlb.pickle'
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as file:
+                games = pickle.load(file)
+            return games
+
+    local = pytz.timezone("America/New_York")
+    starts_after = datetime.now() - timedelta(days=1)
+    starts_before = datetime.now() + timedelta(days=1)
+    starts_after = local.localize(starts_after, is_dst=None)
+    starts_after = starts_after.astimezone(pytz.utc)
+    starts_before = local.localize(starts_before, is_dst=None)
+    starts_before = starts_before.astimezone(pytz.utc)
+
+    response = requests.get(
+        f'https://api.sportsgameodds.com/v1/events?leagueID=MLB&'
+        f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
+        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
+        f'oddIDs=points-home-game-sp-home',
+        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+    )
+    data = response.json()
+
+    games = []
+    for game in data['data']:
+        if game['teams']['away']['teamID'] in MLB_TEAMS or \
+                game['teams']['home']['teamID'] in MLB_TEAMS:
+            games.append(game)
+
+    if os.name == 'nt':
+        with open(cache_file, 'wb') as file:
+            pickle.dump(games, file)
+
+    return games
+
+
+def get_games_nhl():
+    if os.name == 'nt':
+        import pickle
+        cache_file = r'c:\temp\nhl.pickle'
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as file:
+                games = pickle.load(file)
+            return games
+
+    local = pytz.timezone("America/New_York")
+    starts_after = datetime.now() - timedelta(days=1)
+    starts_before = datetime.now() + timedelta(days=1)
+    starts_after = local.localize(starts_after, is_dst=None)
+    starts_after = starts_after.astimezone(pytz.utc)
+    starts_before = local.localize(starts_before, is_dst=None)
+    starts_before = starts_before.astimezone(pytz.utc)
+
+    response = requests.get(
+        f'https://api.sportsgameodds.com/v1/events?leagueID=NHL&'
+        f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
+        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
+        f'oddIDs=points-home-game-sp-home',
+        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+    )
+    data = response.json()
+
+    games = []
+    for game in data['data']:
+        if game['teams']['away']['teamID'] in NHL_TEAMS or \
+                game['teams']['home']['teamID'] in NHL_TEAMS:
+            games.append(game)
+
+    if os.name == 'nt':
+        with open(cache_file, 'wb') as file:
+            pickle.dump(games, file)
+
+    return games
 
 
 def get_weather():
@@ -732,6 +824,11 @@ def get_weather():
             FORECAST = None
 
     return WEATHER, FORECAST
+
+
+def hex_to_rgb(h):
+    h = h.lstrip('#')
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
 
 
 def k_to_c(k):
@@ -864,107 +961,7 @@ def weather_to_icon(weather):
     return icon_file
 
 
-def hex_to_rgb(h):
-    h = h.lstrip('#')
-    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-
-
-def get_game_icon(game):
-
-    if game['teams']['away']['teamID'] in MLB_TEAMS:
-        icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
-    else:
-        icon_file = 'icons/32/' + game['teams']['home']['teamID'] + '.png'
-
-    return icon_file
-
-
-def get_mlb_games():
-    if os.name == 'nt':
-        import pickle
-        cache_file = r'c:\temp\mlb.pickle'
-        if os.path.exists(cache_file):
-            with open(cache_file, 'rb') as file:
-                games = pickle.load(file)
-            return games
-
-    local = pytz.timezone("America/New_York")
-    starts_after = datetime.now() - timedelta(days=1)
-    starts_before = datetime.now() + timedelta(days=1)
-    starts_after = local.localize(starts_after, is_dst=None)
-    starts_after = starts_after.astimezone(pytz.utc)
-    starts_before = local.localize(starts_before, is_dst=None)
-    starts_before = starts_before.astimezone(pytz.utc)
-
-    response = requests.get(
-        f'https://api.sportsgameodds.com/v1/events?leagueID=MLB&'
-        f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
-        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
-        f'oddIDs=points-home-game-sp-home',
-        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
-    )
-    data = response.json()
-
-    games = []
-    for game in data['data']:
-        if game['teams']['away']['teamID'] in MLB_TEAMS or \
-                game['teams']['home']['teamID'] in MLB_TEAMS:
-            games.append(game)
-
-    if os.name == 'nt':
-        with open(cache_file, 'wb') as file:
-            pickle.dump(games, file)
-
-    return games
-
-
-def get_nhl_games():
-    if os.name == 'nt':
-        import pickle
-        cache_file = r'c:\temp\nhl.pickle'
-        if os.path.exists(cache_file):
-            with open(cache_file, 'rb') as file:
-                games = pickle.load(file)
-            return games
-
-    local = pytz.timezone("America/New_York")
-    starts_after = datetime.now() - timedelta(days=1)
-    starts_before = datetime.now() + timedelta(days=1)
-    starts_after = local.localize(starts_after, is_dst=None)
-    starts_after = starts_after.astimezone(pytz.utc)
-    starts_before = local.localize(starts_before, is_dst=None)
-    starts_before = starts_before.astimezone(pytz.utc)
-
-    response = requests.get(
-        f'https://api.sportsgameodds.com/v1/events?leagueID=NHL&'
-        f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
-        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
-        f'oddIDs=points-home-game-sp-home',
-        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
-    )
-    data = response.json()
-
-    games = []
-    for game in data['data']:
-        if game['teams']['away']['teamID'] in NHL_TEAMS or \
-                game['teams']['home']['teamID'] in NHL_TEAMS:
-            games.append(game)
-
-    if os.name == 'nt':
-        with open(cache_file, 'wb') as file:
-            pickle.dump(games, file)
-
-    return games
-
-
-def get_sports_games():
-    games = get_mlb_games()
-    games.extend(get_nhl_games())
-    return games
-    
-    
 def main():
-
     led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
     led_display_trains.process()
 
