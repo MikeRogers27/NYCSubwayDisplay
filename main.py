@@ -690,6 +690,8 @@ def get_games_league(league_id):
         headers={'X-Api-Key': os.environ['SGO_API_KEY']}
     )
     data = response.json()
+    if not data['success']:
+        return []
 
     if league_id == 'MLB':
         league_teams = MLB_TEAMS
