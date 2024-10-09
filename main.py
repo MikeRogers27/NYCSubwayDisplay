@@ -63,9 +63,10 @@ class RunMatrix(SampleBase):
         self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
     def draw_game(self, canvas, game):
-        if game['leagueID'] == 'MLB':
+        league_id = game['leagueID']
+        if league_id == 'MLB':
             league_teams = MLB_TEAMS
-        elif game['leagueID'] == 'NHL':
+        elif league_id == 'NHL':
             league_teams = NHL_TEAMS
         else:  # NFL
             return None
@@ -80,10 +81,13 @@ class RunMatrix(SampleBase):
 
         start_time = to_local_tz(parse(game['status']['startsAt']))
 
+        has_started = game['status']['started']
+        has_ended = game['status']['ended']
+        in_progress = has_started and not has_ended
         if game['teams']['away']['teamID'] in league_teams:
             title_symbol = '@'
             title_str = game['teams']['home']['names']['short']
-            if game['status']['ended']:
+            if has_ended:
                 if game['teams']['away']['score'] > game['teams']['home']['score']:
                     score_prefix = 'W'
                 elif game['teams']['away']['score'] == game['teams']['home']['score']:
@@ -96,7 +100,7 @@ class RunMatrix(SampleBase):
         else:
             title_symbol = 'v'
             title_str = game['teams']['away']['names']['short']
-            if game['status']['ended']:
+            if has_ended:
                 if game['teams']['home']['score'] > game['teams']['away']['score']:
                     score_prefix = 'W'
                 elif game['teams']['home']['score'] == game['teams']['away']['score']:
@@ -107,15 +111,18 @@ class RunMatrix(SampleBase):
                 score_prefix = ''
             team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
 
-        if game['status']['started'] or game['status']['ended']:
+        if has_started or has_ended:
             score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
         else:
             score_str = start_time.strftime('%H:%M')
 
-        if os.name == 'nt':
-            date_str = start_time.strftime('%#m/%#d')
+        if in_progress:
+            date_str = game['status']['displayShort']
         else:
-            date_str = start_time.strftime('%-m/%-d')
+            if os.name == 'nt':
+                date_str = start_time.strftime('%#m/%#d')
+            else:
+                date_str = start_time.strftime('%-m/%-d')
 
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
         graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
