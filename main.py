@@ -29,7 +29,7 @@ WEATHER_TIMESTAMP = None
 
 MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
 NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
-
+NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
 
 class GracefulKiller:
     def __init__(self):
@@ -666,6 +666,7 @@ def get_game_icon(game):
 def get_games():
     games = get_games_league('MLB')
     games.extend(get_games_league('NHL'))
+    games.extend(get_games_league('NFL'))
     return games
 
 
