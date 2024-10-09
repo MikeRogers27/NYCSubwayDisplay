@@ -1,4 +1,5 @@
 from datetime import datetime, time as dt_time, timedelta
+from dateutil.parser import parse
 import importlib
 import os
 import requests
@@ -9,7 +10,7 @@ import warnings
 from PIL import Image
 from nyct_gtfs import NYCTFeed
 from pyowm import OWM
-
+import pytz
 
 if os.name == 'nt':
     graphics = importlib.import_module('RGBMatrixEmulator', 'graphics')
@@ -368,8 +369,6 @@ class RunMatrix(SampleBase):
         return canvas
 
     def draw_mlb_game(self, canvas, game):
-        import pytz
-        from dateutil.parser import parse
 
         text_y_top = 10
         text_y_middle = 20
@@ -386,7 +385,7 @@ class RunMatrix(SampleBase):
         if game['teams']['away']['teamID'] in MLB_TEAMS:
             title_symbol = '@'
             title_str = game['teams']['home']['names']['short']
-            if game['status']['finalized']:
+            if game['status']['ended']:
                 if game['teams']['away']['score'] > game['teams']['home']['score']:
                     score_prefix = 'W'
                 elif game['teams']['away']['score'] == game['teams']['home']['score']:
@@ -399,7 +398,7 @@ class RunMatrix(SampleBase):
         else:
             title_symbol = 'v'
             title_str = game['teams']['away']['names']['short']
-            if game['status']['finalized']:
+            if game['status']['ended']:
                 if game['teams']['home']['score'] > game['teams']['away']['score']:
                     score_prefix = 'W'
                 elif game['teams']['home']['score'] == game['teams']['away']['score']:
@@ -410,7 +409,7 @@ class RunMatrix(SampleBase):
                 score_prefix = ''
             team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
 
-        if game['status']['finalized']:
+        if game['status']['started'] or game['status']['ended']:
             score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
         else:
             score_str = start_time.strftime('%H:%M')
@@ -722,10 +721,10 @@ def hex_to_rgb(h):
 
 def get_game_icon(game):
 
-    if game['teams']['away']['teamID'] == MLB_TEAMS:
+    if game['teams']['away']['teamID'] in MLB_TEAMS:
         icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
     else:
-        icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
+        icon_file = 'icons/32/' + game['teams']['home']['teamID'] + '.png'
 
     return icon_file
 
@@ -738,11 +737,18 @@ def get_mlb_games():
             games = pickle.load(file)
         return games
 
+    local = pytz.timezone("America/New_York")
     starts_after = datetime.now() - timedelta(days=1)
+    starts_before = datetime.now() + timedelta(days=1)
+    starts_after = local.localize(starts_after, is_dst=None)
+    starts_after = starts_after.astimezone(pytz.utc)
+    starts_before = local.localize(starts_before, is_dst=None)
+    starts_before = starts_before.astimezone(pytz.utc)
+
     response = requests.get(
         f'https://api.sportsgameodds.com/v1/events?leagueID=MLB&'
-        #  f'finalized=true&'
-        f'startsAfter={starts_after}&'
+        f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
+        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
         f'oddIDs=points-home-game-sp-home',
         headers={'X-Api-Key': os.environ['SGO_API_KEY']}
     )
@@ -751,7 +757,7 @@ def get_mlb_games():
     games = []
     for game in data['data']:
         if game['teams']['away']['teamID'] in MLB_TEAMS or \
-                game['teams']['away']['teamID'] in MLB_TEAMS:
+                game['teams']['home']['teamID'] in MLB_TEAMS:
             games.append(game)
 
     with open(cache_file, 'wb') as file:
