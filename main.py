@@ -8,6 +8,7 @@ import warnings
 from PIL import Image
 from nyct_gtfs import NYCTFeed
 from pyowm import OWM
+import pytz
 
 
 if os.name == 'nt':
@@ -19,6 +20,7 @@ from samplebase import SampleBase
 
 FEEDS = None
 NOW = None
+LOCAL_TZ = pytz.timezone("America/New_York")
 WEATHER_MGR = None
 WEATHER = None
 FORECAST = None
@@ -244,6 +246,7 @@ class DisplayTrains(SampleBase):
         return True, canvas
 
     def what_should_we_display(self):
+        return ['weather'], 10
 
         timestamp = datetime.now().time()
         # display trains and clock between 7am and 9am
@@ -317,35 +320,22 @@ class DisplayTrains(SampleBase):
 
         return canvas
 
-    def display_weather(self, canvas, display_time=10):
+    def draw_weather(self, canvas, w):
         text_y_top = 10
         text_y_middle = 20
         text_y_bottom = 30
 
-        timestamp = datetime.now().time()
-        if timestamp < dt_time(13, 0):  # before 12 show today's forecast
-            min_temp, max_temp, icon_file = todays_forecast()
-            head_str = 'Today'
-        elif timestamp < dt_time(19, 0):  # before 7pm show the evening forecast
-            min_temp, max_temp, icon_file = evening_forecast()
-            head_str = 'Eve'
-        else:
-            min_temp, max_temp, icon_file = tomorrows_forecast()
-            head_str = 'Tom'
-
-        if min_temp is None:
-            min_temp = '-'
-
-        if max_temp is None:
-            max_temp = '-'
-
-        canvas.Clear()
+        max_temp = k_to_c(w.temp['temp_max'])
+        min_temp = k_to_c(w.temp['temp_min'])
+        icon_file = weather_to_icon(w)
 
         if icon_file is not None:
             im = Image.open(icon_file)
-            if im.width != 32:
-                im.thumbnail((32, 32), Image.Resampling.LANCZOS)
             canvas.SetImage(im)
+
+        # get forecast time in local (this automatically happens with from timestamp)
+        weather_time = datetime.fromtimestamp(w.ref_time)
+        head_str = weather_time.strftime('%h%P')
 
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, head_str)
         hot_colour = graphics.Color(247, 92, 92)
@@ -358,9 +348,53 @@ class DisplayTrains(SampleBase):
                           '↓')
         graphics.DrawText(canvas, self.circle_font, 40, text_y_bottom, self.text_colour,
                           f'{min_temp}c')
+        return canvas
 
-        canvas = self.matrix.SwapOnVSync(canvas)
-        time.sleep(display_time)
+    def draw_no_weather(self, canvas):
+        text_y_top = 10
+        text_y_middle = 20
+        text_y_bottom = 30
+
+        icon_file = 'icons/32/weather-forecast.png'
+        im = Image.open(icon_file)
+        canvas.SetImage(im)
+
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, '***')
+        hot_colour = graphics.Color(247, 92, 92)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, hot_colour,
+                          '↑')
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_middle, self.text_colour,
+                          f'--c')
+        cold_colour = graphics.Color(92, 172, 247)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, cold_colour,
+                          '↓')
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_bottom, self.text_colour,
+                          f'--c')
+        return canvas
+
+    def display_weather(self, canvas, display_time=10):
+
+        timestamp = datetime.now().time()
+        if True or timestamp < dt_time(13, 0):  # before 12 show today's forecast
+            forecasts = todays_forecasts()
+        elif timestamp < dt_time(19, 0):  # before 7pm show the evening forecast
+            forecasts = evening_forecasts()
+        else:
+            forecasts = tomorrows_forecasts()
+
+        if len(forecasts):
+            weather_time = max(3, round(display_time/len(forecasts)))
+            for forecast in forecasts:
+                canvas.Clear()
+                canvas = self.draw_weather(canvas, forecast)
+                canvas = self.matrix.SwapOnVSync(canvas)
+                time.sleep(weather_time)
+        else:
+            canvas.Clear()
+            canvas = self.draw_no_weather(canvas)
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(display_time)
+
         return canvas
 
     def run(self):
@@ -590,44 +624,57 @@ def pick_worst_weather(w1, w2):
         return w2
 
 
-def get_forecast(time_start, time_end):
+def to_utc_tz(date_time):
+    date_time = LOCAL_TZ.localize(date_time, is_dst=None)
+    date_time = date_time.astimezone(pytz.utc)
+    return date_time
+
+def to_local_tz(date_time):
+    date_time = pytz.utc.localize(date_time, is_dst=None)
+    date_time = date_time.astimezone(LOCAL_TZ)
+    return date_time
+
+
+def get_forecasts(time_start, time_end):
+    # put time in utc
+    time_start = to_utc_tz(time_start)
+    time_end = to_utc_tz(time_end)
+
     w, forecast = get_weather()
-    if w is None:
-        return None, None, 'icons/32/weather-forecast-sign-16552.png'
+    # if w is None:
+    #     return None, None, 'icons/32/weather-forecast-sign-16552.png'
+    #
+    # max_temp = k_to_c(w.temp['temp_max'])
+    # min_temp = k_to_c(w.temp['temp_min'])
+    # icon_weather = w
 
-    max_temp = k_to_c(w.temp['temp_max'])
-    min_temp = k_to_c(w.temp['temp_min'])
-    icon_weather = w
-
+    forecasts = []
     for w in forecast.forecast.weathers:
         if time_start.timestamp() <= w.reference_time() <= time_end.timestamp():
-            max_temp = max(max_temp, k_to_c(w.temp['temp_max']))
-            min_temp = min(k_to_c(w.temp['temp_min']), min_temp)
-            icon_weather = pick_worst_weather(icon_weather, w)
-    icon = weather_to_icon(icon_weather)
+            forecasts.append(w)
 
-    return min_temp, max_temp, icon
+    return forecasts
 
 
-def todays_forecast():
-    # today's forecast is between 9am and 7pm
+def todays_forecasts():
+    # today's forecasts are between 9am and 7pm
     start_time = datetime.today().replace(hour=9, minute=0, second=0)
     end_time = datetime.today().replace(hour=19, minute=0, second=0)
-    return get_forecast(start_time, end_time)
+    return get_forecasts(start_time, end_time)
 
 
-def evening_forecast():
+def evening_forecasts():
     # evening forecast is between 7pm and midnight
     start_time = datetime.today().replace(hour=19, minute=0, second=0)
     end_time = datetime.today().replace(hour=0, minute=0, second=0) + timedelta(days=1)
-    return get_forecast(start_time, end_time)
+    return get_forecasts(start_time, end_time)
 
 
-def tomorrows_forecast():
+def tomorrows_forecasts():
     # evening forecast is between 7am and 7pm tomorrow
     start_time = datetime.today().replace(hour=7, minute=0, second=0) + timedelta(days=1)
     end_time = datetime.today().replace(hour=19, minute=0, second=0) + timedelta(days=1)
-    return get_forecast(start_time, end_time)
+    return get_forecasts(start_time, end_time)
 
 
 def main():
