@@ -657,31 +657,25 @@ def get_game_icon(game):
 
 
 def get_games():
-    # games = get_games_mlb()
-    # games.extend(get_games_nhl())
-    games = get_games_nhl()
+    games = get_games_league('MLB')
+    games.extend(get_games_league('NHL'))
     return games
 
 
-def get_games_mlb():
+def get_games_league(league_id):
     if os.name == 'nt':
         import pickle
-        cache_file = r'c:\temp\mlb.pickle'
+        cache_file = rf'c:\temp\{league_id}.pickle'
         if os.path.exists(cache_file):
             with open(cache_file, 'rb') as file:
                 games = pickle.load(file)
             return games
 
-    local = pytz.timezone("America/New_York")
-    starts_after = datetime.now() - timedelta(days=1)
-    starts_before = datetime.now() + timedelta(days=1)
-    starts_after = local.localize(starts_after, is_dst=None)
-    starts_after = starts_after.astimezone(pytz.utc)
-    starts_before = local.localize(starts_before, is_dst=None)
-    starts_before = starts_before.astimezone(pytz.utc)
+    starts_after = to_utc_tz(datetime.now() - timedelta(days=1))
+    starts_before = to_utc_tz(datetime.now() + timedelta(days=1))
 
     response = requests.get(
-        f'https://api.sportsgameodds.com/v1/events?leagueID=MLB&'
+        f'https://api.sportsgameodds.com/v1/events?leagueID={league_id}&'
         f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
         f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
         f'oddIDs=points-home-game-sp-home',
@@ -689,45 +683,17 @@ def get_games_mlb():
     )
     data = response.json()
 
-    games = []
-    for game in data['data']:
-        if game['teams']['away']['teamID'] in MLB_TEAMS or \
-                game['teams']['home']['teamID'] in MLB_TEAMS:
-            games.append(game)
-
-    if os.name == 'nt':
-        with open(cache_file, 'wb') as file:
-            pickle.dump(games, file)
-
-    return games
-
-
-def get_games_nhl():
-    if os.name == 'nt':
-        import pickle
-        cache_file = r'c:\temp\nhl.pickle'
-        if os.path.exists(cache_file):
-            with open(cache_file, 'rb') as file:
-                games = pickle.load(file)
-            return games
-
-    local = pytz.timezone("America/New_York")
-    starts_after = to_utc_tz(datetime.now() - timedelta(days=1))
-    starts_before = to_utc_tz(datetime.now() + timedelta(days=1))
-
-    response = requests.get(
-        f'https://api.sportsgameodds.com/v1/events?leagueID=NHL&'
-        f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
-        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&',
-        f'oddIDs=points-home-game-sp-home',
-        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
-    )
-    data = response.json()
+    if league_id == 'MLB':
+        league_teams = MLB_TEAMS
+    elif league_id == 'NHL':
+        league_teams = NHL_TEAMS
+    else:
+        league_teams = []
 
     games = []
     for game in data['data']:
-        if game['teams']['away']['teamID'] in NHL_TEAMS or \
-                game['teams']['home']['teamID'] in NHL_TEAMS:
+        if game['teams']['away']['teamID'] in league_teams or \
+                game['teams']['home']['teamID'] in league_teams:
             games.append(game)
 
     if os.name == 'nt':
