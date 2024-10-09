@@ -21,6 +21,7 @@ from samplebase import SampleBase
 
 FEEDS = None
 NOW = None
+LOCAL_TZ = pytz.timezone("America/New_York")
 WEATHER_MGR = None
 WEATHER = None
 FORECAST = None
@@ -61,7 +62,8 @@ class RunMatrix(SampleBase):
         self.circle_colour_g = graphics.Color(108, 190, 69)
         self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
-    def draw_filled_circle(self, canvas, x, y, color):
+    @staticmethod
+    def draw_filled_circle(canvas, x, y, color):
         # Draw circle with lines
         graphics.DrawLine(canvas, x - 1, y - 6, x + 1, y - 6, color)
         graphics.DrawLine(canvas, x - 3, y - 5, x + 3, y - 5, color)
@@ -90,15 +92,15 @@ class RunMatrix(SampleBase):
         # graphics.DrawLine(canvas, x - 3, y + 4, x + 3, y + 4, color)
         # graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
 
-    def draw_row(self,
-                 canvas,
-                 row_ind,
-                 text_colour,
-                 circle_colour,
-                 route_id,
-                 headsign_text,
-                 direction,
-                 arrival_mins):
+    def draw_train_row(self,
+                       canvas,
+                       row_ind,
+                       text_colour,
+                       circle_colour,
+                       route_id,
+                       headsign_text,
+                       direction,
+                       arrival_mins):
         # Top line
         if row_ind == 0:
             circle_y = 8
@@ -159,30 +161,16 @@ class RunMatrix(SampleBase):
         else:
             direction = 'S'
 
-        self.draw_row(canvas,
-                      row_ind=row_ind,
-                      text_colour=text_colour,
-                      circle_colour=circle_colour,
-                      route_id=train.route_id,
-                      headsign_text=train.headsign_text,
-                      direction=direction,
-                      arrival_mins=arrival_mins)
+        self.draw_train_row(canvas,
+                            row_ind=row_ind,
+                            text_colour=text_colour,
+                            circle_colour=circle_colour,
+                            route_id=train.route_id,
+                            headsign_text=train.headsign_text,
+                            direction=direction,
+                            arrival_mins=arrival_mins)
 
-    @staticmethod
-    def get_stop_name_and_direction( stop_id):
-        if stop_id.startswith('F23'):
-            stop_name = '4 Av'
-        elif stop_id.startswith('R33'):
-            stop_name = '9 St'
-
-        if stop_id.endswith('N'):
-            direction = '↑'
-        else:
-            direction = '↓'
-
-        return stop_name, direction
-
-    def draw_no_train_data(self,
+    def draw_train_no_data(self,
                            stop_id,
                            canvas,
                            ):
@@ -190,7 +178,7 @@ class RunMatrix(SampleBase):
         text_y_top = 13
         text_y_bottom = 28
 
-        stop_name, direction = self.get_stop_name_and_direction(stop_id)
+        stop_name, direction = get_stop_name_and_direction(stop_id)
 
         graphics.DrawText(canvas, self.font, 1, text_y_top, self.text_colour, f'{stop_name} {direction}')
         if stop_id.startswith('F23'):
@@ -204,15 +192,15 @@ class RunMatrix(SampleBase):
 
         graphics.DrawText(canvas, self.font, 7, text_y_bottom, self.text_colour, '*no data*')
 
-    def draw_no_trains(self,
-                       stop_id,
-                       canvas,
-                       ):
+    def draw_trains_none(self,
+                         stop_id,
+                         canvas,
+                         ):
         # Top line
         text_y_top = 13
         text_y_bottom = 28
 
-        stop_name, direction = self.get_stop_name_and_direction(stop_id)
+        stop_name, direction = get_stop_name_and_direction(stop_id)
 
         graphics.DrawText(canvas, self.font, 1, text_y_top, self.text_colour, f'{stop_name} {direction}')
         if stop_id.startswith('F23'):
@@ -228,7 +216,7 @@ class RunMatrix(SampleBase):
 
     def draw_trains(self, trains, stop_id, canvas):
         if trains is None:
-            self.draw_no_train_data(stop_id, canvas)
+            self.draw_train_no_data(stop_id, canvas)
         elif len(trains):
             # check we don't have stale data
             now = datetime.now()
@@ -238,49 +226,101 @@ class RunMatrix(SampleBase):
                     last_update_time = train.last_position_update
             # if the latest update was more than 15 minutes ago, the data is stale
             if last_update_time < now - timedelta(minutes=15):
-                self.draw_no_train_data(stop_id, canvas)
+                self.draw_train_no_data(stop_id, canvas)
             else:
                 self.draw_train(0, trains[0], stop_id, canvas)
                 if len(trains) > 1:
                     self.draw_train(1, trains[1], stop_id, canvas)
         else:
-            self.draw_no_trains(stop_id, canvas)
+            self.draw_trains_none(stop_id, canvas)
 
         return True, canvas
 
-    def what_should_we_display(self):
-        return ['sports'], 10
+    def draw_weather(self, canvas, w):
+        text_y_top = 10
+        text_y_middle = 20
+        text_y_bottom = 30
 
-        timestamp = datetime.now().time()
-        # display trains and clock between 7am and 9am
-        if dt_time(7, 0) <= timestamp < dt_time(9, 0):
-            return ['trains_uptown, clock', 'weather'], 5
-        # only trains during the day
-        if dt_time(9, 0) <= timestamp < dt_time(20, 0):
-            return ['trains', 'weather'], 10
-        # only clok after 8
-        if timestamp >= dt_time(20, 0):
-            return ['clock', 'weather'], 10
+        max_temp = k_to_c(w.temp['temp_max'])
+        min_temp = k_to_c(w.temp['temp_min'])
+        icon_file = weather_to_icon(w)
 
-        return ['off']
+        if icon_file is not None:
+            im = Image.open(icon_file)
+            canvas.SetImage(im)
 
-    def display_trains(self, canvas, display_time=10, uptown_only=False):
-        update_feeds()
-        stop_ids = self.stop_ids
-        if uptown_only:
-            stop_ids = self.uptown_stop_ids
-        for stop_id in stop_ids:
-            trains = get_next_trains(stop_id=stop_id)
+        # get forecast time in local (this automatically happens with from timestamp)
+        weather_time = datetime.fromtimestamp(w.ref_time)
+        if os.name == 'nt':
+            head_str = weather_time.strftime('%#I%p').lower()
+        else:
+            head_str = weather_time.strftime('%-I%p').lower()
 
-            canvas.Clear()
-            success, canvas = self.draw_trains(trains, stop_id, canvas)
-            if success:
-                time.sleep(0.05)
-                canvas = self.matrix.SwapOnVSync(canvas)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, head_str)
+        hot_colour = graphics.Color(247, 92, 92)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, hot_colour,
+                          '↑')
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_middle, self.text_colour,
+                          f'{max_temp}c')
+        cold_colour = graphics.Color(92, 172, 247)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, cold_colour,
+                          '↓')
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_bottom, self.text_colour,
+                          f'{min_temp}c')
+        return canvas
 
-            # show display for 10 seconds before update
-            time.sleep(display_time)
+    def draw_weather_no_data(self, canvas):
+        text_y_top = 10
+        text_y_middle = 20
+        text_y_bottom = 30
 
+        icon_file = 'icons/32/weather-forecast.png'
+        im = Image.open(icon_file)
+        canvas.SetImage(im)
+
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, '***')
+        hot_colour = graphics.Color(247, 92, 92)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, hot_colour,
+                          '↑')
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_middle, self.text_colour,
+                          f'--c')
+        cold_colour = graphics.Color(92, 172, 247)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, cold_colour,
+                          '↓')
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_bottom, self.text_colour,
+                          f'--c')
+        return canvas
+
+    def draw_weather_summary(self, canvas, w_list, title_str):
+        text_y_top = 10
+        text_y_middle = 20
+        text_y_bottom = 30
+
+        max_temp = -100
+        min_temp = 100
+        codes = []
+        for w in w_list:
+            max_temp = max(max_temp, k_to_c(w.temp['temp_max']))
+            min_temp = min(min_temp, k_to_c(w.temp['temp_min']))
+            codes.append(w.weather_code)
+        best_code = max(set(codes), key=codes.count)
+
+        icon_file = weather_to_icon(next(w for w in w_list if w.weather_code == best_code))
+        if icon_file is not None:
+            im = Image.open(icon_file)
+            canvas.SetImage(im)
+
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_str)
+        hot_colour = graphics.Color(247, 92, 92)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, hot_colour,
+                          '↑')
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_middle, self.text_colour,
+                          f'{max_temp}c')
+        cold_colour = graphics.Color(92, 172, 247)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, cold_colour,
+                          '↓')
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_bottom, self.text_colour,
+                          f'{min_temp}c')
         return canvas
 
     def display_clock(self, canvas, display_time=10):
@@ -323,53 +363,76 @@ class RunMatrix(SampleBase):
 
         return canvas
 
+    def display_trains(self, canvas, display_time=10, uptown_only=False):
+        update_feeds()
+        stop_ids = self.stop_ids
+        if uptown_only:
+            stop_ids = self.uptown_stop_ids
+        for stop_id in stop_ids:
+            trains = get_next_trains(stop_id=stop_id)
+
+            canvas.Clear()
+            success, canvas = self.draw_trains(trains, stop_id, canvas)
+            if success:
+                time.sleep(0.05)
+                canvas = self.matrix.SwapOnVSync(canvas)
+
+            # show display for 10 seconds before update
+            time.sleep(display_time)
+
+        return canvas
+
     def display_weather(self, canvas, display_time=10):
-        text_y_top = 10
-        text_y_middle = 20
-        text_y_bottom = 30
 
         timestamp = datetime.now().time()
         if timestamp < dt_time(13, 0):  # before 12 show today's forecast
-            min_temp, max_temp, icon_file = todays_forecast()
-            head_str = 'Today'
+            title_str = 'Day'
+            forecasts = forecasts_today()
         elif timestamp < dt_time(19, 0):  # before 7pm show the evening forecast
-            min_temp, max_temp, icon_file = evening_forecast()
-            head_str = 'Eve.'
+            title_str = 'Eve'
+            forecasts = forecasts_evening()
         else:
-            min_temp, max_temp, icon_file = tomorrows_forecast()
-            head_str = 'Tom.'
+            title_str = 'Tom'
+            forecasts = forecasts_tomorrow()
 
-        if min_temp is None:
-            min_temp = '-'
+        if len(forecasts):
+            weather_time = max(3, round(display_time / (len(forecasts) + 2)))
 
-        if max_temp is None:
-            max_temp = '-'
+            canvas.Clear()
+            canvas = self.draw_weather_summary(canvas, forecasts, title_str)
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(weather_time * 2)
 
-        canvas.Clear()
+            for forecast in forecasts:
+                canvas.Clear()
+                canvas = self.draw_weather(canvas, forecast)
+                canvas = self.matrix.SwapOnVSync(canvas)
+                time.sleep(weather_time)
 
-        if icon_file is not None:
-            im = Image.open(icon_file)
-            if im.width != 32:
-                im.thumbnail((32, 32), Image.Resampling.LANCZOS)
-            canvas.SetImage(im)
+        else:
+            canvas.Clear()
+            canvas = self.draw_weather_no_data(canvas)
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(display_time)
 
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, head_str)
-        hot_colour = graphics.Color(247, 92, 92)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, hot_colour,
-                          '↑')
-        graphics.DrawText(canvas, self.circle_font, 40, text_y_middle, self.text_colour,
-                          f'{max_temp}c')
-        cold_colour = graphics.Color(92, 172, 247)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, cold_colour,
-                          '↓')
-        graphics.DrawText(canvas, self.circle_font, 40, text_y_bottom, self.text_colour,
-                          f'{min_temp}c')
-
-        canvas = self.matrix.SwapOnVSync(canvas)
-        time.sleep(display_time)
         return canvas
 
-    def draw_mlb_game(self, canvas, game):
+    @staticmethod
+    def what_should_we_display():
+
+        timestamp = datetime.now().time()
+        # display trains and clock between 7am and 9am
+        if dt_time(7, 0) <= timestamp < dt_time(9, 0):
+            return ['trains_uptown, clock', 'weather'], 5
+        # only trains during the day
+        if dt_time(9, 0) <= timestamp < dt_time(20, 0):
+            return ['trains', 'weather'], 10
+        # only clok after 8
+        if timestamp >= dt_time(20, 0):
+            return ['clock', 'weather'], 10
+
+        return ['off']
+   def draw_mlb_game(self, canvas, game):
 
         text_y_top = 10
         text_y_middle = 20
@@ -504,8 +567,7 @@ class RunMatrix(SampleBase):
             canvas = self.matrix.SwapOnVSync(canvas)
             time.sleep(game_time)
         return canvas
-
-
+        
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
 
@@ -513,6 +575,9 @@ class RunMatrix(SampleBase):
         while not graceful_killer.kill_now:
             display_items, display_time = self.what_should_we_display()
             for display_item in display_items:
+                # break out early if required
+                if graceful_killer.kill_now:
+                    break
                 if display_item == 'trains':
                     canvas = self.display_trains(canvas, display_time=display_time)
                 elif display_item == 'trains_uptown':
@@ -549,22 +614,46 @@ def find_next_trains(trains, num_trains, stop_id):
     return [trains[train_order[i]] for i in range(num_trains) if len(train_order) > i]
 
 
-def get_next_trains(
-        num_trains=2,
-        stop_id='F23N'
-):
-    # time from now
-    global NOW
-    NOW = datetime.now()
-    # get all feeds
-    feeds = get_mta_feeds()
-    if feeds is not None:
-        all_trains = []
-        for feed in feeds:
-            all_trains.extend(feed.filter_trips(headed_for_stop_id=stop_id))
-        return find_next_trains(all_trains, num_trains, stop_id)
-    else:
-        return None
+def forecasts_evening():
+    # evening forecast is between 7pm and midnight
+    start_time = datetime.today().replace(hour=19, minute=0, second=0)
+    end_time = datetime.today().replace(hour=0, minute=0, second=0) + timedelta(days=1)
+    return forecasts_get(start_time, end_time)
+
+
+def forecasts_get(time_start, time_end):
+    # put time in utc
+    time_start = to_utc_tz(time_start)
+    time_end = to_utc_tz(time_end)
+
+    w, forecast = get_weather()
+    # if w is None:
+    #     return None, None, 'icons/32/weather-forecast-sign-16552.png'
+    #
+    # max_temp = k_to_c(w.temp['temp_max'])
+    # min_temp = k_to_c(w.temp['temp_min'])
+    # icon_weather = w
+
+    forecasts = []
+    for w in forecast.forecast.weathers:
+        if time_start.timestamp() <= w.reference_time() <= time_end.timestamp():
+            forecasts.append(w)
+
+    return forecasts
+
+
+def forecasts_today():
+    # today's forecasts are between 9am and 7pm
+    start_time = datetime.today().replace(hour=9, minute=0, second=0)
+    end_time = datetime.today().replace(hour=19, minute=0, second=0)
+    return forecasts_get(start_time, end_time)
+
+
+def forecasts_tomorrow():
+    # tomorrow's forecast is between 7am and 7pm tomorrow
+    start_time = datetime.today().replace(hour=7, minute=0, second=0) + timedelta(days=1)
+    end_time = datetime.today().replace(hour=19, minute=0, second=0) + timedelta(days=1)
+    return forecasts_get(start_time, end_time)
 
 
 def get_mta_feeds():
@@ -585,6 +674,99 @@ def get_mta_feeds():
     return FEEDS
 
 
+def get_next_trains(
+        num_trains=2,
+        stop_id='F23N'
+):
+    # time from now
+    global NOW
+    NOW = datetime.now()
+    # get all feeds
+    feeds = get_mta_feeds()
+    if feeds is not None:
+        all_trains = []
+        for feed in feeds:
+            all_trains.extend(feed.filter_trips(headed_for_stop_id=stop_id))
+        return find_next_trains(all_trains, num_trains, stop_id)
+    else:
+        return None
+
+
+def get_stop_name_and_direction(stop_id):
+    # stop_id reference here:
+    # https://openmobilitydata-data.s3-us-west-1.amazonaws.com/public/feeds/mta/79/20240103/original/stops.txt
+
+    if stop_id.startswith('F23'):
+        stop_name = '4 Av'
+    elif stop_id.startswith('R33'):
+        stop_name = '9 St'
+
+    if stop_id.endswith('N'):
+        direction = '↑'
+    else:
+        direction = '↓'
+
+    return stop_name, direction
+
+
+def get_weather():
+    global WEATHER_MGR
+    global WEATHER
+    global FORECAST
+    global WEATHER_TIMESTAMP
+
+    if WEATHER_MGR is None:
+        owm = OWM(os.environ['OWM_API_KEY'])
+        WEATHER_MGR = owm.weather_manager()
+
+    # we only get the weather every 0.5 hours
+    if WEATHER_TIMESTAMP is None or \
+            (datetime.now() - WEATHER_TIMESTAMP).total_seconds() / 3600 > 0.5:
+        WEATHER_TIMESTAMP = datetime.now()
+        try:
+            observation = WEATHER_MGR.weather_at_place('New York')
+            WEATHER = observation.weather
+            FORECAST = WEATHER_MGR.forecast_at_place('New York', '3h')
+        except Exception as e:
+            WEATHER = None
+            FORECAST = None
+
+    return WEATHER, FORECAST
+
+
+def k_to_c(k):
+    return round(k - 273.15)
+
+
+def pick_worst_weather(w1, w2):
+    order_of_weather_codes = [
+        781,  # tornado
+        200, 201, 202, 210, 211, 212, 221, 230, 231, 232,  # thunderstorms!
+        615, 602, 616, 601, 600, 621, 611, 613, 620, 612, 622,  # snow
+        511, 504, 503, 502, 501, 500, 531, 522, 521, 520,  # rain
+        312, 301, 311, 301, 310, 300, 314, 321, 313,  # drizzle
+        771, 762, 761, 751, 741, 731, 721, 711, 701,  # atmosphere
+        804, 803, 802, 801,  # clouds
+        800,  # clear
+    ]
+    if order_of_weather_codes.index(w1.weather_code) < order_of_weather_codes.index(w2.weather_code):
+        return w1
+    else:
+        return w2
+
+
+def to_utc_tz(date_time):
+    date_time = LOCAL_TZ.localize(date_time, is_dst=None)
+    date_time = date_time.astimezone(pytz.utc)
+    return date_time
+
+
+def to_local_tz(date_time):
+    date_time = pytz.utc.localize(date_time, is_dst=None)
+    date_time = date_time.astimezone(LOCAL_TZ)
+    return date_time
+
+
 def update_feeds():
     import requests
 
@@ -597,17 +779,6 @@ def update_feeds():
             except requests.exceptions.ConnectionError as e:
                 warnings.warn(f'ConnectionError: {e}')
                 pass
-
-
-def display_trains(trains, stop_id):
-    for i, train in enumerate(trains):
-        arrival_mins = arrival_minutes(train, stop_id)
-        print(f'{i + 1}. {train.route_id} {train.headsign_text: <20s} {arrival_mins:2d}min')
-    print()
-
-
-def k_to_c(k):
-    return round(k - 273.15)
 
 
 def weather_to_icon(weather):
@@ -637,7 +808,7 @@ def weather_to_icon(weather):
     elif weather.weather_code in [500, ]:
         icon_file = 'icons/32/rain0.png'
 
-    elif weather.weather_code in [501, 502,]:
+    elif weather.weather_code in [501, 502, ]:
         icon_file = 'icons/32/rain1.png'
 
     elif weather.weather_code in [503, 504, ]:
@@ -675,104 +846,22 @@ def weather_to_icon(weather):
             icon_file = 'icons/32/sun.png'
         else:
             icon_file = 'icons/32/moon.png'
-    elif weather.weather_code in [801, ]:
+    elif weather.weather_code in [801, 802, ]:
         if is_day:
             icon_file = 'icons/32/cloud_sun.png'
         else:
             icon_file = 'icons/32/cloud_moon.png'
 
-    elif weather.weather_code in [802, ]:
+    elif weather.weather_code in [803, ]:
         icon_file = 'icons/32/cloud.png'
 
-    elif weather.weather_code in [803, 804]:
+    elif weather.weather_code in [804, ]:
         icon_file = 'icons/32/clouds.png'
 
     else:
         icon_file = 'icons/32/weather-forecast.png'
 
     return icon_file
-
-
-def get_weather():
-    global WEATHER_MGR
-    global WEATHER
-    global FORECAST
-    global WEATHER_TIMESTAMP
-
-    if WEATHER_MGR is None:
-        owm = OWM(os.environ['OWM_API_KEY'])
-        WEATHER_MGR = owm.weather_manager()
-
-    # we only get the weather every 0.5 hours
-    if WEATHER_TIMESTAMP is None or \
-            (datetime.now() - WEATHER_TIMESTAMP).total_seconds() / 3600 > 0.5:
-        WEATHER_TIMESTAMP = datetime.now()
-        try:
-            observation = WEATHER_MGR.weather_at_place('New York')
-            WEATHER = observation.weather
-            FORECAST = WEATHER_MGR.forecast_at_place('New York', '3h')
-        except Exception as e:
-            WEATHER = None
-            FORECAST = None
-
-    return WEATHER, FORECAST
-
-
-def pick_worst_weather(w1, w2):
-    order_of_weather_codes = [
-        781,  # tornado
-        200, 201, 202, 210, 211, 212, 221, 230, 231, 232,  # thunderstorms!
-        615, 602, 616, 601, 600, 621, 611, 613, 620, 612, 622,  # snow
-        511, 504, 503, 502, 501, 500, 531, 522, 521, 520,  # rain
-        312, 301, 311, 301, 310, 300, 314, 321, 313,  # drizzle
-        771, 762, 761, 751, 741, 731, 721, 711, 701,  # atmosphere
-        804, 803, 802, 801,  # clouds
-        800,  # clear
-    ]
-    if order_of_weather_codes.index(w1.weather_code) < order_of_weather_codes.index(w2.weather_code):
-        return w1
-    else:
-        return w2
-
-
-def get_forecast(time_start, time_end):
-    w, forecast = get_weather()
-    if w is None:
-        return None, None, 'icons/32/weather-forecast-sign-16552.png'
-
-    max_temp = k_to_c(w.temp['temp_max'])
-    min_temp = k_to_c(w.temp['temp_min'])
-    icon_weather = w
-
-    for w in forecast.forecast.weathers:
-        if time_start.timestamp() <= w.reference_time() <= time_end.timestamp():
-            max_temp = max(max_temp, k_to_c(w.temp['temp_max']))
-            min_temp = min(k_to_c(w.temp['temp_min']), min_temp)
-            icon_weather = pick_worst_weather(icon_weather, w)
-    icon = weather_to_icon(icon_weather)
-
-    return min_temp, max_temp, icon
-
-
-def todays_forecast():
-    # today's forecast is between 9am and 7pm
-    start_time = datetime.today().replace(hour=9, minute=0, second=0)
-    end_time = datetime.today().replace(hour=19, minute=0, second=0)
-    return get_forecast(start_time, end_time)
-
-
-def evening_forecast():
-    # evening forecast is between 7pm and midnight
-    start_time = datetime.today().replace(hour=19, minute=0, second=0)
-    end_time = datetime.today().replace(hour=0, minute=0, second=0) + timedelta(days=1)
-    return get_forecast(start_time, end_time)
-
-
-def tomorrows_forecast():
-    # evening forecast is between 7am and 7pm tomorrow
-    start_time = datetime.today().replace(hour=7, minute=0, second=0) + timedelta(days=1)
-    end_time = datetime.today().replace(hour=19, minute=0, second=0) + timedelta(days=1)
-    return get_forecast(start_time, end_time)
 
 
 def hex_to_rgb(h):
@@ -872,24 +961,11 @@ def get_sports_games():
     games = get_mlb_games()
     games.extend(get_nhl_games())
     return games
-
-
+    
+    
 def main():
-    # stop_id reference here:
-    # https://openmobilitydata-data.s3-us-west-1.amazonaws.com/public/feeds/mta/79/20240103/original/stops.txt
 
-    # # Load the realtime feed from the MTA site
-    # while True:
-    #     fg_trains = get_next_trains(stop_id='F23S')
-    #     display_trains(fg_trains, stop_id='F23S')
-    #     time.sleep(5)
-
-    # r_trains = get_next_trains(stop_id='R33N')
-    # display_trains(r_trains, stop_id='R33N')
-
-    # get_mta_feeds()
-    led_display_trains = RunMatrix(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
-    # led_display_trains = DisplayTrains(['F23S', ])
+    led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
     led_display_trains.process()
 
     pass
@@ -904,6 +980,9 @@ if __name__ == '__main__':
     #
     # Contents:
     # #!/bin/bash
+    #
+    # # wait to see if we're online
+    # for i in {1..50}; do ping -c1 www.google.com &> /dev/null && break; done
     #
     # # add ssh credentials
     # eval "$(ssh-agent -s)"
