@@ -536,18 +536,18 @@ def mta_update_feeds():
     global MTA_TIMESTAMP
     import requests
 
-    # update all feeds at the interval specified 
+    # update all feeds at the interval specified
     if MTA_TIMESTAMP is None or \
             (datetime.now() - MTA_TIMESTAMP).total_seconds() > MTA_REFRESH_RATE:
         MTA_TIMESTAMP = datetime.now()
         feeds = mta_get_feeds()
         if feeds is not None:
             for feed in feeds:
-            try:
-                feed.refresh()
-            except requests.exceptions.ConnectionError as e:
-                warnings.warn(f'ConnectionError: {e}')
-                pass
+                try:
+                    feed.refresh()
+                except requests.exceptions.ConnectionError as e:
+                    warnings.warn(f'ConnectionError: {e}')
+                    pass
 
 
 def owm_forecasts_evening():
