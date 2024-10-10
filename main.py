@@ -124,7 +124,7 @@ class DisplayTrains(SampleBase):
             graphics.DrawText(canvas, self.font, 32, text_y, text_colour, arrival_mins)
 
     def draw_train(self, row_ind, train, stop_id, canvas):
-        arrival_mins = arrival_minutes(train, stop_id)
+        arrival_mins = mta_arrival_minutes(train, stop_id)
         # arrival_mins = 0
         text_colour = self.text_colour
 
@@ -170,7 +170,7 @@ class DisplayTrains(SampleBase):
         text_y_top = 13
         text_y_bottom = 28
 
-        stop_name, direction = get_stop_name_and_direction(stop_id)
+        stop_name, direction = mta_get_stop_name_and_direction(stop_id)
 
         graphics.DrawText(canvas, self.font, 1, text_y_top, self.text_colour, f'{stop_name} {direction}')
         if stop_id.startswith('F23'):
@@ -192,7 +192,7 @@ class DisplayTrains(SampleBase):
         text_y_top = 13
         text_y_bottom = 28
 
-        stop_name, direction = get_stop_name_and_direction(stop_id)
+        stop_name, direction = mta_get_stop_name_and_direction(stop_id)
 
         graphics.DrawText(canvas, self.font, 1, text_y_top, self.text_colour, f'{stop_name} {direction}')
         if stop_id.startswith('F23'):
@@ -235,7 +235,7 @@ class DisplayTrains(SampleBase):
 
         max_temp = k_to_c(w.temp['temp_max'])
         min_temp = k_to_c(w.temp['temp_min'])
-        icon_file = weather_to_icon(w)
+        icon_file = owm_weather_to_icon(w)
 
         if icon_file is not None:
             im = Image.open(icon_file)
@@ -297,7 +297,7 @@ class DisplayTrains(SampleBase):
             codes.append(w.weather_code)
         best_code = max(set(codes), key=codes.count)
 
-        icon_file = weather_to_icon(next(w for w in w_list if w.weather_code == best_code))
+        icon_file = owm_weather_to_icon(next(w for w in w_list if w.weather_code == best_code))
         if icon_file is not None:
             im = Image.open(icon_file)
             canvas.SetImage(im)
@@ -320,7 +320,7 @@ class DisplayTrains(SampleBase):
         text_y_bottom = 28
         clock_pos = 1
 
-        w, _ = get_weather()
+        w, _ = owm_get_weather()
 
         start_time = datetime.now()
         show_colon = True
@@ -356,12 +356,12 @@ class DisplayTrains(SampleBase):
         return canvas
 
     def display_trains(self, canvas, display_time=10, uptown_only=False):
-        update_feeds()
+        mta_update_feeds()
         stop_ids = self.stop_ids
         if uptown_only:
             stop_ids = self.uptown_stop_ids
         for stop_id in stop_ids:
-            trains = get_next_trains(stop_id=stop_id)
+            trains = mta_get_next_trains(stop_id=stop_id)
 
             canvas.Clear()
             success, canvas = self.draw_trains(trains, stop_id, canvas)
@@ -379,13 +379,13 @@ class DisplayTrains(SampleBase):
         timestamp = datetime.now().time()
         if timestamp < dt_time(13, 0):  # before 12 show today's forecast
             title_str = 'Day'
-            forecasts = forecasts_today()
+            forecasts = owm_forecasts_today()
         elif timestamp < dt_time(19, 0):  # before 7pm show the evening forecast
             title_str = 'Eve'
-            forecasts = forecasts_evening()
+            forecasts = owm_forecasts_evening()
         else:
             title_str = 'Tom'
-            forecasts = forecasts_tomorrow()
+            forecasts = owm_forecasts_tomorrow()
 
         if len(forecasts):
             weather_time = max(3, round(display_time / (len(forecasts) + 2)))
@@ -449,69 +449,31 @@ class DisplayTrains(SampleBase):
                     time.sleep(display_time)  # check again in 10 mins
 
 
-def arrival_time(train, stop_id):
+def k_to_c(k):
+    return round(k - 273.15)
+
+
+def mta_arrival_time(train, stop_id):
     if train.location_status == 'STOPPED_AT' and train.location == stop_id:
         return datetime(9999, 1, 1, 0, 0, 0)
     return next((stu.arrival for stu in train.stop_time_updates
                  if stu.stop_id == stop_id), datetime(9999, 1, 1, 0, 0, 0))
 
 
-def arrival_minutes(train, stop_id):
-    t = arrival_time(train, stop_id)
+def mta_arrival_minutes(train, stop_id):
+    t = mta_arrival_time(train, stop_id)
     tdelta = t - NOW
     arrival_mins = int(tdelta.total_seconds() / 60)
     return arrival_mins
 
 
-def find_next_trains(trains, num_trains, stop_id):
-    arrival_times = [arrival_time(train, stop_id) for train in trains]
+def mta_find_next_trains(trains, num_trains, stop_id):
+    arrival_times = [mta_arrival_time(train, stop_id) for train in trains]
     train_order = sorted(range(len(arrival_times)), key=lambda k: arrival_times[k])
     return [trains[train_order[i]] for i in range(num_trains) if len(train_order) > i]
 
 
-def forecasts_evening():
-    # evening forecast is between 7pm and midnight
-    start_time = datetime.today().replace(hour=19, minute=0, second=0)
-    end_time = datetime.today().replace(hour=0, minute=0, second=0) + timedelta(days=1)
-    return forecasts_get(start_time, end_time)
-
-
-def forecasts_get(time_start, time_end):
-    # put time in utc
-    time_start = to_utc_tz(time_start)
-    time_end = to_utc_tz(time_end)
-
-    w, forecast = get_weather()
-    # if w is None:
-    #     return None, None, 'icons/32/weather-forecast-sign-16552.png'
-    #
-    # max_temp = k_to_c(w.temp['temp_max'])
-    # min_temp = k_to_c(w.temp['temp_min'])
-    # icon_weather = w
-
-    forecasts = []
-    for w in forecast.forecast.weathers:
-        if time_start.timestamp() <= w.reference_time() <= time_end.timestamp():
-            forecasts.append(w)
-
-    return forecasts
-
-
-def forecasts_today():
-    # today's forecasts are between 9am and 7pm
-    start_time = datetime.today().replace(hour=9, minute=0, second=0)
-    end_time = datetime.today().replace(hour=19, minute=0, second=0)
-    return forecasts_get(start_time, end_time)
-
-
-def forecasts_tomorrow():
-    # tomorrow's forecast is between 7am and 7pm tomorrow
-    start_time = datetime.today().replace(hour=7, minute=0, second=0) + timedelta(days=1)
-    end_time = datetime.today().replace(hour=19, minute=0, second=0) + timedelta(days=1)
-    return forecasts_get(start_time, end_time)
-
-
-def get_mta_feeds():
+def mta_get_feeds():
     import requests
     global FEEDS
 
@@ -529,7 +491,7 @@ def get_mta_feeds():
     return FEEDS
 
 
-def get_next_trains(
+def mta_get_next_trains(
         num_trains=2,
         stop_id='F23N'
 ):
@@ -537,17 +499,17 @@ def get_next_trains(
     global NOW
     NOW = datetime.now()
     # get all feeds
-    feeds = get_mta_feeds()
+    feeds = mta_get_feeds()
     if feeds is not None:
         all_trains = []
         for feed in feeds:
             all_trains.extend(feed.filter_trips(headed_for_stop_id=stop_id))
-        return find_next_trains(all_trains, num_trains, stop_id)
+        return mta_find_next_trains(all_trains, num_trains, stop_id)
     else:
         return None
 
 
-def get_stop_name_and_direction(stop_id):
+def mta_get_stop_name_and_direction(stop_id):
     # stop_id reference here:
     # https://openmobilitydata-data.s3-us-west-1.amazonaws.com/public/feeds/mta/79/20240103/original/stops.txt
 
@@ -564,7 +526,63 @@ def get_stop_name_and_direction(stop_id):
     return stop_name, direction
 
 
-def get_weather():
+def mta_update_feeds():
+    import requests
+
+    # update all feeds
+    feeds = mta_get_feeds()
+    if feeds is not None:
+        for feed in feeds:
+            try:
+                feed.refresh()
+            except requests.exceptions.ConnectionError as e:
+                warnings.warn(f'ConnectionError: {e}')
+                pass
+
+
+def owm_forecasts_evening():
+    # evening forecast is between 7pm and midnight
+    start_time = datetime.today().replace(hour=19, minute=0, second=0)
+    end_time = datetime.today().replace(hour=0, minute=0, second=0) + timedelta(days=1)
+    return owm_forecasts_get(start_time, end_time)
+
+
+def owm_forecasts_get(time_start, time_end):
+    # put time in utc
+    time_start = to_utc_tz(time_start)
+    time_end = to_utc_tz(time_end)
+
+    w, forecast = owm_get_weather()
+    # if w is None:
+    #     return None, None, 'icons/32/weather-forecast-sign-16552.png'
+    #
+    # max_temp = k_to_c(w.temp['temp_max'])
+    # min_temp = k_to_c(w.temp['temp_min'])
+    # icon_weather = w
+
+    forecasts = []
+    for w in forecast.forecast.weathers:
+        if time_start.timestamp() <= w.reference_time() <= time_end.timestamp():
+            forecasts.append(w)
+
+    return forecasts
+
+
+def owm_forecasts_today():
+    # today's forecasts are between 9am and 7pm
+    start_time = datetime.today().replace(hour=9, minute=0, second=0)
+    end_time = datetime.today().replace(hour=19, minute=0, second=0)
+    return owm_forecasts_get(start_time, end_time)
+
+
+def owm_forecasts_tomorrow():
+    # tomorrow's forecast is between 7am and 7pm tomorrow
+    start_time = datetime.today().replace(hour=7, minute=0, second=0) + timedelta(days=1)
+    end_time = datetime.today().replace(hour=19, minute=0, second=0) + timedelta(days=1)
+    return owm_forecasts_get(start_time, end_time)
+
+
+def owm_get_weather():
     global WEATHER_MGR
     global WEATHER
     global FORECAST
@@ -589,11 +607,7 @@ def get_weather():
     return WEATHER, FORECAST
 
 
-def k_to_c(k):
-    return round(k - 273.15)
-
-
-def pick_worst_weather(w1, w2):
+def owm_pick_worst_weather(w1, w2):
     order_of_weather_codes = [
         781,  # tornado
         200, 201, 202, 210, 211, 212, 221, 230, 231, 232,  # thunderstorms!
@@ -610,33 +624,7 @@ def pick_worst_weather(w1, w2):
         return w2
 
 
-def to_utc_tz(date_time):
-    date_time = LOCAL_TZ.localize(date_time, is_dst=None)
-    date_time = date_time.astimezone(pytz.utc)
-    return date_time
-
-
-def to_local_tz(date_time):
-    date_time = pytz.utc.localize(date_time, is_dst=None)
-    date_time = date_time.astimezone(LOCAL_TZ)
-    return date_time
-
-
-def update_feeds():
-    import requests
-
-    # update all feeds
-    feeds = get_mta_feeds()
-    if feeds is not None:
-        for feed in feeds:
-            try:
-                feed.refresh()
-            except requests.exceptions.ConnectionError as e:
-                warnings.warn(f'ConnectionError: {e}')
-                pass
-
-
-def weather_to_icon(weather):
+def owm_weather_to_icon(weather):
     # see: https://openweathermap.org/weather-conditions
     # icons from: https://github.com/Dhole/weather-pixel-icons
 
@@ -717,6 +705,21 @@ def weather_to_icon(weather):
         icon_file = 'icons/32/weather-forecast.png'
 
     return icon_file
+
+
+
+def to_utc_tz(date_time):
+    date_time = LOCAL_TZ.localize(date_time, is_dst=None)
+    date_time = date_time.astimezone(pytz.utc)
+    return date_time
+
+
+def to_local_tz(date_time):
+    date_time = pytz.utc.localize(date_time, is_dst=None)
+    date_time = date_time.astimezone(LOCAL_TZ)
+    return date_time
+
+
 
 
 def main():
