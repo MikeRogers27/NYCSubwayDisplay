@@ -43,13 +43,10 @@ class DisplayTrains(SampleBase):
         self.stop_ids = stop_ids
         self.uptown_stop_ids = uptown_stop_ids
         self.font = graphics.Font()
-        # self.font.LoadFont("./fonts/7x13.bdf")
         self.font.LoadFont("./fonts/helvR12.bdf")
         self.circle_font = graphics.Font()
         self.circle_font.LoadFont('./fonts/6x10.bdf')
 
-        # self.text_colour = graphics.Color(0, 110, 0)
-        # self.text_colour_arriving = graphics.Color(255, 66, 25)
         self.text_colour = graphics.Color(74, 214, 9)
         self.text_colour_arriving = graphics.Color(247, 75, 25)
 
@@ -418,7 +415,7 @@ class DisplayTrains(SampleBase):
         timestamp = datetime.now().time()
         # display trains and clock between 7am and 9am
         if dt_time(7, 0) <= timestamp < dt_time(10, 0):
-            return ['trains_uptown, clock', 'weather'], 5
+            return ['trains_uptown', 'clock', 'weather'], 5
         # only trains and weather during the day
         if dt_time(10, 0) <= timestamp < dt_time(20, 0):
             return ['trains', 'weather'], 10
