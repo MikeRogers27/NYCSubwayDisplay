@@ -417,10 +417,10 @@ class DisplayTrains(SampleBase):
 
         timestamp = datetime.now().time()
         # display trains and clock between 7am and 9am
-        if dt_time(7, 0) <= timestamp < dt_time(9, 0):
+        if dt_time(7, 0) <= timestamp < dt_time(10, 0):
             return ['trains_uptown, clock', 'weather'], 5
-        # only trains during the day
-        if dt_time(9, 0) <= timestamp < dt_time(20, 0):
+        # only trains and weather during the day
+        if dt_time(10, 0) <= timestamp < dt_time(20, 0):
             return ['trains', 'weather'], 10
         # only clok after 8
         if timestamp >= dt_time(20, 0):
