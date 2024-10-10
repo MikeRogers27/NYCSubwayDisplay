@@ -25,17 +25,18 @@ NOW = None
 MTA_FEEDS = None
 MTA_TIMESTAMP = None
 MTA_TRAINS = None
-MTA_REFRESH_RATE =  60
+MTA_REFRESH_RATE = 60
 
 OWM_FORECAST = None
 OWM_MGR = None
-OWM_REFRESH_RATE =  3600 * 0.5
+OWM_REFRESH_RATE = 3600 * 0.5
 OWN_TIMESTAMP = None
 OWM_WEATHER = None
 
-MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
-NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
-NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
+SGO_MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
+SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
+SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
+
 
 class GracefulKiller:
     def __init__(self):
@@ -68,9 +69,9 @@ class RunMatrix(SampleBase):
     def draw_game(self, canvas, game):
         league_id = game['leagueID']
         if league_id == 'MLB':
-            league_teams = MLB_TEAMS
+            league_teams = SGO_MLB_TEAMS
         elif league_id == 'NHL':
-            league_teams = NHL_TEAMS
+            league_teams = SGO_NHL_TEAMS
         else:  # NFL
             return None
 
@@ -78,7 +79,7 @@ class RunMatrix(SampleBase):
         text_y_middle = 20
         text_y_bottom = 30
 
-        icon_file = get_game_icon(game)
+        icon_file = sgo_get_game_icon(game)
         im = Image.open(icon_file)
         canvas.SetImage(im)
 
@@ -425,7 +426,7 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_sports(self, canvas, display_time=10):
-        games = get_games()
+        games = sgo_get_games()
         game_time = max(5, round(display_time / len(games)))
         for game in games:
             canvas.Clear()
@@ -542,6 +543,11 @@ class RunMatrix(SampleBase):
         # graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
 
 
+def hex_to_rgb(h):
+    h = h.lstrip('#')
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
 def k_to_c(k):
     return round(k - 273.15)
 
@@ -619,69 +625,10 @@ def mta_get_stop_name_and_direction(stop_id):
     return stop_name, direction
 
 
-def get_game_icon(game):
-    if game['teams']['away']['teamID'] in MLB_TEAMS + NHL_TEAMS:
-        icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
-    else:
-        icon_file = 'icons/32/' + game['teams']['home']['teamID'] + '.png'
-
-    return icon_file
-
-
-def get_games():
-    games = get_games_league('MLB')
-    games.extend(get_games_league('NHL'))
-    games.extend(get_games_league('NFL'))
-    return games
-
-
-def get_games_league(league_id):
-    if os.name == 'nt':
-        import pickle
-        cache_file = rf'c:\temp\{league_id}.pickle'
-        if os.path.exists(cache_file):
-            with open(cache_file, 'rb') as file:
-                games = pickle.load(file)
-            return games
-
-    starts_after = to_utc_tz(datetime.now() - timedelta(days=1))
-    starts_before = to_utc_tz(datetime.now() + timedelta(days=1))
-
-    response = requests.get(
-        f'https://api.sportsgameodds.com/v1/events?leagueID={league_id}&'
-        f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
-        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
-        f'oddIDs=points-home-game-sp-home',
-        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
-    )
-    data = response.json()
-    if not data['success']:
-        return []
-
-    if league_id == 'MLB':
-        league_teams = MLB_TEAMS
-    elif league_id == 'NHL':
-        league_teams = NHL_TEAMS
-    else:
-        league_teams = []
-
-    games = []
-    for game in data['data']:
-        if game['teams']['away']['teamID'] in league_teams or \
-                game['teams']['home']['teamID'] in league_teams:
-            games.append(game)
-
-    if os.name == 'nt':
-        with open(cache_file, 'wb') as file:
-            pickle.dump(games, file)
-
-    return games
-
-
 def mta_update_feeds():
     global MTA_TIMESTAMP
     import requests
-    
+
     # update all feeds at the interval specified
     if MTA_TIMESTAMP is None or \
             (datetime.now() - MTA_TIMESTAMP).total_seconds() > MTA_REFRESH_RATE:
@@ -761,12 +708,6 @@ def owm_get_weather():
             OWM_FORECAST = None
 
     return OWM_WEATHER, OWM_FORECAST
-
-
-def hex_to_rgb(h):
-    h = h.lstrip('#')
-    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-
 
 
 def owm_pick_worst_weather(w1, w2):
@@ -869,6 +810,64 @@ def owm_weather_to_icon(weather):
     return icon_file
 
 
+def sgo_get_game_icon(game):
+    if game['teams']['away']['teamID'] in SGO_MLB_TEAMS + SGO_NHL_TEAMS:
+        icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
+    else:
+        icon_file = 'icons/32/' + game['teams']['home']['teamID'] + '.png'
+
+    return icon_file
+
+
+def sgo_get_games():
+    games = sgo_get_games_league('MLB')
+    games.extend(sgo_get_games_league('NHL'))
+    games.extend(sgo_get_games_league('NFL'))
+    return games
+
+
+def sgo_get_games_league(league_id):
+    if os.name == 'nt':
+        import pickle
+        cache_file = rf'c:\temp\{league_id}.pickle'
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as file:
+                games = pickle.load(file)
+            return games
+
+    starts_after = to_utc_tz(datetime.now() - timedelta(days=1))
+    starts_before = to_utc_tz(datetime.now() + timedelta(days=1))
+
+    response = requests.get(
+        f'https://api.sportsgameodds.com/v1/events?leagueID={league_id}&'
+        f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
+        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
+        f'oddIDs=points-home-game-sp-home',
+        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+    )
+    data = response.json()
+    if not data['success']:
+        return []
+
+    if league_id == 'MLB':
+        league_teams = SGO_MLB_TEAMS
+    elif league_id == 'NHL':
+        league_teams = SGO_NHL_TEAMS
+    else:
+        league_teams = []
+
+    games = []
+    for game in data['data']:
+        if game['teams']['away']['teamID'] in league_teams or \
+                game['teams']['home']['teamID'] in league_teams:
+            games.append(game)
+
+    if os.name == 'nt':
+        with open(cache_file, 'wb') as file:
+            pickle.dump(games, file)
+
+    return games
+
 
 def to_utc_tz(date_time):
     if date_time.tzinfo is None:
@@ -882,8 +881,6 @@ def to_local_tz(date_time):
         date_time = pytz.utc.localize(date_time, is_dst=None)
     date_time = date_time.astimezone(LOCAL_TZ)
     return date_time
-
-
 
 
 def main():
