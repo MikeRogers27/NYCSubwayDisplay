@@ -17,13 +17,19 @@ else:
 
 from samplebase import SampleBase
 
-FEEDS = None
-NOW = None
 LOCAL_TZ = pytz.timezone("America/New_York")
-WEATHER_MGR = None
-WEATHER = None
-FORECAST = None
-WEATHER_TIMESTAMP = None
+NOW = None
+
+MTA_FEEDS = None
+MTA_TIMESTAMP = None
+MTA_TRAINS = None
+MTA_REFRESH_RATE =  60
+
+OWM_FORECAST = None
+OWM_MGR = None
+OWM_REFRESH_RATE =  3600 * 0.5
+OWN_TIMESTAMP = None
+OWM_WEATHER = None
 
 
 class GracefulKiller:
@@ -475,11 +481,11 @@ def mta_find_next_trains(trains, num_trains, stop_id):
 
 def mta_get_feeds():
     import requests
-    global FEEDS
+    global MTA_FEEDS
 
-    if FEEDS is None:
+    if MTA_FEEDS is None:
         try:
-            FEEDS = [
+            MTA_FEEDS = [
                 NYCTFeed("F"),
                 NYCTFeed("G"),
                 NYCTFeed("R"),
@@ -488,7 +494,7 @@ def mta_get_feeds():
             warnings.warn(f'ConnectionError: {e}')
             return None
 
-    return FEEDS
+    return MTA_FEEDS
 
 
 def mta_get_next_trains(
@@ -527,12 +533,16 @@ def mta_get_stop_name_and_direction(stop_id):
 
 
 def mta_update_feeds():
+    global MTA_TIMESTAMP
     import requests
 
-    # update all feeds
-    feeds = mta_get_feeds()
-    if feeds is not None:
-        for feed in feeds:
+    # update all feeds at the interval specified 
+    if MTA_TIMESTAMP is None or \
+            (datetime.now() - MTA_TIMESTAMP).total_seconds() > MTA_REFRESH_RATE:
+        MTA_TIMESTAMP = datetime.now()
+        feeds = mta_get_feeds()
+        if feeds is not None:
+            for feed in feeds:
             try:
                 feed.refresh()
             except requests.exceptions.ConnectionError as e:
@@ -583,28 +593,28 @@ def owm_forecasts_tomorrow():
 
 
 def owm_get_weather():
-    global WEATHER_MGR
-    global WEATHER
-    global FORECAST
-    global WEATHER_TIMESTAMP
+    global OWM_MGR
+    global OWM_WEATHER
+    global OWM_FORECAST
+    global OWN_TIMESTAMP
 
-    if WEATHER_MGR is None:
+    if OWM_MGR is None:
         owm = OWM(os.environ['OWM_API_KEY'])
-        WEATHER_MGR = owm.weather_manager()
+        OWM_MGR = owm.weather_manager()
 
     # we only get the weather every 0.5 hours
-    if WEATHER_TIMESTAMP is None or \
-            (datetime.now() - WEATHER_TIMESTAMP).total_seconds() / 3600 > 0.5:
-        WEATHER_TIMESTAMP = datetime.now()
+    if OWN_TIMESTAMP is None or \
+            (datetime.now() - OWN_TIMESTAMP).total_seconds() > OWM_REFRESH_RATE:
+        OWN_TIMESTAMP = datetime.now()
         try:
-            observation = WEATHER_MGR.weather_at_place('New York')
-            WEATHER = observation.weather
-            FORECAST = WEATHER_MGR.forecast_at_place('New York', '3h')
+            observation = OWM_MGR.weather_at_place('New York')
+            OWM_WEATHER = observation.weather
+            OWM_FORECAST = OWM_MGR.forecast_at_place('New York', '3h')
         except Exception as e:
-            WEATHER = None
-            FORECAST = None
+            OWM_WEATHER = None
+            OWM_FORECAST = None
 
-    return WEATHER, FORECAST
+    return OWM_WEATHER, OWM_FORECAST
 
 
 def owm_pick_worst_weather(w1, w2):
