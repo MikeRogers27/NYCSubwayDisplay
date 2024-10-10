@@ -426,7 +426,7 @@ class DisplayTrains(SampleBase):
         if timestamp >= dt_time(20, 0):
             return ['clock', 'weather'], 10
 
-        return ['off']
+        return ['off'], 600
 
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
@@ -449,7 +449,7 @@ class DisplayTrains(SampleBase):
                 else:
                     # nothing
                     canvas.Clear()
-                    time.sleep(600)  # check again in 10 mins
+                    time.sleep(display_time)  # check again in 10 mins
 
 
 def arrival_time(train, stop_id):
