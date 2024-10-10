@@ -33,6 +33,9 @@ OWM_REFRESH_RATE = 3600 * 0.5
 OWN_TIMESTAMP = None
 OWM_WEATHER = None
 
+SGO_GAMES = None
+SGO_TIMESTAMP = None
+SGO_REFRESH_RATE = 600
 SGO_MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
 SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
@@ -72,8 +75,10 @@ class RunMatrix(SampleBase):
             league_teams = SGO_MLB_TEAMS
         elif league_id == 'NHL':
             league_teams = SGO_NHL_TEAMS
-        else:  # NFL
-            return None
+        elif league_id == 'NFL':
+            league_teams = SGO_NFL_TEAMS
+        else:
+            return canvas
 
         text_y_top = 10
         text_y_middle = 20
@@ -427,6 +432,8 @@ class RunMatrix(SampleBase):
 
     def display_sports(self, canvas, display_time=10):
         games = sgo_get_games()
+        if not len(games):
+            return canvas
         game_time = max(5, round(display_time / len(games)))
         for game in games:
             canvas.Clear()
@@ -475,16 +482,17 @@ class RunMatrix(SampleBase):
         return ['sports'], 5
 
         timestamp = datetime.now().time()
-        # display trains and clock between 7am and 9am
+        # morning between 7am and 10am
         if dt_time(7, 0) <= timestamp < dt_time(10, 0):
             return ['trains_uptown', 'clock', 'weather'], 5
-        # only trains and weather during the day
+        # day between 10am and 8pm
         if dt_time(10, 0) <= timestamp < dt_time(20, 0):
             return ['trains', 'weather'], 10
-        # only clok after 8
-        if timestamp >= dt_time(20, 0):
-            return ['clock', 'weather'], 10
+        # evening after 8pm til midnight
+        if dt_time(20, 0) <= timestamp <= dt_time(23, 59):
+            return ['clock', 'weather', 'sports'], 10
 
+        # off after midnight
         return ['off'], 600
 
     def run(self):
@@ -820,23 +828,36 @@ def sgo_get_game_icon(game):
 
 
 def sgo_get_games():
-    games = sgo_get_games_league('MLB')
-    games.extend(sgo_get_games_league('NHL'))
-    games.extend(sgo_get_games_league('NFL'))
-    return games
+    global SGO_GAMES, SGO_TIMESTAMP
+
+    # update all feeds at the interval specified
+    if SGO_TIMESTAMP is None or \
+            (datetime.now() - SGO_TIMESTAMP).total_seconds() > SGO_REFRESH_RATE:
+        SGO_TIMESTAMP = datetime.now()
+
+        SGO_GAMES = []
+        SGO_GAMES.extend(sgo_get_games_league('MLB'))
+        SGO_GAMES.extend(sgo_get_games_league('NHL'))
+        SGO_GAMES.extend(sgo_get_games_league('NFL'))
+
+    return SGO_GAMES
 
 
 def sgo_get_games_league(league_id):
-    if os.name == 'nt':
-        import pickle
-        cache_file = rf'c:\temp\{league_id}.pickle'
-        if os.path.exists(cache_file):
-            with open(cache_file, 'rb') as file:
-                games = pickle.load(file)
-            return games
+    # if os.name == 'nt':
+    #     import pickle
+    #     cache_file = rf'c:\temp\{league_id}.pickle'
+    #     if os.path.exists(cache_file):
+    #         with open(cache_file, 'rb') as file:
+    #             games = pickle.load(file)
+    #         return games
 
-    starts_after = to_utc_tz(datetime.now() - timedelta(days=1))
-    starts_before = to_utc_tz(datetime.now() + timedelta(days=1))
+    if league_id in ['MLB', 'NHL']:
+        starts_after = to_utc_tz(datetime.now() - timedelta(days=1))
+        starts_before = to_utc_tz(datetime.now() + timedelta(days=1))
+    else:
+        starts_after = to_utc_tz(datetime.now() - timedelta(days=2))
+        starts_before = to_utc_tz(datetime.now() + timedelta(days=2))
 
     response = requests.get(
         f'https://api.sportsgameodds.com/v1/events?leagueID={league_id}&'
@@ -853,6 +874,8 @@ def sgo_get_games_league(league_id):
         league_teams = SGO_MLB_TEAMS
     elif league_id == 'NHL':
         league_teams = SGO_NHL_TEAMS
+    elif league_id == 'NFL':
+        league_teams = SGO_NFL_TEAMS
     else:
         league_teams = []
 
@@ -862,9 +885,9 @@ def sgo_get_games_league(league_id):
                 game['teams']['home']['teamID'] in league_teams:
             games.append(game)
 
-    if os.name == 'nt':
-        with open(cache_file, 'wb') as file:
-            pickle.dump(games, file)
+    # if os.name == 'nt':
+    #     with open(cache_file, 'wb') as file:
+    #         pickle.dump(games, file)
 
     return games
 
