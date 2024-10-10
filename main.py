@@ -479,7 +479,6 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        return ['sports'], 5
 
         timestamp = datetime.now().time()
         # morning between 7am and 10am
@@ -489,7 +488,7 @@ class RunMatrix(SampleBase):
         if dt_time(10, 0) <= timestamp < dt_time(20, 0):
             return ['trains', 'weather'], 10
         # evening after 8pm til midnight
-        if dt_time(20, 0) <= timestamp <= dt_time(23, 59):
+        if timestamp > dt_time(20, 0):
             return ['clock', 'weather', 'sports'], 10
 
         # off after midnight
