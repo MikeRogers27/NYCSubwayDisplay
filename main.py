@@ -871,13 +871,15 @@ def owm_weather_to_icon(weather):
 
 
 def to_utc_tz(date_time):
-    date_time = LOCAL_TZ.localize(date_time, is_dst=None)
+    if date_time.tzinfo is None:
+        date_time = LOCAL_TZ.localize(date_time, is_dst=None)
     date_time = date_time.astimezone(pytz.utc)
     return date_time
 
 
 def to_local_tz(date_time):
-    date_time = pytz.utc.localize(date_time, is_dst=None)
+    if date_time.tzinfo is None:
+        date_time = pytz.utc.localize(date_time, is_dst=None)
     date_time = date_time.astimezone(LOCAL_TZ)
     return date_time
 
