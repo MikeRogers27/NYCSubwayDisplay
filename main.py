@@ -851,11 +851,10 @@ def sgo_get_games_league(league_id):
     #             games = pickle.load(file)
     #         return games
 
+    starts_after = to_utc_tz(datetime.now() - timedelta(days=1))
     if league_id in ['MLB', 'NHL']:
-        starts_after = to_utc_tz(datetime.now() - timedelta(days=1))
         starts_before = to_utc_tz(datetime.now() + timedelta(days=1))
     else:
-        starts_after = to_utc_tz(datetime.now() - timedelta(days=2))
         starts_before = to_utc_tz(datetime.now() + timedelta(days=2))
 
     response = requests.get(
