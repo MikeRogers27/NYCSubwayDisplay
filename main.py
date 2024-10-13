@@ -1,6 +1,8 @@
 from datetime import datetime, time as dt_time, timedelta
+from dateutil.parser import parse
 import importlib
 import os
+import requests
 import time
 import signal
 import warnings
@@ -23,13 +25,20 @@ NOW = None
 MTA_FEEDS = None
 MTA_TIMESTAMP = None
 MTA_TRAINS = None
-MTA_REFRESH_RATE =  60
+MTA_REFRESH_RATE = 60
 
 OWM_FORECAST = None
 OWM_MGR = None
-OWM_REFRESH_RATE =  3600 * 0.5
+OWM_REFRESH_RATE = 3600 * 0.5
 OWN_TIMESTAMP = None
 OWM_WEATHER = None
+
+SGO_GAMES = None
+SGO_TIMESTAMP = None
+SGO_REFRESH_RATE = 600
+SGO_MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
+SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
+SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
 
 
 class GracefulKiller:
@@ -42,9 +51,9 @@ class GracefulKiller:
         self.kill_now = True
 
 
-class DisplayTrains(SampleBase):
+class RunMatrix(SampleBase):
     def __init__(self, stop_ids, uptown_stop_ids, *args, **kwargs):
-        super(DisplayTrains, self).__init__(*args, **kwargs)
+        super(RunMatrix, self).__init__(*args, **kwargs)
 
         self.stop_ids = stop_ids
         self.uptown_stop_ids = uptown_stop_ids
@@ -60,35 +69,76 @@ class DisplayTrains(SampleBase):
         self.circle_colour_g = graphics.Color(108, 190, 69)
         self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
-    @staticmethod
-    def draw_filled_circle(canvas, x, y, color):
-        # Draw circle with lines
-        graphics.DrawLine(canvas, x - 1, y - 6, x + 1, y - 6, color)
-        graphics.DrawLine(canvas, x - 3, y - 5, x + 3, y - 5, color)
-        graphics.DrawLine(canvas, x - 4, y - 4, x + 4, y - 4, color)
-        graphics.DrawLine(canvas, x - 5, y - 3, x + 5, y - 3, color)
-        graphics.DrawLine(canvas, x - 5, y - 2, x + 5, y - 2, color)
-        graphics.DrawLine(canvas, x - 6, y - 1, x + 6, y - 1, color)
-        graphics.DrawLine(canvas, x - 6, y, x + 6, y, color)
-        graphics.DrawLine(canvas, x - 6, y + 1, x + 6, y + 1, color)
-        graphics.DrawLine(canvas, x - 5, y + 2, x + 5, y + 2, color)
-        graphics.DrawLine(canvas, x - 5, y + 3, x + 5, y + 3, color)
-        graphics.DrawLine(canvas, x - 4, y + 4, x + 4, y + 4, color)
-        graphics.DrawLine(canvas, x - 3, y + 5, x + 3, y + 5, color)
-        graphics.DrawLine(canvas, x - 1, y + 6, x + 1, y + 6, color)
+    def draw_game(self, canvas, game):
+        league_id = game['leagueID']
+        if league_id == 'MLB':
+            league_teams = SGO_MLB_TEAMS
+        elif league_id == 'NHL':
+            league_teams = SGO_NHL_TEAMS
+        elif league_id == 'NFL':
+            league_teams = SGO_NFL_TEAMS
+        else:
+            return canvas
 
-        # # Draw circle with lines
-        # graphics.DrawLine(canvas, x - 2, y - 5, x + 2, y - 5, color)
-        # graphics.DrawLine(canvas, x - 3, y - 4, x + 3, y - 4, color)
-        # graphics.DrawLine(canvas, x - 4, y - 3, x + 4, y - 3, color)
-        # graphics.DrawLine(canvas, x - 5, y - 2, x + 5, y - 2, color)
-        # graphics.DrawLine(canvas, x - 5, y - 1, x + 5, y - 1, color)
-        # graphics.DrawLine(canvas, x - 5, y, x + 5, y, color)
-        # graphics.DrawLine(canvas, x - 5, y + 1, x + 5, y + 1, color)
-        # graphics.DrawLine(canvas, x - 5, y + 2, x + 5, y + 2, color)
-        # graphics.DrawLine(canvas, x - 4, y + 3, x + 4, y + 3, color)
-        # graphics.DrawLine(canvas, x - 3, y + 4, x + 3, y + 4, color)
-        # graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
+        text_y_top = 10
+        text_y_middle = 20
+        text_y_bottom = 30
+
+        icon_file = sgo_get_game_icon(game)
+        im = Image.open(icon_file)
+        canvas.SetImage(im)
+
+        start_time = to_local_tz(parse(game['status']['startsAt']))
+
+        has_started = game['status']['started']
+        has_ended = game['status']['ended']
+        in_progress = has_started and not has_ended
+        if game['teams']['away']['teamID'] in league_teams:
+            title_symbol = '@'
+            title_str = game['teams']['home']['names']['short']
+            if has_ended:
+                if game['teams']['away']['score'] > game['teams']['home']['score']:
+                    score_prefix = 'W'
+                elif game['teams']['away']['score'] == game['teams']['home']['score']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+            team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
+        else:
+            title_symbol = 'v'
+            title_str = game['teams']['away']['names']['short']
+            if has_ended:
+                if game['teams']['home']['score'] > game['teams']['away']['score']:
+                    score_prefix = 'W'
+                elif game['teams']['home']['score'] == game['teams']['away']['score']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+            team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
+
+        if has_started or has_ended:
+            score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
+        else:
+            score_str = start_time.strftime('%H:%M')
+
+        if in_progress:
+            date_str = game['status']['displayShort']
+        else:
+            if os.name == 'nt':
+                date_str = start_time.strftime('%#m/%#d')
+            else:
+                date_str = start_time.strftime('%-m/%-d')
+
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
+
+        return canvas
 
     def draw_train_row(self,
                        canvas,
@@ -114,7 +164,7 @@ class DisplayTrains(SampleBase):
         graphics.DrawText(canvas, self.font, 1, text_y, text_colour, f'{row_ind + 1}')
         graphics.DrawText(canvas, self.font, 7, text_y, text_colour, f'.')
         # graphics.DrawCircle(canvas, 16, circle_y, 5, circle_colour)
-        self.draw_filled_circle(canvas, 15, circle_y, circle_colour)
+        self._draw_filled_circle(canvas, 15, circle_y, circle_colour)
         graphics.DrawText(canvas, self.circle_font, 15 - route_id_offset, text_y - 1, graphics.Color(0, 0, 0), route_id)
         # graphics.DrawText(canvas, self.font, 26, text_y, text_colour, headsign_text)
         if direction == 'N':
@@ -380,6 +430,18 @@ class DisplayTrains(SampleBase):
 
         return canvas
 
+    def display_sports(self, canvas, display_time=10):
+        games = sgo_get_games()
+        if not len(games):
+            return canvas
+        game_time = max(5, round(display_time / len(games)))
+        for game in games:
+            canvas.Clear()
+            canvas = self.draw_game(canvas, game)
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(game_time)
+        return canvas
+
     def display_weather(self, canvas, display_time=10):
 
         timestamp = datetime.now().time()
@@ -418,18 +480,33 @@ class DisplayTrains(SampleBase):
     @staticmethod
     def what_should_we_display():
 
-        timestamp = datetime.now().time()
-        # display trains and clock between 7am and 9am
-        if dt_time(7, 0) <= timestamp < dt_time(10, 0):
-            return ['trains_uptown', 'clock', 'weather'], 5
-        # only trains and weather during the day
-        if dt_time(10, 0) <= timestamp < dt_time(20, 0):
-            return ['trains', 'weather'], 10
-        # only clok after 8
-        if timestamp >= dt_time(20, 0):
-            return ['clock', 'weather'], 10
+        now = datetime.now()
+        timestamp = now.time()
+        weekday = now.weekday()
 
-        return ['off'], 600
+        # weekdays
+        if weekday < 5:
+            # morning between 7am and 10am
+            if dt_time(7, 0) <= timestamp < dt_time(10, 0):
+                return ['trains_uptown', 'clock', 'weather'], 5
+            # day between 10am and 8pm
+            if dt_time(10, 0) <= timestamp < dt_time(20, 0):
+                return ['trains', 'weather'], 10
+            # evening after 8pm til midnight
+            if timestamp > dt_time(20, 0):
+                return ['clock', 'weather', 'sports'], 10
+
+            # off after midnight
+            return ['off'], 600
+
+        # weekends
+        else:
+            # all day between 9am and midnight
+            if timestamp > dt_time(9, 0):
+                return ['trains', 'clock', 'weather', 'sports'], 10
+
+            # off after midnight
+            return ['off'], 600
 
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
@@ -449,11 +526,48 @@ class DisplayTrains(SampleBase):
                     canvas = self.display_clock(canvas, display_time=display_time)
                 elif display_item == 'weather':
                     canvas = self.display_weather(canvas, display_time=display_time)
+                elif display_item == 'sports':
+                    canvas = self.display_sports(canvas, display_time=display_time)
                 else:
                     # nothing
                     canvas.Clear()
                     canvas = self.matrix.SwapOnVSync(canvas)
                     time.sleep(display_time)  # check again in 10 mins
+
+    @staticmethod
+    def _draw_filled_circle(canvas, x, y, color):
+        # Draw circle with lines
+        graphics.DrawLine(canvas, x - 1, y - 6, x + 1, y - 6, color)
+        graphics.DrawLine(canvas, x - 3, y - 5, x + 3, y - 5, color)
+        graphics.DrawLine(canvas, x - 4, y - 4, x + 4, y - 4, color)
+        graphics.DrawLine(canvas, x - 5, y - 3, x + 5, y - 3, color)
+        graphics.DrawLine(canvas, x - 5, y - 2, x + 5, y - 2, color)
+        graphics.DrawLine(canvas, x - 6, y - 1, x + 6, y - 1, color)
+        graphics.DrawLine(canvas, x - 6, y, x + 6, y, color)
+        graphics.DrawLine(canvas, x - 6, y + 1, x + 6, y + 1, color)
+        graphics.DrawLine(canvas, x - 5, y + 2, x + 5, y + 2, color)
+        graphics.DrawLine(canvas, x - 5, y + 3, x + 5, y + 3, color)
+        graphics.DrawLine(canvas, x - 4, y + 4, x + 4, y + 4, color)
+        graphics.DrawLine(canvas, x - 3, y + 5, x + 3, y + 5, color)
+        graphics.DrawLine(canvas, x - 1, y + 6, x + 1, y + 6, color)
+
+        # # Draw circle with lines
+        # graphics.DrawLine(canvas, x - 2, y - 5, x + 2, y - 5, color)
+        # graphics.DrawLine(canvas, x - 3, y - 4, x + 3, y - 4, color)
+        # graphics.DrawLine(canvas, x - 4, y - 3, x + 4, y - 3, color)
+        # graphics.DrawLine(canvas, x - 5, y - 2, x + 5, y - 2, color)
+        # graphics.DrawLine(canvas, x - 5, y - 1, x + 5, y - 1, color)
+        # graphics.DrawLine(canvas, x - 5, y, x + 5, y, color)
+        # graphics.DrawLine(canvas, x - 5, y + 1, x + 5, y + 1, color)
+        # graphics.DrawLine(canvas, x - 5, y + 2, x + 5, y + 2, color)
+        # graphics.DrawLine(canvas, x - 4, y + 3, x + 4, y + 3, color)
+        # graphics.DrawLine(canvas, x - 3, y + 4, x + 3, y + 4, color)
+        # graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
+
+
+def hex_to_rgb(h):
+    h = h.lstrip('#')
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
 
 
 def k_to_c(k):
@@ -733,24 +847,95 @@ def owm_weather_to_icon(weather):
     return icon_file
 
 
+def sgo_get_game_icon(game):
+    if game['teams']['away']['teamID'] in SGO_MLB_TEAMS + SGO_NHL_TEAMS:
+        icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
+    else:
+        icon_file = 'icons/32/' + game['teams']['home']['teamID'] + '.png'
+
+    return icon_file
+
+
+def sgo_get_games():
+    global SGO_GAMES, SGO_TIMESTAMP
+
+    # update all feeds at the interval specified
+    if SGO_TIMESTAMP is None or \
+            (datetime.now() - SGO_TIMESTAMP).total_seconds() > SGO_REFRESH_RATE:
+        SGO_TIMESTAMP = datetime.now()
+
+        SGO_GAMES = []
+        SGO_GAMES.extend(sgo_get_games_league('MLB'))
+        SGO_GAMES.extend(sgo_get_games_league('NHL'))
+        SGO_GAMES.extend(sgo_get_games_league('NFL'))
+
+    return SGO_GAMES
+
+
+def sgo_get_games_league(league_id):
+    # if os.name == 'nt':
+    #     import pickle
+    #     cache_file = rf'c:\temp\{league_id}.pickle'
+    #     if os.path.exists(cache_file):
+    #         with open(cache_file, 'rb') as file:
+    #             games = pickle.load(file)
+    #         return games
+
+    starts_after = to_utc_tz(datetime.now() - timedelta(days=1))
+    if league_id in ['MLB', 'NHL']:
+        starts_before = to_utc_tz(datetime.now() + timedelta(days=1))
+    else:
+        starts_before = to_utc_tz(datetime.now() + timedelta(days=2))
+
+    response = requests.get(
+        f'https://api.sportsgameodds.com/v1/events?leagueID={league_id}&'
+        f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
+        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
+        f'oddIDs=points-home-game-sp-home',
+        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+    )
+    data = response.json()
+    if not data['success']:
+        return []
+
+    if league_id == 'MLB':
+        league_teams = SGO_MLB_TEAMS
+    elif league_id == 'NHL':
+        league_teams = SGO_NHL_TEAMS
+    elif league_id == 'NFL':
+        league_teams = SGO_NFL_TEAMS
+    else:
+        league_teams = []
+
+    games = []
+    for game in data['data']:
+        if game['teams']['away']['teamID'] in league_teams or \
+                game['teams']['home']['teamID'] in league_teams:
+            games.append(game)
+
+    # if os.name == 'nt':
+    #     with open(cache_file, 'wb') as file:
+    #         pickle.dump(games, file)
+
+    return games
+
 
 def to_utc_tz(date_time):
-    date_time = LOCAL_TZ.localize(date_time, is_dst=None)
+    if date_time.tzinfo is None:
+        date_time = LOCAL_TZ.localize(date_time, is_dst=None)
     date_time = date_time.astimezone(pytz.utc)
     return date_time
 
 
 def to_local_tz(date_time):
-    date_time = pytz.utc.localize(date_time, is_dst=None)
+    if date_time.tzinfo is None:
+        date_time = pytz.utc.localize(date_time, is_dst=None)
     date_time = date_time.astimezone(LOCAL_TZ)
     return date_time
 
 
-
-
 def main():
-
-    led_display_trains = DisplayTrains(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
+    led_display_trains = RunMatrix(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
     led_display_trains.process()
 
     pass
