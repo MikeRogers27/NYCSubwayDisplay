@@ -662,7 +662,10 @@ def owm_weather_to_icon(weather):
     elif weather.weather_code in [500, ]:
         icon_file = 'icons/32/rain0.png'
 
-    elif weather.weather_code in [501, 502, ]:
+    elif weather.weather_code in [501, ]:
+        icon_file = 'icons/32/rain1.png'
+
+    elif weather.weather_code in [502, ]:
         icon_file = 'icons/32/rain1.png'
 
     elif weather.weather_code in [503, 504, ]:
@@ -671,11 +674,23 @@ def owm_weather_to_icon(weather):
     elif weather.weather_code in [511, 611]:
         icon_file = 'icons/32/rain_hail.png'
 
-    elif weather.weather_code in [520, 521, 522, 531]:
+    elif weather.weather_code in [520,]:
+        if is_day:
+            icon_file = 'icons/32/rain0_sun.png'
+        else:
+            icon_file = 'icons/32/rain0_moon.png'
+
+    elif weather.weather_code in [521,]:
         if is_day:
             icon_file = 'icons/32/rain1_sun.png'
         else:
             icon_file = 'icons/32/rain1_moon.png'
+
+    elif weather.weather_code in [522, 531]:
+        if is_day:
+            icon_file = 'icons/32/rain2_sun.png'
+        else:
+            icon_file = 'icons/32/rain2_moon.png'
 
     elif weather.weather_code in [600, 601, 602, ]:
         icon_file = 'icons/32/snow.png'
