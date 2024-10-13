@@ -517,6 +517,7 @@ class RunMatrix(SampleBase):
                 else:
                     # nothing
                     canvas.Clear()
+                    canvas = self.matrix.SwapOnVSync(canvas)
                     time.sleep(display_time)  # check again in 10 mins
 
     @staticmethod
