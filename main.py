@@ -848,7 +848,7 @@ def owm_weather_to_icon(weather):
 
 
 def sgo_get_game_icon(game):
-    if game['teams']['away']['teamID'] in SGO_MLB_TEAMS + SGO_NHL_TEAMS:
+    if game['teams']['away']['teamID'] in SGO_MLB_TEAMS + SGO_NHL_TEAMS + SGO_NFL_TEAMS:
         icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
     else:
         icon_file = 'icons/32/' + game['teams']['home']['teamID'] + '.png'
