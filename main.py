@@ -33,6 +33,11 @@ OWM_REFRESH_RATE = 3600 * 0.5
 OWN_TIMESTAMP = None
 OWM_WEATHER = None
 
+RAPI_GAMES = None
+RAPI_TIMESTAMP = None
+RAPI_NEXT_REFRESH = None
+RAPI_REFRESH_RATE = 360
+
 RAPI_TEAMS = [746, ]
 RAPI_TEAM_COLOURS = {
     38: (237,33,39),  # Watford
@@ -90,7 +95,7 @@ RAPI_TEAM_CODES = {
 SGO_GAMES = None
 SGO_TIMESTAMP = None
 SGO_NEXT_REFRESH = None
-SGO_REFRESH_RATE = 600
+SGO_REFRESH_RATE = 360
 SGO_MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
 SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
@@ -572,7 +577,7 @@ class RunMatrix(SampleBase):
 
     def display_sports(self, canvas, display_time=10):
         games = sgo_get_games()
-        # games = rapi_get_games()
+        games.extend(rapi_get_games())
         if not len(games):
             return canvas
         game_time = max(5, round(display_time / len(games)))
@@ -980,43 +985,85 @@ def rapi_get_game_icon(game):
 
 
 def rapi_get_games():
-    if os.name == 'nt':
-        import pickle
-        cache_file = rf'c:\temp\rapi.pickle'
-        if os.path.exists(cache_file):
-            with open(cache_file, 'rb') as file:
-                games = pickle.load(file)
-            return games
+    global RAPI_GAMES
 
-    starts_after = to_utc_tz(datetime.now() - timedelta(days=14))
-    starts_before = to_utc_tz(datetime.now() + timedelta(days=7))
+    # if os.name == 'nt':
+    #     import pickle
+    #     cache_file = rf'c:\temp\rapi.pickle'
+    #     if os.path.exists(cache_file):
+    #         with open(cache_file, 'rb') as file:
+    #             games = pickle.load(file)
+    #         return games
 
-    # Championship league id = 40
-    # sunderland team id = 746
-    querystring = {
-        # 'league': '40',
-        'season': '2024',
-        'team': '746',
-        'from': starts_after.strftime('%Y-%m-%d'),
-        'to': starts_before.strftime('%Y-%m-%d'),
-    }
-    headers = {
-        'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
-        'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
-    }
-    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-    response = requests.request("GET", url, headers=headers, params=querystring)
-    data = response.json()
+    # update all feeds when requested but not faster than the refresh rate
+    now = datetime.now()
+    # update
+    update_games = True
+    # unless we've already updated within the refresh time
+    if RAPI_TIMESTAMP is not None and \
+            (now - RAPI_TIMESTAMP).total_seconds() <= RAPI_REFRESH_RATE:
+        update_games = False
+    # or if we don't need to update
+    if RAPI_NEXT_REFRESH is not None and now < RAPI_NEXT_REFRESH:
+        update_games = False
 
-    games = []
-    for game in data['response']:
-        games.append(game)
+    if update_games:
+        starts_after = to_utc_tz(datetime.now() - timedelta(days=14))
+        starts_before = to_utc_tz(datetime.now() + timedelta(days=7))
 
-    if os.name == 'nt':
-        with open(cache_file, 'wb') as file:
-            pickle.dump(games, file)
+        # Championship league id = 40
+        # sunderland team id = 746
+        querystring = {
+            # 'league': '40',
+            'season': '2024',
+            'team': '746',
+            'from': starts_after.strftime('%Y-%m-%d'),
+            'to': starts_before.strftime('%Y-%m-%d'),
+        }
+        headers = {
+            'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+            'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
+        }
+        url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+        response = requests.request("GET", url, headers=headers, params=querystring)
+        data = response.json()
 
-    return games
+        RAPI_GAMES = []
+        for game in data['response']:
+            RAPI_GAMES.append(game)
+
+        # compute new update time
+        rapi_next_update(RAPI_GAMES)
+
+    # if os.name == 'nt':
+    #     with open(cache_file, 'wb') as file:
+    #         pickle.dump(games, file)
+
+    return RAPI_GAMES
+
+
+def rapi_next_update(games):
+    global RAPI_NEXT_REFRESH
+
+    now = datetime.now()
+    # we need to update at midnight tomorrow at the latest
+    RAPI_NEXT_REFRESH = datetime.combine(
+        now.date() + timedelta(days=1),
+        datetime.min.time()
+    )
+
+    for game in games:
+        has_ended = game['fixture']['status']['short'] == 'FT'
+        has_started = has_ended or game['fixture']['status']['short'] != 'NS'
+        in_progress = has_started and not has_ended
+
+        if has_ended:
+            continue
+
+        # if we're in progress, update as soon as possible
+        if in_progress:
+            RAPI_NEXT_REFRESH = now
+
 
 def sgo_get_game_icon(game):
     if game['teams']['away']['teamID'] in \
@@ -1110,9 +1157,10 @@ def sgo_get_games_league(league_id):
 def sgo_next_update(games):
     global SGO_NEXT_REFRESH
 
+    now = datetime.now()
     # we need to update at midnight tomorrow at the latest
     SGO_NEXT_REFRESH = datetime.combine(
-        datetime.now().date() + timedelta(days=1),
+        now.date() + timedelta(days=1),
         datetime.min.time()
     )
 
@@ -1126,7 +1174,7 @@ def sgo_next_update(games):
 
         # if we're in progress, update as soon as possible
         if in_progress:
-            SGO_NEXT_REFRESH = datetime.now()
+            SGO_NEXT_REFRESH = now
 
 
 def to_utc_tz(date_time):
@@ -1174,6 +1222,8 @@ if __name__ == '__main__':
     # # run
     # export PYTHONPATH=${PYTHONPATH}:${HOME}/src/rpi-rgb-led-matrix/bindings/python
     # export OWM_API_KEY=<Key from https://home.openweathermap.org/api_keys>
+    # export SGO_API_KEY=<Key from https://sportsgameodds.com/>
+    # export RAPI_API_KEY=<Key from https://rapidapi.com/>
     # source ${HOME}/venv/NYCSubwayDisplay/bin/activate
     # sudo --preserve-env=PYTHONPATH,OWM_API_KEY /home/pi/venv/NYCSubwayDisplay/bin/python main.py --led-gpio-mapping=adafruit-hat-pwm --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=40 --led-slowdown-gpio=1  --led-no-drop-privs
 
