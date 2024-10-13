@@ -480,19 +480,33 @@ class RunMatrix(SampleBase):
     @staticmethod
     def what_should_we_display():
 
-        timestamp = datetime.now().time()
-        # morning between 7am and 10am
-        if dt_time(7, 0) <= timestamp < dt_time(10, 0):
-            return ['trains_uptown', 'clock', 'weather'], 5
-        # day between 10am and 8pm
-        if dt_time(10, 0) <= timestamp < dt_time(20, 0):
-            return ['trains', 'weather'], 10
-        # evening after 8pm til midnight
-        if timestamp > dt_time(20, 0):
-            return ['clock', 'weather', 'sports'], 10
+        now = datetime.now()
+        timestamp = now.time()
+        weekday = now.weekday()
 
-        # off after midnight
-        return ['off'], 600
+        # weekdays
+        if weekday < 5:
+            # morning between 7am and 10am
+            if dt_time(7, 0) <= timestamp < dt_time(10, 0):
+                return ['trains_uptown', 'clock', 'weather'], 5
+            # day between 10am and 8pm
+            if dt_time(10, 0) <= timestamp < dt_time(20, 0):
+                return ['trains', 'weather'], 10
+            # evening after 8pm til midnight
+            if timestamp > dt_time(20, 0):
+                return ['clock', 'weather', 'sports'], 10
+
+            # off after midnight
+            return ['off'], 600
+
+        # weekends
+        else:
+            # all day between 9am and midnight
+            if timestamp > dt_time(9, 0):
+                return ['trains', 'clock', 'weather', 'sports'], 10
+
+            # off after midnight
+            return ['off'], 600
 
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
