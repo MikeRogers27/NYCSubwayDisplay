@@ -33,6 +33,60 @@ OWM_REFRESH_RATE = 3600 * 0.5
 OWN_TIMESTAMP = None
 OWM_WEATHER = None
 
+RAPI_TEAMS = [746, ]
+RAPI_TEAM_COLOURS = {
+    38: (237,33,39),  # Watford
+    43: (0, 112, 181),  # Cardiff City
+    44: (128, 0, 0),  # Burnley
+    56: (226, 26, 35),  # Bristol City
+    58: (0, 25, 74),  # Millwall
+    59: (0, 33, 86),  # Preston North End
+    60: (6, 0, 103),  # West Bromwich Albion
+    62: (236, 34, 39),  # Sheffield United
+    63: (255, 255, 255),  # Leeds
+    64: (241, 138, 1),  # Hull City
+    67: (0, 158, 224),  # Blackburn Rovers
+    69: (255, 255, 255),  # Derby
+    70: (222, 27, 34),  # Middlesbrough
+    71: (255, 242, 0),  # Norwich
+    74: (14, 0, 247),  # Sheffield Wednesday
+    75: (224, 58, 62),  # Stoke City
+    76: (255, 255, 255),  # Swansea City
+    746: (255, 0, 0),  # Sunderland
+    1338: (255, 221, 0),  # Oxford United
+    1346: (5, 157, 217),  # Coventry City
+    1355: (0, 20, 137),  # Portsmouth
+    1357: (20, 135, 62),  # Plymouth Argyle
+    1359: (255, 255, 255),  # Luton Town
+    18212: (29, 91, 164),  # Queens Park Rangers
+}
+RAPI_TEAM_CODES = {
+    38: 'WAT',  # Watford
+    43: 'CAR',  # Cardiff City
+    44: 'BUR',  # Burnley
+    56: 'BRC',  # Bristol City
+    58: 'MIL',  # Millwall
+    59: 'PNE',  # Preston North End
+    60: 'WBA',  # West Bromwich Albion
+    62: 'SHU',  # Sheffield United
+    63: 'LEE',  # Leeds
+    64: 'HUL',  # Hull City
+    67: 'BBR',  # Blackburn Rovers
+    69: 'DER',  # Derby
+    70: 'MID',  # Middlesbrough
+    71: 'NOR',  # Norwich
+    74: 'SHW',  # Sheffield Wednesday
+    75: 'STO',  # Stoke City
+    76: 'SWA',  # Swansea City
+    746: 'SUN',  # Sunderland
+    1338: 'OXF',  # Oxford United
+    1346: 'COV',  # Coventry City
+    1355: 'POR',  # Portsmouth
+    1357: 'PLY',  # Plymouth Argyle
+    1359: 'LUT',  # Luton Town
+    18212: 'QPR',  # Queens Park Rangers
+}
+
 SGO_GAMES = None
 SGO_TIMESTAMP = None
 SGO_REFRESH_RATE = 600
@@ -160,51 +214,63 @@ class RunMatrix(SampleBase):
 
         start_time = to_local_tz(datetime.fromtimestamp(game['fixture']['timestamp']))
 
-        has_started = game['status']['started']
-        has_ended = game['status']['ended']
+        has_ended = game['fixture']['status']['short'] == 'FT'
+        has_started = has_ended or game['fixture']['status']['short'] != 'NS'
         in_progress = has_started and not has_ended
-        if game['teams']['away']['teamID'] in league_teams:
-            title_symbol = '@'
-            title_str = game['teams']['home']['names']['short']
+        if game['teams']['away']['id'] in RAPI_TEAMS:
+            title_symbol = 'A'
+            if game['teams']['home']['id'] in RAPI_TEAM_CODES:
+                title_str = RAPI_TEAM_CODES[game['teams']['home']['id']]
+            else:
+                title_str = game['teams']['home']['name'][:3].upper()
             if has_ended:
-                if game['teams']['away']['score'] > game['teams']['home']['score']:
+                if game['goals']['away'] > game['goals']['home']:
                     score_prefix = 'W'
-                elif game['teams']['away']['score'] == game['teams']['home']['score']:
+                elif game['goals']['away'] == game['goals']['home']:
                     score_prefix = 'D'
                 else:
                     score_prefix = 'L'
             else:
                 score_prefix = ''
-            team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
+            if game['teams']['home']['id'] in RAPI_TEAM_COLOURS:
+                team_colour = graphics.Color(*RAPI_TEAM_COLOURS[game['teams']['home']['id']])
+            else:
+                team_colour = self.text_colour
         else:
-            title_symbol = 'v'
-            title_str = game['teams']['away']['names']['short']
+            title_symbol = 'H'
+            if game['teams']['away']['id'] in RAPI_TEAM_CODES:
+                title_str = RAPI_TEAM_CODES[game['teams']['away']['id']]
+            else:
+                title_str = game['teams']['away']['name'][:3].upper()
             if has_ended:
-                if game['teams']['home']['score'] > game['teams']['away']['score']:
+                if game['goals']['home'] > game['goals']['away']:
                     score_prefix = 'W'
-                elif game['teams']['home']['score'] == game['teams']['away']['score']:
+                elif game['goals']['home'] == game['goals']['away']:
                     score_prefix = 'D'
                 else:
                     score_prefix = 'L'
             else:
                 score_prefix = ''
-            team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
+            if game['teams']['away']['id'] in RAPI_TEAM_COLOURS:
+                team_colour = graphics.Color(*RAPI_TEAM_COLOURS[game['teams']['away']['id']])
+            else:
+                team_colour = self.text_colour
 
         if has_started or has_ended:
-            score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
+            score_str = f"{score_prefix}{game['goals']['home']}-{game['goals']['away']}"
         else:
             score_str = start_time.strftime('%H:%M')
 
         if in_progress:
-            date_str = game['status']['displayShort']
+            date_str = score_str
         else:
             if os.name == 'nt':
                 date_str = start_time.strftime('%#m/%#d')
             else:
                 date_str = start_time.strftime('%-m/%-d')
 
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
-        graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, team_colour, title_str)
+        graphics.DrawText(canvas, self.circle_font, 56, text_y_top, self.text_colour, title_symbol)
         graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
         graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
 
