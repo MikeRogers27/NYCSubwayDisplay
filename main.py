@@ -94,7 +94,7 @@ SGO_REFRESH_RATE = 600
 SGO_MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
 SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
-SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_FC_MLS']
+SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
 
 class GracefulKiller:
@@ -1019,7 +1019,8 @@ def rapi_get_games():
     return games
 
 def sgo_get_game_icon(game):
-    if game['teams']['away']['teamID'] in SGO_MLB_TEAMS + SGO_NHL_TEAMS:
+    if game['teams']['away']['teamID'] in \
+            SGO_MLB_TEAMS + SGO_NHL_TEAMS + SGO_NFL_TEAMS + SGO_MLS_TEAMS:
         icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
     else:
         icon_file = 'icons/32/' + game['teams']['home']['teamID'] + '.png'
