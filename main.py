@@ -70,6 +70,14 @@ class RunMatrix(SampleBase):
         self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
     def draw_game(self, canvas, game):
+        if 'fixture' in game:
+            canvas = self.draw_game_rapi(canvas, game)
+        else:
+            canvas = self.draw_game_sgo(canvas, game)
+
+        return canvas
+
+    def draw_game_sgo(self, canvas, game):
         league_id = game['leagueID']
         if league_id == 'MLB':
             league_teams = SGO_MLB_TEAMS
@@ -89,6 +97,68 @@ class RunMatrix(SampleBase):
         canvas.SetImage(im)
 
         start_time = to_local_tz(parse(game['status']['startsAt']))
+
+        has_started = game['status']['started']
+        has_ended = game['status']['ended']
+        in_progress = has_started and not has_ended
+        if game['teams']['away']['teamID'] in league_teams:
+            title_symbol = '@'
+            title_str = game['teams']['home']['names']['short']
+            if has_ended:
+                if game['teams']['away']['score'] > game['teams']['home']['score']:
+                    score_prefix = 'W'
+                elif game['teams']['away']['score'] == game['teams']['home']['score']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+            team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
+        else:
+            title_symbol = 'v'
+            title_str = game['teams']['away']['names']['short']
+            if has_ended:
+                if game['teams']['home']['score'] > game['teams']['away']['score']:
+                    score_prefix = 'W'
+                elif game['teams']['home']['score'] == game['teams']['away']['score']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+            team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
+
+        if has_started or has_ended:
+            score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
+        else:
+            score_str = start_time.strftime('%H:%M')
+
+        if in_progress:
+            date_str = game['status']['displayShort']
+        else:
+            if os.name == 'nt':
+                date_str = start_time.strftime('%#m/%#d')
+            else:
+                date_str = start_time.strftime('%-m/%-d')
+
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
+        graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
+
+        return canvas
+
+    def draw_game_rapi(self, canvas, game):
+
+        text_y_top = 10
+        text_y_middle = 20
+        text_y_bottom = 30
+
+        icon_file = rapi_get_game_icon(game)
+        im = Image.open(icon_file)
+        canvas.SetImage(im)
+
+        start_time = to_local_tz(datetime.fromtimestamp(game['fixture']['timestamp']))
 
         has_started = game['status']['started']
         has_ended = game['status']['ended']
@@ -431,7 +501,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_sports(self, canvas, display_time=10):
-        games = sgo_get_games()
+        # games = sgo_get_games()
+        games = rapi_get_games()
         if not len(games):
             return canvas
         game_time = max(5, round(display_time / len(games)))
@@ -479,6 +550,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
+        return ['sports'], 10
 
         now = datetime.now()
         timestamp = now.time()
@@ -831,6 +903,50 @@ def owm_weather_to_icon(weather):
 
     return icon_file
 
+
+def rapi_get_game_icon(game):
+    icon_file = 'icons/32/SUNDERLAND.png'
+    return icon_file
+
+
+def rapi_get_games():
+    if os.name == 'nt':
+        import pickle
+        cache_file = rf'c:\temp\rapi.pickle'
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as file:
+                games = pickle.load(file)
+            return games
+
+    starts_after = to_utc_tz(datetime.now() - timedelta(days=14))
+    starts_before = to_utc_tz(datetime.now() + timedelta(days=7))
+
+    # Championship league id = 40
+    # sunderland team id = 746
+    querystring = {
+        # 'league': '40',
+        'season': '2024',
+        'team': '746',
+        'from': starts_after.strftime('%Y-%m-%d'),
+        'to': starts_before.strftime('%Y-%m-%d'),
+    }
+    headers = {
+        'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+        'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
+    }
+    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+    response = requests.request("GET", url, headers=headers, params=querystring)
+    data = response.json()
+
+    games = []
+    for game in data['response']:
+        games.append(game)
+
+    if os.name == 'nt':
+        with open(cache_file, 'wb') as file:
+            pickle.dump(games, file)
+
+    return games
 
 def sgo_get_game_icon(game):
     if game['teams']['away']['teamID'] in SGO_MLB_TEAMS + SGO_NHL_TEAMS:
