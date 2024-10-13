@@ -94,6 +94,7 @@ SGO_REFRESH_RATE = 600
 SGO_MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
 SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
+SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_FC_MLS']
 
 
 class GracefulKiller:
@@ -140,6 +141,8 @@ class RunMatrix(SampleBase):
             league_teams = SGO_NHL_TEAMS
         elif league_id == 'NFL':
             league_teams = SGO_NFL_TEAMS
+        elif league_id == 'MLS':
+            league_teams = SGO_MLS_TEAMS
         else:
             return canvas
 
@@ -1046,6 +1049,7 @@ def sgo_get_games():
         SGO_GAMES.extend(sgo_get_games_league('MLB'))
         SGO_GAMES.extend(sgo_get_games_league('NHL'))
         SGO_GAMES.extend(sgo_get_games_league('NFL'))
+        SGO_GAMES.extend(sgo_get_games_league('MLS'))
 
         sgo_next_update(SGO_GAMES)
 
@@ -1084,6 +1088,8 @@ def sgo_get_games_league(league_id):
         league_teams = SGO_NHL_TEAMS
     elif league_id == 'NFL':
         league_teams = SGO_NFL_TEAMS
+    elif league_id == 'MLS':
+        league_teams = SGO_MLS_TEAMS
     else:
         league_teams = []
 
