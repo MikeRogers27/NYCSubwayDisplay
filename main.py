@@ -89,6 +89,7 @@ RAPI_TEAM_CODES = {
 
 SGO_GAMES = None
 SGO_TIMESTAMP = None
+SGO_NEXT_REFRESH = None
 SGO_REFRESH_RATE = 600
 SGO_MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
 SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
@@ -567,8 +568,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_sports(self, canvas, display_time=10):
-        # games = sgo_get_games()
-        games = rapi_get_games()
+        games = sgo_get_games()
+        # games = rapi_get_games()
         if not len(games):
             return canvas
         game_time = max(5, round(display_time / len(games)))
@@ -1026,15 +1027,27 @@ def sgo_get_game_icon(game):
 def sgo_get_games():
     global SGO_GAMES, SGO_TIMESTAMP
 
-    # update all feeds at the interval specified
-    if SGO_TIMESTAMP is None or \
-            (datetime.now() - SGO_TIMESTAMP).total_seconds() > SGO_REFRESH_RATE:
+    # update all feeds when requested but not faster than the refresh rate
+    now = datetime.now()
+    # update
+    update_games = True
+    # unless we've already updated within the refresh time
+    if SGO_TIMESTAMP is not None and \
+            (now - SGO_TIMESTAMP).total_seconds() <= SGO_REFRESH_RATE:
+        update_games = False
+    # or if we don't need to update
+    if SGO_NEXT_REFRESH is not None and now < SGO_NEXT_REFRESH:
+        update_games = False
+
+    if update_games:
         SGO_TIMESTAMP = datetime.now()
 
         SGO_GAMES = []
         SGO_GAMES.extend(sgo_get_games_league('MLB'))
         SGO_GAMES.extend(sgo_get_games_league('NHL'))
         SGO_GAMES.extend(sgo_get_games_league('NFL'))
+
+        sgo_next_update(SGO_GAMES)
 
     return SGO_GAMES
 
@@ -1085,6 +1098,28 @@ def sgo_get_games_league(league_id):
     #         pickle.dump(games, file)
 
     return games
+
+
+def sgo_next_update(games):
+    global SGO_NEXT_REFRESH
+
+    # we need to update at midnight tomorrow at the latest
+    SGO_NEXT_REFRESH = datetime.combine(
+        datetime.now().date() + timedelta(days=1),
+        datetime.min.time()
+    )
+
+    for game in games:
+        has_started = game['status']['started']
+        has_ended = game['status']['ended']
+        in_progress = has_started and not has_ended
+
+        if has_ended:
+            continue
+
+        # if we're in progress, update as soon as possible
+        if in_progress:
+            SGO_NEXT_REFRESH = datetime.now()
 
 
 def to_utc_tz(date_time):
