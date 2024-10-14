@@ -1008,8 +1008,8 @@ def rapi_get_games():
         update_games = False
 
     if update_games:
-        starts_after = to_utc_tz(datetime.now() - timedelta(days=14))
-        starts_before = to_utc_tz(datetime.now() + timedelta(days=7))
+        starts_after = to_utc_tz(datetime.now() - timedelta(days=2))
+        starts_before = to_utc_tz(datetime.now() + timedelta(days=2))
 
         # Championship league id = 40
         # sunderland team id = 746
@@ -1032,8 +1032,8 @@ def rapi_get_games():
         for game in data['response']:
             RAPI_GAMES.append(game)
 
-        # compute new update time
-        rapi_next_update(RAPI_GAMES)
+    # compute new update time
+    rapi_next_update(RAPI_GAMES)
 
     # if os.name == 'nt':
     #     with open(cache_file, 'wb') as file:
@@ -1078,8 +1078,13 @@ def sgo_get_game_icon(game):
 def sgo_get_games():
     global SGO_GAMES, SGO_TIMESTAMP
 
-    # update all feeds when requested but not faster than the refresh rate
     now = datetime.now()
+
+    # update uninitalised data
+    if SGO_TIMESTAMP is None:
+        SGO_TIMESTAMP = now - timedelta(days=1)
+
+    # update all feeds when requested but not faster than the refresh rate
     # update
     update_games = True
     # unless we've already updated within the refresh time
@@ -1099,7 +1104,7 @@ def sgo_get_games():
         SGO_GAMES.extend(sgo_get_games_league('NFL'))
         SGO_GAMES.extend(sgo_get_games_league('MLS'))
 
-        sgo_next_update(SGO_GAMES)
+    sgo_next_update(SGO_GAMES)
 
     return SGO_GAMES
 
@@ -1174,7 +1179,7 @@ def sgo_next_update(games):
 
         # if we're in progress, update as soon as possible
         if in_progress:
-            SGO_NEXT_REFRESH = now
+            SGO_NEXT_REFRESH = min(SGO_TIMESTAMP + SGO_REFRESH_RATE, now)
 
 
 def to_utc_tz(date_time):
