@@ -509,10 +509,10 @@ class RunMatrix(SampleBase):
                 return ['trains_uptown', 'clock', 'weather'], 5
             # day between 10am and 8pm
             if dt_time(10, 0) <= timestamp < dt_time(20, 0):
-                return ['trains', 'clock', 'weather'], 10
+                return ['trains', 'clock', 'weather'], 5
             # evening after 8pm til midnight
             if timestamp > dt_time(19, 30):
-                return ['clock', 'weather', 'sports'], 10
+                return ['clock', 'weather', 'sports'], 5
 
             # off after midnight
             return ['off'], 600
