@@ -403,7 +403,7 @@ class RunMatrix(SampleBase):
                 icon_file = 'icons/32/thermometer_hot.png'
 
             im = Image.open(icon_file)
-            canvas.SetImage(im, offset_x=clock_pos+36, offset_y=2)
+            canvas.SetImage(im, offset_x=clock_pos+35, offset_y=2)
 
             if w is not None:
                 graphics.DrawText(canvas, self.circle_font, clock_pos + 44, text_y_top - 1, self.text_colour,
