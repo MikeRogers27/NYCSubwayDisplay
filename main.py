@@ -394,16 +394,27 @@ class RunMatrix(SampleBase):
                               current_time.strftime('%M'))
 
             # draw temp
+            temp_c = k_to_c(w.temp["temp"])
+            if temp_c <= 8:
+                icon_file = 'icons/32/thermometer_cold.png'
+            elif temp_c < 22:
+                icon_file = 'icons/32/thermometer_mid.png'
+            else:
+                icon_file = 'icons/32/thermometer_hot.png'
+
+            im = Image.open(icon_file)
+            canvas.SetImage(im, offset_x=clock_pos+36, offset_y=2)
+
             if w is not None:
                 graphics.DrawText(canvas, self.circle_font, clock_pos + 44, text_y_top - 1, self.text_colour,
-                                  f'{k_to_c(w.temp["temp"]):d}c')
+                                  f'{temp_c:d}c')
             else:
                 graphics.DrawText(canvas, self.circle_font, clock_pos + 44, text_y_top - 1, self.text_colour,
                                   '--c')
 
             # draw date
             date_str = current_time.strftime('%a ') + f'{current_time.day} ' + current_time.strftime('%b')
-            graphics.DrawText(canvas, self.font, 1, text_y_bottom, self.text_colour, date_str)
+            graphics.DrawText(canvas, self.circle_font, clock_pos + 1, text_y_bottom, self.text_colour, date_str)
 
             canvas = self.matrix.SwapOnVSync(canvas)
             show_colon = not show_colon
@@ -479,6 +490,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
+        return ['clock'], 5
 
         now = datetime.now()
         timestamp = now.time()
