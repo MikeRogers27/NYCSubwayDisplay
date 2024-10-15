@@ -135,7 +135,6 @@ class RunMatrix(SampleBase):
             else:
                 date_str = start_time.strftime('%-m/%-d')
 
-        score_str = 'L99-99'
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
         graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
         graphics.DrawText(canvas, self.sports_font, 34, text_y_middle, self.text_colour, score_str)
@@ -493,7 +492,6 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        return ['sports'], 5
 
         now = datetime.now()
         timestamp = now.time()
@@ -508,7 +506,7 @@ class RunMatrix(SampleBase):
             if dt_time(10, 0) <= timestamp < dt_time(20, 0):
                 return ['trains', 'clock', 'weather'], 10
             # evening after 8pm til midnight
-            if timestamp > dt_time(20, 0):
+            if timestamp > dt_time(19, 30):
                 return ['clock', 'weather', 'sports'], 10
 
             # off after midnight
