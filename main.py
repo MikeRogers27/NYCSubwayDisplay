@@ -61,6 +61,8 @@ class RunMatrix(SampleBase):
         self.font.LoadFont("./fonts/helvR12.bdf")
         self.circle_font = graphics.Font()
         self.circle_font.LoadFont('./fonts/6x10.bdf')
+        self.sports_font = graphics.Font()
+        self.sports_font.LoadFont('./fonts/5x8.bdf')
 
         self.text_colour = graphics.Color(74, 214, 9)
         self.text_colour_arriving = graphics.Color(247, 75, 25)
@@ -133,10 +135,11 @@ class RunMatrix(SampleBase):
             else:
                 date_str = start_time.strftime('%-m/%-d')
 
+        score_str = 'L99-99'
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
         graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
+        graphics.DrawText(canvas, self.sports_font, 34, text_y_middle, self.text_colour, score_str)
+        graphics.DrawText(canvas, self.sports_font, 34, text_y_bottom, self.text_colour, date_str)
 
         return canvas
 
@@ -490,7 +493,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        return ['clock'], 5
+        return ['sports'], 5
 
         now = datetime.now()
         timestamp = now.time()
