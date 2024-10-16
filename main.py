@@ -122,6 +122,8 @@ class RunMatrix(SampleBase):
         self.font.LoadFont("./fonts/helvR12.bdf")
         self.circle_font = graphics.Font()
         self.circle_font.LoadFont('./fonts/6x10.bdf')
+        self.sports_font = graphics.Font()
+        self.sports_font.LoadFont('./fonts/5x8.bdf')
 
         self.text_colour = graphics.Color(74, 214, 9)
         self.text_colour_arriving = graphics.Color(247, 75, 25)
@@ -206,8 +208,8 @@ class RunMatrix(SampleBase):
 
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
         graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
+        graphics.DrawText(canvas, self.sports_font, 34, text_y_middle, self.text_colour, score_str)
+        graphics.DrawText(canvas, self.sports_font, 34, text_y_bottom, self.text_colour, date_str)
 
         return canvas
 
@@ -539,16 +541,32 @@ class RunMatrix(SampleBase):
                               current_time.strftime('%M'))
 
             # draw temp
+            temp_c = k_to_c(w.temp["temp"])
+            if temp_c < 0:
+                icon_file = 'icons/32/thermometer_verycold.png'
+            elif temp_c < 10:
+                icon_file = 'icons/32/thermometer_cold.png'
+            elif temp_c < 20:
+                icon_file = 'icons/32/thermometer_mid.png'
+            elif temp_c < 30:
+                icon_file = 'icons/32/thermometer_hot.png'
+            else:
+                icon_file = 'icons/32/thermometer_veryhot.png'
+
+
+            im = Image.open(icon_file)
+            canvas.SetImage(im, offset_x=clock_pos+35, offset_y=2)
+
             if w is not None:
                 graphics.DrawText(canvas, self.circle_font, clock_pos + 44, text_y_top - 1, self.text_colour,
-                                  f'{k_to_c(w.temp["temp"]):d}c')
+                                  f'{temp_c:d}c')
             else:
                 graphics.DrawText(canvas, self.circle_font, clock_pos + 44, text_y_top - 1, self.text_colour,
                                   '--c')
 
             # draw date
             date_str = current_time.strftime('%a ') + f'{current_time.day} ' + current_time.strftime('%b')
-            graphics.DrawText(canvas, self.font, 1, text_y_bottom, self.text_colour, date_str)
+            graphics.DrawText(canvas, self.circle_font, clock_pos + 1, text_y_bottom, self.text_colour, date_str)
 
             canvas = self.matrix.SwapOnVSync(canvas)
             show_colon = not show_colon
@@ -638,10 +656,10 @@ class RunMatrix(SampleBase):
                 return ['trains_uptown', 'clock', 'weather'], 5
             # day between 10am and 8pm
             if dt_time(10, 0) <= timestamp < dt_time(20, 0):
-                return ['trains', 'weather'], 10
+                return ['trains', 'clock', 'weather'], 5
             # evening after 8pm til midnight
-            if timestamp > dt_time(20, 0):
-                return ['clock', 'weather', 'sports'], 10
+            if timestamp > dt_time(19, 30):
+                return ['clock', 'weather', 'sports'], 5
 
             # off after midnight
             return ['off'], 600
@@ -923,7 +941,10 @@ def owm_weather_to_icon(weather):
     elif weather.weather_code in [500, ]:
         icon_file = 'icons/32/rain0.png'
 
-    elif weather.weather_code in [501, 502, ]:
+    elif weather.weather_code in [501, ]:
+        icon_file = 'icons/32/rain1.png'
+
+    elif weather.weather_code in [502, ]:
         icon_file = 'icons/32/rain1.png'
 
     elif weather.weather_code in [503, 504, ]:
@@ -932,11 +953,23 @@ def owm_weather_to_icon(weather):
     elif weather.weather_code in [511, 611]:
         icon_file = 'icons/32/rain_hail.png'
 
-    elif weather.weather_code in [520, 521, 522, 531]:
+    elif weather.weather_code in [520,]:
+        if is_day:
+            icon_file = 'icons/32/rain0_sun.png'
+        else:
+            icon_file = 'icons/32/rain0_moon.png'
+
+    elif weather.weather_code in [521,]:
         if is_day:
             icon_file = 'icons/32/rain1_sun.png'
         else:
             icon_file = 'icons/32/rain1_moon.png'
+
+    elif weather.weather_code in [522, 531]:
+        if is_day:
+            icon_file = 'icons/32/rain2_sun.png'
+        else:
+            icon_file = 'icons/32/rain2_moon.png'
 
     elif weather.weather_code in [600, 601, 602, ]:
         icon_file = 'icons/32/snow.png'
