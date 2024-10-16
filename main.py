@@ -448,6 +448,27 @@ class RunMatrix(SampleBase):
 
         return canvas
 
+    def display_seasonal(self, canvas, display_time=10):
+
+        image_file = 'images/halloween.png'
+        im = Image.open(image_file)
+
+        n_rows_display = 32*2 + im.height
+        sleep_time = display_time / n_rows_display
+
+        start_time = datetime.now()
+        offset_y = 32
+        while (datetime.now() - start_time).total_seconds() < display_time:
+            canvas.Clear()
+
+            canvas.SetImage(im, offset_x=0, offset_y=offset_y)
+
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(sleep_time)
+            offset_y -= 1
+
+        return canvas
+
     def display_sports(self, canvas, display_time=10):
         games = sgo_get_games()
         if not len(games):
@@ -497,6 +518,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
+        return ['seasonal'], 5
 
         now = datetime.now()
         timestamp = now.time()
@@ -546,6 +568,8 @@ class RunMatrix(SampleBase):
                     canvas = self.display_weather(canvas, display_time=display_time)
                 elif display_item == 'sports':
                     canvas = self.display_sports(canvas, display_time=display_time)
+                elif display_item == 'seasonal':
+                    canvas = self.display_seasonal(canvas, display_time=display_time)
                 else:
                     # nothing
                     canvas.Clear()
