@@ -473,7 +473,8 @@ class RunMatrix(SampleBase):
                 for frame_ind in range(im.n_frames):
                     canvas.Clear()
                     im.seek(frame_ind)
-                    canvas.SetImage(im, offset_x=0, offset_y=offset_y)
+                    im_disp = im.convert('RGB')
+                    canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
 
                     canvas = self.matrix.SwapOnVSync(canvas)
                     time.sleep(im.info['duration'] / 1000)
