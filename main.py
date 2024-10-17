@@ -451,32 +451,35 @@ class RunMatrix(SampleBase):
     def display_seasonal(self, canvas, display_time=10):
 
         image_file = 'images/halloween.png'
-        image_file = 'images/halloween_anim_2.gif'
+        image_file = 'images/halloween_anim.gif'
         im = Image.open(image_file)
 
         n_rows_display = 32*2 + im.height
         sleep_time = display_time / n_rows_display
+        center_offset = int(im.height / 2) - 16
 
-        start_time = datetime.now()
         if im.is_animated:
             im.seek(0)
-            next_frame_time = start_time + timedelta(milliseconds=im.info['duration'])
-        frame_ind = 0
+
+        start_time = datetime.now()
         offset_y = 32
-        while (datetime.now() - start_time).total_seconds() < display_time:
-            canvas.Clear()
+        while offset_y > -(im.height+32):
 
-            if im.is_animated and datetime.now() > next_frame_time:
-                frame_ind = (frame_ind + 1) % im.n_frames
-                im.seek(frame_ind)
-                next_frame_time = datetime.now() + timedelta(milliseconds=im.info['duration'])
+            # play the animation when centered
+            if im.is_animated and offset_y == -center_offset:
+                for frame_ind in range(im.n_frames):
+                    canvas.Clear()
+                    im.seek(frame_ind)
+                    canvas.SetImage(im, offset_x=0, offset_y=offset_y)
 
-            canvas.SetImage(im, offset_x=0, offset_y=offset_y)
-
-            canvas = self.matrix.SwapOnVSync(canvas)
-            time.sleep(sleep_time)
+                    canvas = self.matrix.SwapOnVSync(canvas)
+                    time.sleep(im.info['duration'] / 1000)
+            else:
+                canvas.Clear()
+                canvas.SetImage(im, offset_x=0, offset_y=offset_y)
+                canvas = self.matrix.SwapOnVSync(canvas)
+                time.sleep(sleep_time)
             offset_y -= 1
-
 
         return canvas
 
