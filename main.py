@@ -463,6 +463,7 @@ class RunMatrix(SampleBase):
 
         if im.is_animated:
             im.seek(0)
+        im_disp = im.convert('RGB')
 
         start_time = datetime.now()
         offset_y = 32
@@ -480,7 +481,7 @@ class RunMatrix(SampleBase):
                     time.sleep(im.info['duration'] / 1000)
             else:
                 canvas.Clear()
-                canvas.SetImage(im, offset_x=0, offset_y=offset_y)
+                canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
                 canvas = self.matrix.SwapOnVSync(canvas)
                 time.sleep(sleep_time)
             offset_y -= 1
