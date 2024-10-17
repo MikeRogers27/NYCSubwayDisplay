@@ -451,21 +451,32 @@ class RunMatrix(SampleBase):
     def display_seasonal(self, canvas, display_time=10):
 
         image_file = 'images/halloween.png'
+        image_file = 'images/halloween_anim_2.gif'
         im = Image.open(image_file)
 
         n_rows_display = 32*2 + im.height
         sleep_time = display_time / n_rows_display
 
         start_time = datetime.now()
+        if im.is_animated:
+            im.seek(0)
+            next_frame_time = start_time + timedelta(milliseconds=im.info['duration'])
+        frame_ind = 0
         offset_y = 32
         while (datetime.now() - start_time).total_seconds() < display_time:
             canvas.Clear()
+
+            if im.is_animated and datetime.now() > next_frame_time:
+                frame_ind = (frame_ind + 1) % im.n_frames
+                im.seek(frame_ind)
+                next_frame_time = datetime.now() + timedelta(milliseconds=im.info['duration'])
 
             canvas.SetImage(im, offset_x=0, offset_y=offset_y)
 
             canvas = self.matrix.SwapOnVSync(canvas)
             time.sleep(sleep_time)
             offset_y -= 1
+
 
         return canvas
 
