@@ -453,6 +453,7 @@ class RunMatrix(SampleBase):
         image_file = 'images/halloween.png'
         image_file = 'images/halloween_anim.gif'
         im = Image.open(image_file)
+        im = im.convert('RGB')
 
         n_rows_display = 32*2 + im.height
         sleep_time = display_time / n_rows_display
