@@ -1,4 +1,4 @@
-from datetime import datetime, time as dt_time, timedelta
+from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
 import importlib
 import os
@@ -94,8 +94,9 @@ RAPI_TEAM_CODES = {
 
 SGO_GAMES = None
 SGO_TIMESTAMP = None
+SGO_GAMES_LAST_UPDATE = {}
 SGO_NEXT_REFRESH = None
-SGO_REFRESH_RATE = 360
+SGO_REFRESH_RATE = 1800  # 30 mins
 SGO_MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
 SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
@@ -166,6 +167,7 @@ class RunMatrix(SampleBase):
         has_started = game['status']['started']
         has_ended = game['status']['ended']
         in_progress = has_started and not has_ended
+        score_str = start_time.strftime('%H:%M')
         if game['teams']['away']['teamID'] in league_teams:
             title_symbol = '@'
             title_str = game['teams']['home']['names']['short']
@@ -179,6 +181,10 @@ class RunMatrix(SampleBase):
             else:
                 score_prefix = ''
             team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
+
+            if has_started or has_ended:
+                score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
+
         else:
             title_symbol = 'v'
             title_str = game['teams']['away']['names']['short']
@@ -193,18 +199,19 @@ class RunMatrix(SampleBase):
                 score_prefix = ''
             team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
 
-        if has_started or has_ended:
-            score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
-        else:
-            score_str = start_time.strftime('%H:%M')
+            if has_started or has_ended:
+                score_str = f"{score_prefix}{game['teams']['home']['score']}-{game['teams']['away']['score']}"
 
-        if in_progress:
+        if in_progress or has_ended:
             date_str = game['status']['displayShort']
+            if date_str == 'F':
+                date_str = 'Final'
         else:
-            if os.name == 'nt':
-                date_str = start_time.strftime('%#m/%#d')
+            today = dt_date.today()
+            if start_time.date() == today:
+                date_str = 'Today'
             else:
-                date_str = start_time.strftime('%-m/%-d')
+                date_str = start_time.strftime('%a')
 
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
         graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
@@ -228,6 +235,7 @@ class RunMatrix(SampleBase):
         has_ended = game['fixture']['status']['short'] == 'FT'
         has_started = has_ended or game['fixture']['status']['short'] != 'NS'
         in_progress = has_started and not has_ended
+        score_str = start_time.strftime('%H:%M')
         if game['teams']['away']['id'] in RAPI_TEAMS:
             title_symbol = 'A'
             if game['teams']['home']['id'] in RAPI_TEAM_CODES:
@@ -247,6 +255,9 @@ class RunMatrix(SampleBase):
                 team_colour = graphics.Color(*RAPI_TEAM_COLOURS[game['teams']['home']['id']])
             else:
                 team_colour = self.text_colour
+
+            if has_started or has_ended:
+                score_str = f"{score_prefix}{game['goals']['away']}-{game['goals']['home']}"
         else:
             title_symbol = 'H'
             if game['teams']['away']['id'] in RAPI_TEAM_CODES:
@@ -267,18 +278,24 @@ class RunMatrix(SampleBase):
             else:
                 team_colour = self.text_colour
 
-        if has_started or has_ended:
-            score_str = f"{score_prefix}{game['goals']['home']}-{game['goals']['away']}"
-        else:
-            score_str = start_time.strftime('%H:%M')
+            if has_started or has_ended:
+                score_str = f"{score_prefix}{game['goals']['home']}-{game['goals']['away']}"
 
         if in_progress:
             date_str = score_str
-        else:
-            if os.name == 'nt':
-                date_str = start_time.strftime('%#m/%#d')
+        elif has_ended:
+            if game['score']['extratime']['home'] is not None:
+                date_str = 'AET'
+            elif game['score']['penalty']['home'] is not None:
+                date_str = 'PEN'
             else:
-                date_str = start_time.strftime('%-m/%-d')
+                date_str = 'FT'
+        else:
+            today = dt_date.today()
+            if start_time.date() == today:
+                date_str = 'Today'
+            else:
+                date_str = start_time.strftime('%a')
 
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, team_colour, title_str)
         graphics.DrawText(canvas, self.circle_font, 56, text_y_top, self.text_colour, title_symbol)
@@ -594,10 +611,13 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_sports(self, canvas, display_time=10):
-        games = sgo_get_games()
+        games = []
+        games.extend(sgo_get_games())
         games.extend(rapi_get_games())
         if not len(games):
             return canvas
+        games = self._sort_games(games)
+
         game_time = max(5, round(display_time / len(games)))
         for game in games:
             canvas.Clear()
@@ -728,6 +748,20 @@ class RunMatrix(SampleBase):
         # graphics.DrawLine(canvas, x - 4, y + 3, x + 4, y + 3, color)
         # graphics.DrawLine(canvas, x - 3, y + 4, x + 3, y + 4, color)
         # graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
+
+    @staticmethod
+    def _sort_games(games):
+
+        def start_time(game):
+            if 'fixture' in game:
+                start_time = to_local_tz(datetime.fromtimestamp(game['fixture']['timestamp']))
+            else:
+                start_time = to_local_tz(parse(game['status']['startsAt']))
+            return start_time
+
+        games = sorted(games, key=start_time)
+
+        return games
 
 
 def hex_to_rgb(h):
@@ -1018,31 +1052,28 @@ def rapi_get_game_icon(game):
 
 
 def rapi_get_games():
-    global RAPI_GAMES
+    global RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP
 
-    # if os.name == 'nt':
-    #     import pickle
-    #     cache_file = rf'c:\temp\rapi.pickle'
-    #     if os.path.exists(cache_file):
-    #         with open(cache_file, 'rb') as file:
-    #             games = pickle.load(file)
-    #         return games
+    if os.name == 'nt':
+        import pickle
+        cache_file = rf'c:\temp\rapi.pickle'
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as file:
+                games = pickle.load(file)
+            return games
 
     # update all feeds when requested but not faster than the refresh rate
     now = datetime.now()
-    # update
-    update_games = True
-    # unless we've already updated within the refresh time
-    if RAPI_TIMESTAMP is not None and \
-            (now - RAPI_TIMESTAMP).total_seconds() <= RAPI_REFRESH_RATE:
-        update_games = False
-    # or if we don't need to update
-    if RAPI_NEXT_REFRESH is not None and now < RAPI_NEXT_REFRESH:
-        update_games = False
+    # update un-initialised data so we update on first request
+    if RAPI_NEXT_REFRESH is None:
+        RAPI_NEXT_REFRESH = now - timedelta(days=1)
 
-    if update_games:
-        starts_after = to_utc_tz(datetime.now() - timedelta(days=2))
-        starts_before = to_utc_tz(datetime.now() + timedelta(days=2))
+    if now > RAPI_NEXT_REFRESH:
+        RAPI_TIMESTAMP = datetime.now()
+
+        today = datetime.fromordinal(dt_date.today().toordinal())
+        starts_after = to_utc_tz(today - timedelta(days=1))
+        starts_before = to_utc_tz(today + timedelta(days=5))
 
         # Championship league id = 40
         # sunderland team id = 746
@@ -1068,9 +1099,9 @@ def rapi_get_games():
     # compute new update time
     rapi_next_update(RAPI_GAMES)
 
-    # if os.name == 'nt':
-    #     with open(cache_file, 'wb') as file:
-    #         pickle.dump(games, file)
+    if os.name == 'nt':
+        with open(cache_file, 'wb') as file:
+            pickle.dump(RAPI_GAMES, file)
 
     return RAPI_GAMES
 
@@ -1095,7 +1126,7 @@ def rapi_next_update(games):
 
         # if we're in progress, update as soon as possible
         if in_progress:
-            RAPI_NEXT_REFRESH = now
+            RAPI_NEXT_REFRESH = min(RAPI_TIMESTAMP + timedelta(seconds=RAPI_REFRESH_RATE), now)
 
 
 def sgo_get_game_icon(game):
@@ -1109,26 +1140,17 @@ def sgo_get_game_icon(game):
 
 
 def sgo_get_games():
-    global SGO_GAMES, SGO_TIMESTAMP
+    global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH
 
     now = datetime.now()
 
-    # update uninitalised data
-    if SGO_TIMESTAMP is None:
-        SGO_TIMESTAMP = now - timedelta(days=1)
+    # update un-initalised data so we update on first request
+    if SGO_NEXT_REFRESH is None:
+        SGO_NEXT_REFRESH = now - timedelta(days=1)
 
     # update all feeds when requested but not faster than the refresh rate
     # update
-    update_games = True
-    # unless we've already updated within the refresh time
-    if SGO_TIMESTAMP is not None and \
-            (now - SGO_TIMESTAMP).total_seconds() <= SGO_REFRESH_RATE:
-        update_games = False
-    # or if we don't need to update
-    if SGO_NEXT_REFRESH is not None and now < SGO_NEXT_REFRESH:
-        update_games = False
-
-    if update_games:
+    if now > SGO_NEXT_REFRESH:
         SGO_TIMESTAMP = datetime.now()
 
         SGO_GAMES = []
@@ -1137,25 +1159,38 @@ def sgo_get_games():
         SGO_GAMES.extend(sgo_get_games_league('NFL'))
         SGO_GAMES.extend(sgo_get_games_league('MLS'))
 
-    sgo_next_update(SGO_GAMES)
+        # update the leagues again tomorrow
+        today = datetime.fromordinal(dt_date.today().toordinal())
+        SGO_NEXT_REFRESH = today + timedelta(days=1)
+
+    # now update games in progress
+    sgo_update_games(SGO_GAMES)
 
     return SGO_GAMES
 
 
 def sgo_get_games_league(league_id):
-    # if os.name == 'nt':
-    #     import pickle
-    #     cache_file = rf'c:\temp\{league_id}.pickle'
-    #     if os.path.exists(cache_file):
-    #         with open(cache_file, 'rb') as file:
-    #             games = pickle.load(file)
-    #         return games
+    global SGO_GAMES_LAST_UPDATE
+    if os.name == 'nt':
+        now = datetime.now()
+        import pickle
+        cache_file = rf'c:\temp\{league_id}.pickle'
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as file:
+                games = pickle.load(file)
 
-    starts_after = to_utc_tz(datetime.now() - timedelta(days=1))
+            for game in games:
+                SGO_GAMES_LAST_UPDATE[game['eventID']] = now
+            return games
+
+    now = datetime.now()
+    today = datetime.fromordinal(dt_date.today().toordinal())
+
+    starts_after = to_utc_tz(today - timedelta(days=1))
     if league_id in ['MLB', 'NHL']:
-        starts_before = to_utc_tz(datetime.now() + timedelta(days=1))
+        starts_before = to_utc_tz(today + timedelta(days=1))
     else:
-        starts_before = to_utc_tz(datetime.now() + timedelta(days=2))
+        starts_before = to_utc_tz(today + timedelta(days=1))
 
     response = requests.get(
         f'https://api.sportsgameodds.com/v1/events?leagueID={league_id}&'
@@ -1183,36 +1218,42 @@ def sgo_get_games_league(league_id):
     for game in data['data']:
         if game['teams']['away']['teamID'] in league_teams or \
                 game['teams']['home']['teamID'] in league_teams:
+            SGO_GAMES_LAST_UPDATE[game['eventID']] = now
             games.append(game)
 
-    # if os.name == 'nt':
-    #     with open(cache_file, 'wb') as file:
-    #         pickle.dump(games, file)
+    if os.name == 'nt':
+        with open(cache_file, 'wb') as file:
+            pickle.dump(games, file)
 
     return games
 
 
-def sgo_next_update(games):
-    global SGO_NEXT_REFRESH
+def sgo_update_games(games):
+    global SGO_GAMES_LAST_UPDATE
 
     now = datetime.now()
-    # we need to update at midnight tomorrow at the latest
-    SGO_NEXT_REFRESH = datetime.combine(
-        now.date() + timedelta(days=1),
-        datetime.min.time()
-    )
-
     for game in games:
         has_started = game['status']['started']
         has_ended = game['status']['ended']
         in_progress = has_started and not has_ended
 
-        if has_ended:
-            continue
-
         # if we're in progress, update as soon as possible
         if in_progress:
-            SGO_NEXT_REFRESH = min(SGO_TIMESTAMP + SGO_REFRESH_RATE, now)
+            next_refresh = SGO_GAMES_LAST_UPDATE[game['eventID']] + timedelta(seconds=SGO_REFRESH_RATE)
+            if now > next_refresh:
+                game = sgo_update_game(game)
+                SGO_GAMES_LAST_UPDATE[game['eventID']] = now
+
+def sgo_update_game(game):
+
+    response = requests.get(
+        f'https://api.sportsgameodds.com/v1/events?eventID={game["eventID"]}&'
+        f'oddIDs=points-home-game-sp-home',
+        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+    )
+    data = response.json()
+    game = data['data'][0]
+    return game
 
 
 def to_utc_tz(date_time):
@@ -1237,6 +1278,13 @@ def main():
 
 
 if __name__ == '__main__':
+
+    # response = requests.get(
+    #     f'https://api.sportsgameodds.com/v1/account/usage',
+    #     headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+    # )
+    # data = response.json()
+
     main()
 
     # script is here:
