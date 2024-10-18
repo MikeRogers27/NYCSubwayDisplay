@@ -230,6 +230,7 @@ class RunMatrix(SampleBase):
 
         icon_file = rapi_get_game_icon(game)
         im = Image.open(icon_file)
+        im = im.convert('RGB')
         canvas.SetImage(im)
 
         start_time = to_local_tz(datetime.fromtimestamp(game['fixture']['timestamp']))
