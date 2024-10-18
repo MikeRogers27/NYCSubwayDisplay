@@ -1090,6 +1090,7 @@ def rapi_get_games():
 def rapi_get_games_league(league_id):
     global RAPI_GAMES_LAST_UPDATE
 
+    now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
     starts_after = to_utc_tz(today - timedelta(days=1))
     starts_before = to_utc_tz(today + timedelta(days=5))
@@ -1114,6 +1115,7 @@ def rapi_get_games_league(league_id):
     games = []
     for game in data['response']:
         games.append(game)
+        RAPI_GAMES_LAST_UPDATE[game['fixture']['id']] = now
 
     return games
 
