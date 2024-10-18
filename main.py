@@ -36,13 +36,14 @@ OWN_TIMESTAMP = None
 OWM_WEATHER = None
 
 RAPI_GAMES = None
+RAPI_GAMES_LAST_UPDATE = {}
 RAPI_TIMESTAMP = None
 RAPI_NEXT_REFRESH = None
 RAPI_REFRESH_RATE = 360
 
 RAPI_TEAMS = [746, ]
 RAPI_TEAM_COLOURS = {
-    38: (237,33,39),  # Watford
+    38: (237, 33, 39),  # Watford
     43: (0, 112, 181),  # Cardiff City
     44: (128, 0, 0),  # Burnley
     56: (226, 26, 35),  # Bristol City
@@ -573,9 +574,8 @@ class RunMatrix(SampleBase):
             else:
                 icon_file = 'icons/32/thermometer_veryhot.png'
 
-
             im = Image.open(icon_file)
-            canvas.SetImage(im, offset_x=clock_pos+35, offset_y=2)
+            canvas.SetImage(im, offset_x=clock_pos + 35, offset_y=2)
 
             if w is not None:
                 graphics.DrawText(canvas, self.circle_font, clock_pos + 44, text_y_top - 1, self.text_colour,
@@ -757,10 +757,10 @@ class RunMatrix(SampleBase):
 
         def start_time(game):
             if 'fixture' in game:
-                start_time = to_local_tz(datetime.fromtimestamp(game['fixture']['timestamp']))
+                start_t = to_local_tz(datetime.fromtimestamp(game['fixture']['timestamp']))
             else:
-                start_time = to_local_tz(parse(game['status']['startsAt']))
-            return start_time
+                start_t = to_local_tz(parse(game['status']['startsAt']))
+            return start_t
 
         games = sorted(games, key=start_time)
 
@@ -840,6 +840,8 @@ def mta_get_stop_name_and_direction(stop_id):
         stop_name = '4 Av'
     elif stop_id.startswith('R33'):
         stop_name = '9 St'
+    else:
+        stop_name = '?'
 
     if stop_id.endswith('N'):
         direction = '↑'
@@ -990,13 +992,13 @@ def owm_weather_to_icon(weather):
     elif weather.weather_code in [511, 611]:
         icon_file = 'icons/32/rain_hail.png'
 
-    elif weather.weather_code in [520,]:
+    elif weather.weather_code in [520, ]:
         if is_day:
             icon_file = 'icons/32/rain0_sun.png'
         else:
             icon_file = 'icons/32/rain0_moon.png'
 
-    elif weather.weather_code in [521,]:
+    elif weather.weather_code in [521, ]:
         if is_day:
             icon_file = 'icons/32/rain1_sun.png'
         else:
@@ -1057,13 +1059,8 @@ def rapi_get_game_icon(game):
 def rapi_get_games():
     global RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP
 
-    if os.name == 'nt':
-        import pickle
-        cache_file = rf'c:\temp\rapi.pickle'
-        if os.path.exists(cache_file):
-            with open(cache_file, 'rb') as file:
-                games = pickle.load(file)
-            return games
+    if RAPI_TIMESTAMP is None:
+        rapi_retrieve_from_cache()
 
     # update all feeds when requested but not faster than the refresh rate
     now = datetime.now()
@@ -1074,62 +1071,103 @@ def rapi_get_games():
     if now > RAPI_NEXT_REFRESH:
         RAPI_TIMESTAMP = datetime.now()
 
-        today = datetime.fromordinal(dt_date.today().toordinal())
-        starts_after = to_utc_tz(today - timedelta(days=1))
-        starts_before = to_utc_tz(today + timedelta(days=5))
-
-        # Championship league id = 40
-        # sunderland team id = 746
-        querystring = {
-            # 'league': '40',
-            'season': '2024',
-            'team': '746',
-            'from': starts_after.strftime('%Y-%m-%d'),
-            'to': starts_before.strftime('%Y-%m-%d'),
-        }
-        headers = {
-            'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
-            'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
-        }
-        url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-        response = requests.request("GET", url, headers=headers, params=querystring)
-        data = response.json()
-
         RAPI_GAMES = []
-        for game in data['response']:
-            RAPI_GAMES.append(game)
+        RAPI_GAMES.extend(rapi_get_games_league(40))
+
+        # update the leagues again tomorrow
+        today = datetime.fromordinal(dt_date.today().toordinal())
+        RAPI_NEXT_REFRESH = today + timedelta(days=1)
 
     # compute new update time
-    rapi_next_update(RAPI_GAMES)
+    rapi_update_games(RAPI_GAMES)
 
-    if os.name == 'nt':
-        with open(cache_file, 'wb') as file:
-            pickle.dump(RAPI_GAMES, file)
+    # save to cache
+    rapi_save_to_cache()
 
     return RAPI_GAMES
 
 
-def rapi_next_update(games):
-    global RAPI_NEXT_REFRESH
+def rapi_get_games_league(league_id):
+    global RAPI_GAMES_LAST_UPDATE
+
+    today = datetime.fromordinal(dt_date.today().toordinal())
+    starts_after = to_utc_tz(today - timedelta(days=1))
+    starts_before = to_utc_tz(today + timedelta(days=5))
+
+    # Championship league id = 40
+    # sunderland team id = 746
+    querystring = {
+        # 'league': '40',
+        'season': '2024',
+        'team': '746',
+        'from': starts_after.strftime('%Y-%m-%d'),
+        'to': starts_before.strftime('%Y-%m-%d'),
+    }
+    headers = {
+        'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+        'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
+    }
+    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+    response = requests.request("GET", url, headers=headers, params=querystring)
+    data = response.json()
+
+    games = []
+    for game in data['response']:
+        games.append(game)
+
+    return games
+
+
+def rapi_retrieve_from_cache():
+    global RAPI_GAMES, RAPI_TIMESTAMP, RAPI_NEXT_REFRESH, RAPI_GAMES_LAST_UPDATE
+
+    temp_dir = tempfile.gettempdir()
+    cache_file = os.path.join(temp_dir, 'rapi.pickle')
+    if os.path.exists(cache_file):
+        with open(cache_file, 'rb') as file:
+            RAPI_GAMES, RAPI_TIMESTAMP, RAPI_NEXT_REFRESH, RAPI_GAMES_LAST_UPDATE = pickle.load(file)
+
+    return
+
+
+def rapi_save_to_cache():
+    temp_dir = tempfile.gettempdir()
+    cache_file = os.path.join(temp_dir, 'rapi.pickle')
+    with open(cache_file, 'wb') as file:
+        pickle.dump((RAPI_GAMES, RAPI_TIMESTAMP, RAPI_NEXT_REFRESH, RAPI_GAMES_LAST_UPDATE), file)
+
+
+def rapi_update_games(games):
+    global RAPI_GAMES_LAST_UPDATE
 
     now = datetime.now()
-    # we need to update at midnight tomorrow at the latest
-    RAPI_NEXT_REFRESH = datetime.combine(
-        now.date() + timedelta(days=1),
-        datetime.min.time()
-    )
-
-    for game in games:
+    for game_ind, game in enumerate(games):
         has_ended = game['fixture']['status']['short'] == 'FT'
         has_started = has_ended or game['fixture']['status']['short'] != 'NS'
         in_progress = has_started and not has_ended
 
-        if has_ended:
-            continue
-
         # if we're in progress, update as soon as possible
         if in_progress:
-            RAPI_NEXT_REFRESH = min(RAPI_TIMESTAMP + timedelta(seconds=RAPI_REFRESH_RATE), now)
+            next_refresh = RAPI_GAMES_LAST_UPDATE[game['eventID']] + timedelta(seconds=RAPI_REFRESH_RATE)
+            if now > next_refresh:
+                games[game_ind] = rapi_update_game(game)
+                RAPI_GAMES_LAST_UPDATE[game['eventID']] = now
+
+
+def rapi_update_game(game):
+    querystring = {
+        'id': game['fixture']['id'],
+    }
+    headers = {
+        'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+        'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
+    }
+    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+    response = requests.request("GET", url, headers=headers, params=querystring)
+    data = response.json()
+
+    game = data['response'][0]
+    return game
 
 
 def sgo_get_game_icon(game):
@@ -1172,7 +1210,7 @@ def sgo_get_games():
     # now update games in progress
     sgo_update_games(SGO_GAMES)
 
-    # output to cache
+    # save to cache
     sgo_save_to_cache()
 
     return SGO_GAMES
@@ -1245,7 +1283,7 @@ def sgo_update_games(games):
     global SGO_GAMES_LAST_UPDATE
 
     now = datetime.now()
-    for game in games:
+    for game_ind, game in enumerate(games):
         has_started = game['status']['started']
         has_ended = game['status']['ended']
         in_progress = has_started and not has_ended
@@ -1254,12 +1292,11 @@ def sgo_update_games(games):
         if in_progress:
             next_refresh = SGO_GAMES_LAST_UPDATE[game['eventID']] + timedelta(seconds=SGO_REFRESH_RATE)
             if now > next_refresh:
-                game = sgo_update_game(game)
+                games[game_ind] = sgo_update_game(game)
                 SGO_GAMES_LAST_UPDATE[game['eventID']] = now
 
 
 def sgo_update_game(game):
-
     response = requests.get(
         f'https://api.sportsgameodds.com/v1/events?eventID={game["eventID"]}&'
         f'oddIDs=points-home-game-sp-home',
@@ -1292,7 +1329,7 @@ def main():
 
 
 if __name__ == '__main__':
-
+    # A query for SGO rate limiting (costs one object)
     # response = requests.get(
     #     f'https://api.sportsgameodds.com/v1/account/usage',
     #     headers={'X-Api-Key': os.environ['SGO_API_KEY']}
@@ -1325,7 +1362,7 @@ if __name__ == '__main__':
     # export SGO_API_KEY=<Key from https://sportsgameodds.com/>
     # export RAPI_API_KEY=<Key from https://rapidapi.com/>
     # source ${HOME}/venv/NYCSubwayDisplay/bin/activate
-    # sudo --preserve-env=PYTHONPATH,OWM_API_KEY /home/pi/venv/NYCSubwayDisplay/bin/python main.py --led-gpio-mapping=adafruit-hat-pwm --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=40 --led-slowdown-gpio=1  --led-no-drop-privs
+    # sudo --preserve-env=PYTHONPATH,OWM_API_KEY,SGO_API_KEY,RAPI_API_KEY /home/pi/venv/NYCSubwayDisplay/bin/python main.py --led-gpio-mapping=adafruit-hat-pwm --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=40 --led-slowdown-gpio=1  --led-no-drop-privs
 
     # systemd setup to auto-run follows this:
     # https://www.dexterindustries.com/howto/run-a-program-on-your-raspberry-pi-at-startup/
