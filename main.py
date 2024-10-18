@@ -2,7 +2,9 @@ from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
 import importlib
 import os
+import pickle
 import requests
+import tempfile
 import time
 import signal
 import warnings
@@ -1142,6 +1144,9 @@ def sgo_get_game_icon(game):
 def sgo_get_games():
     global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH
 
+    if SGO_TIMESTAMP is None:
+        sgo_retrieve_from_cache()
+
     now = datetime.now()
 
     # update un-initalised data so we update on first request
@@ -1166,22 +1171,14 @@ def sgo_get_games():
     # now update games in progress
     sgo_update_games(SGO_GAMES)
 
+    # output to cache
+    sgo_save_to_cache()
+
     return SGO_GAMES
 
 
 def sgo_get_games_league(league_id):
     global SGO_GAMES_LAST_UPDATE
-    if os.name == 'nt':
-        now = datetime.now()
-        import pickle
-        cache_file = rf'c:\temp\{league_id}.pickle'
-        if os.path.exists(cache_file):
-            with open(cache_file, 'rb') as file:
-                games = pickle.load(file)
-
-            for game in games:
-                SGO_GAMES_LAST_UPDATE[game['eventID']] = now
-            return games
 
     now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
@@ -1221,11 +1218,26 @@ def sgo_get_games_league(league_id):
             SGO_GAMES_LAST_UPDATE[game['eventID']] = now
             games.append(game)
 
-    if os.name == 'nt':
-        with open(cache_file, 'wb') as file:
-            pickle.dump(games, file)
-
     return games
+
+
+def sgo_retrieve_from_cache():
+    global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE
+
+    temp_dir = tempfile.gettempdir()
+    cache_file = os.path.join(temp_dir, 'sgo.pickle')
+    if os.path.exists(cache_file):
+        with open(cache_file, 'rb') as file:
+            SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE = pickle.load(file)
+
+    return
+
+
+def sgo_save_to_cache():
+    temp_dir = tempfile.gettempdir()
+    cache_file = os.path.join(temp_dir, 'sgo.pickle')
+    with open(cache_file, 'wb') as file:
+        pickle.dump((SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE), file)
 
 
 def sgo_update_games(games):
@@ -1243,6 +1255,7 @@ def sgo_update_games(games):
             if now > next_refresh:
                 game = sgo_update_game(game)
                 SGO_GAMES_LAST_UPDATE[game['eventID']] = now
+
 
 def sgo_update_game(game):
 
