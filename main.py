@@ -1093,7 +1093,7 @@ def rapi_get_games_league(league_id):
     now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
     starts_after = to_utc_tz(today - timedelta(days=1))
-    starts_before = to_utc_tz(today + timedelta(days=5))
+    starts_before = to_utc_tz(today + timedelta(days=3))
 
     # Championship league id = 40
     # sunderland team id = 746
@@ -1226,9 +1226,9 @@ def sgo_get_games_league(league_id):
 
     starts_after = to_utc_tz(today - timedelta(days=1))
     if league_id in ['MLB', 'NHL']:
-        starts_before = to_utc_tz(today + timedelta(days=1))
+        starts_before = to_utc_tz(today + timedelta(days=2))
     else:
-        starts_before = to_utc_tz(today + timedelta(days=1))
+        starts_before = to_utc_tz(today + timedelta(days=2))
 
     response = requests.get(
         f'https://api.sportsgameodds.com/v1/events?leagueID={league_id}&'
