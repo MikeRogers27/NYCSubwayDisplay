@@ -1078,7 +1078,7 @@ def rapi_get_games():
         today = datetime.fromordinal(dt_date.today().toordinal())
         RAPI_NEXT_REFRESH = today + timedelta(days=1)
 
-    # compute new update time
+    # update in progress games
     rapi_update_games(RAPI_GAMES)
 
     # save to cache
