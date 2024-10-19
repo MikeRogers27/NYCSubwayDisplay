@@ -1,8 +1,10 @@
-from datetime import datetime, time as dt_time, timedelta
+from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
 import importlib
 import os
+import pickle
 import requests
+import tempfile
 import time
 import signal
 import warnings
@@ -33,12 +35,75 @@ OWM_REFRESH_RATE = 3600 * 0.5
 OWN_TIMESTAMP = None
 OWM_WEATHER = None
 
+RAPI_GAMES = None
+RAPI_GAMES_LAST_UPDATE = {}
+RAPI_TIMESTAMP = None
+RAPI_NEXT_REFRESH = None
+RAPI_REFRESH_RATE = 360
+
+RAPI_TEAMS = [746, ]
+RAPI_TEAM_COLOURS = {
+    38: (237, 33, 39),  # Watford
+    43: (0, 112, 181),  # Cardiff City
+    44: (128, 0, 0),  # Burnley
+    56: (226, 26, 35),  # Bristol City
+    58: (0, 25, 74),  # Millwall
+    59: (0, 33, 86),  # Preston North End
+    60: (6, 0, 103),  # West Bromwich Albion
+    62: (236, 34, 39),  # Sheffield United
+    63: (255, 255, 255),  # Leeds
+    64: (241, 138, 1),  # Hull City
+    67: (0, 158, 224),  # Blackburn Rovers
+    69: (255, 255, 255),  # Derby
+    70: (222, 27, 34),  # Middlesbrough
+    71: (255, 242, 0),  # Norwich
+    74: (14, 0, 247),  # Sheffield Wednesday
+    75: (224, 58, 62),  # Stoke City
+    76: (255, 255, 255),  # Swansea City
+    746: (255, 0, 0),  # Sunderland
+    1338: (255, 221, 0),  # Oxford United
+    1346: (5, 157, 217),  # Coventry City
+    1355: (0, 20, 137),  # Portsmouth
+    1357: (20, 135, 62),  # Plymouth Argyle
+    1359: (255, 255, 255),  # Luton Town
+    18212: (29, 91, 164),  # Queens Park Rangers
+}
+RAPI_TEAM_CODES = {
+    38: 'WAT',  # Watford
+    43: 'CAR',  # Cardiff City
+    44: 'BUR',  # Burnley
+    56: 'BRC',  # Bristol City
+    58: 'MIL',  # Millwall
+    59: 'PNE',  # Preston North End
+    60: 'WBA',  # West Bromwich Albion
+    62: 'SHU',  # Sheffield United
+    63: 'LEE',  # Leeds
+    64: 'HUL',  # Hull City
+    67: 'BBR',  # Blackburn Rovers
+    69: 'DER',  # Derby
+    70: 'MID',  # Middlesbrough
+    71: 'NOR',  # Norwich
+    74: 'SHW',  # Sheffield Wednesday
+    75: 'STO',  # Stoke City
+    76: 'SWA',  # Swansea City
+    746: 'SUN',  # Sunderland
+    1338: 'OXF',  # Oxford United
+    1346: 'COV',  # Coventry City
+    1355: 'POR',  # Portsmouth
+    1357: 'PLY',  # Plymouth Argyle
+    1359: 'LUT',  # Luton Town
+    18212: 'QPR',  # Queens Park Rangers
+}
+
 SGO_GAMES = None
 SGO_TIMESTAMP = None
-SGO_REFRESH_RATE = 600
+SGO_GAMES_LAST_UPDATE = {}
+SGO_NEXT_REFRESH = None
+SGO_REFRESH_RATE = 1800  # 30 mins
 SGO_MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
 SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
+SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
 
 class GracefulKiller:
@@ -72,6 +137,14 @@ class RunMatrix(SampleBase):
         self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
     def draw_game(self, canvas, game):
+        if 'fixture' in game:
+            canvas = self.draw_game_rapi(canvas, game)
+        else:
+            canvas = self.draw_game_sgo(canvas, game)
+
+        return canvas
+
+    def draw_game_sgo(self, canvas, game):
         league_id = game['leagueID']
         if league_id == 'MLB':
             league_teams = SGO_MLB_TEAMS
@@ -79,6 +152,8 @@ class RunMatrix(SampleBase):
             league_teams = SGO_NHL_TEAMS
         elif league_id == 'NFL':
             league_teams = SGO_NFL_TEAMS
+        elif league_id == 'MLS':
+            league_teams = SGO_MLS_TEAMS
         else:
             return canvas
 
@@ -95,6 +170,7 @@ class RunMatrix(SampleBase):
         has_started = game['status']['started']
         has_ended = game['status']['ended']
         in_progress = has_started and not has_ended
+        score_str = start_time.strftime('%H:%M')
         if game['teams']['away']['teamID'] in league_teams:
             title_symbol = '@'
             title_str = game['teams']['home']['names']['short']
@@ -108,6 +184,10 @@ class RunMatrix(SampleBase):
             else:
                 score_prefix = ''
             team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
+
+            if has_started or has_ended:
+                score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
+
         else:
             title_symbol = 'v'
             title_str = game['teams']['away']['names']['short']
@@ -122,21 +202,113 @@ class RunMatrix(SampleBase):
                 score_prefix = ''
             team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
 
-        if has_started or has_ended:
-            score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
-        else:
-            score_str = start_time.strftime('%H:%M')
+            if has_started or has_ended:
+                score_str = f"{score_prefix}{game['teams']['home']['score']}-{game['teams']['away']['score']}"
 
-        if in_progress:
-            date_str = game['status']['displayShort']
-        else:
-            if os.name == 'nt':
-                date_str = start_time.strftime('%#m/%#d')
+        today = dt_date.today()
+        if in_progress or has_ended:
+            if start_time.date() == today:
+                date_str = game['status']['displayShort']
+                if date_str == 'F':
+                    date_str = 'Final'
             else:
-                date_str = start_time.strftime('%-m/%-d')
+                date_str = start_time.strftime('%a')
+        else:
+            if start_time.date() == today:
+                date_str = 'Today'
+            else:
+                date_str = start_time.strftime('%a')
 
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
         graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
+        graphics.DrawText(canvas, self.sports_font, 34, text_y_middle, self.text_colour, score_str)
+        graphics.DrawText(canvas, self.sports_font, 34, text_y_bottom, self.text_colour, date_str)
+
+        return canvas
+
+    def draw_game_rapi(self, canvas, game):
+
+        text_y_top = 10
+        text_y_middle = 20
+        text_y_bottom = 30
+
+        icon_file = rapi_get_game_icon(game)
+        im = Image.open(icon_file)
+        im = im.convert('RGB')
+        canvas.SetImage(im)
+
+        start_time = datetime.fromtimestamp(game['fixture']['timestamp'])
+
+        has_ended = game['fixture']['status']['short'] == 'FT'
+        has_started = has_ended or game['fixture']['status']['short'] != 'NS'
+        in_progress = has_started and not has_ended
+        score_str = start_time.strftime('%H:%M')
+        if game['teams']['away']['id'] in RAPI_TEAMS:
+            title_symbol = 'A'
+            if game['teams']['home']['id'] in RAPI_TEAM_CODES:
+                title_str = RAPI_TEAM_CODES[game['teams']['home']['id']]
+            else:
+                title_str = game['teams']['home']['name'][:3].upper()
+            if has_ended:
+                if game['goals']['away'] > game['goals']['home']:
+                    score_prefix = 'W'
+                elif game['goals']['away'] == game['goals']['home']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+            if game['teams']['home']['id'] in RAPI_TEAM_COLOURS:
+                team_colour = graphics.Color(*RAPI_TEAM_COLOURS[game['teams']['home']['id']])
+            else:
+                team_colour = self.text_colour
+
+            if has_started or has_ended:
+                score_str = f"{score_prefix}{game['goals']['away']}-{game['goals']['home']}"
+        else:
+            title_symbol = 'H'
+            if game['teams']['away']['id'] in RAPI_TEAM_CODES:
+                title_str = RAPI_TEAM_CODES[game['teams']['away']['id']]
+            else:
+                title_str = game['teams']['away']['name'][:3].upper()
+            if has_ended:
+                if game['goals']['home'] > game['goals']['away']:
+                    score_prefix = 'W'
+                elif game['goals']['home'] == game['goals']['away']:
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+            if game['teams']['away']['id'] in RAPI_TEAM_COLOURS:
+                team_colour = graphics.Color(*RAPI_TEAM_COLOURS[game['teams']['away']['id']])
+            else:
+                team_colour = self.text_colour
+
+            if has_started or has_ended:
+                score_str = f"{score_prefix}{game['goals']['home']}-{game['goals']['away']}"
+
+        today = dt_date.today()
+        if in_progress:
+            date_str = score_str
+        elif has_ended:
+            if start_time.date() == today:
+                if game['score']['extratime']['home'] is not None:
+                    date_str = 'AET'
+                elif game['score']['penalty']['home'] is not None:
+                    date_str = 'PEN'
+                else:
+                    date_str = 'FT'
+            else:
+                date_str = start_time.strftime('%a')
+        else:
+            if start_time.date() == today:
+                date_str = 'Today'
+            else:
+                date_str = start_time.strftime('%a')
+
+        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, team_colour, title_str)
+        graphics.DrawText(canvas, self.circle_font, 56, text_y_top, self.text_colour, title_symbol)
         graphics.DrawText(canvas, self.sports_font, 34, text_y_middle, self.text_colour, score_str)
         graphics.DrawText(canvas, self.sports_font, 34, text_y_bottom, self.text_colour, date_str)
 
@@ -408,9 +580,8 @@ class RunMatrix(SampleBase):
             else:
                 icon_file = 'icons/32/thermometer_veryhot.png'
 
-
             im = Image.open(icon_file)
-            canvas.SetImage(im, offset_x=clock_pos+35, offset_y=2)
+            canvas.SetImage(im, offset_x=clock_pos + 35, offset_y=2)
 
             if w is not None:
                 graphics.DrawText(canvas, self.circle_font, clock_pos + 44, text_y_top - 1, self.text_colour,
@@ -449,9 +620,13 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_sports(self, canvas, display_time=10):
-        games = sgo_get_games()
+        games = []
+        games.extend(sgo_get_games())
+        games.extend(rapi_get_games())
         if not len(games):
             return canvas
+        games = self._sort_games(games)
+
         game_time = max(5, round(display_time / len(games)))
         for game in games:
             canvas.Clear()
@@ -497,6 +672,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
+        # return ['sports'], 10
 
         now = datetime.now()
         timestamp = now.time()
@@ -582,6 +758,20 @@ class RunMatrix(SampleBase):
         # graphics.DrawLine(canvas, x - 3, y + 4, x + 3, y + 4, color)
         # graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
 
+    @staticmethod
+    def _sort_games(games):
+
+        def start_time(game):
+            if 'fixture' in game:
+                start_t = to_local_tz(datetime.fromtimestamp(game['fixture']['timestamp']))
+            else:
+                start_t = to_local_tz(parse(game['status']['startsAt']))
+            return start_t
+
+        games = sorted(games, key=start_time)
+
+        return games
+
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -656,6 +846,8 @@ def mta_get_stop_name_and_direction(stop_id):
         stop_name = '4 Av'
     elif stop_id.startswith('R33'):
         stop_name = '9 St'
+    else:
+        stop_name = '?'
 
     if stop_id.endswith('N'):
         direction = '↑'
@@ -806,13 +998,13 @@ def owm_weather_to_icon(weather):
     elif weather.weather_code in [511, 611]:
         icon_file = 'icons/32/rain_hail.png'
 
-    elif weather.weather_code in [520,]:
+    elif weather.weather_code in [520, ]:
         if is_day:
             icon_file = 'icons/32/rain0_sun.png'
         else:
             icon_file = 'icons/32/rain0_moon.png'
 
-    elif weather.weather_code in [521,]:
+    elif weather.weather_code in [521, ]:
         if is_day:
             icon_file = 'icons/32/rain1_sun.png'
         else:
@@ -865,8 +1057,133 @@ def owm_weather_to_icon(weather):
     return icon_file
 
 
+def rapi_get_game_icon(game):
+    icon_file = 'icons/32/SUNDERLAND.png'
+    return icon_file
+
+
+def rapi_get_games():
+    global RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP
+
+    if RAPI_TIMESTAMP is None:
+        rapi_retrieve_from_cache()
+
+    # update all feeds when requested but not faster than the refresh rate
+    now = datetime.now()
+    # update un-initialised data so we update on first request
+    if RAPI_NEXT_REFRESH is None:
+        RAPI_NEXT_REFRESH = now - timedelta(days=1)
+
+    if now > RAPI_NEXT_REFRESH:
+        RAPI_TIMESTAMP = datetime.now()
+
+        RAPI_GAMES = []
+        RAPI_GAMES.extend(rapi_get_games_league(40))
+
+        # update the leagues again tomorrow
+        today = datetime.fromordinal(dt_date.today().toordinal())
+        RAPI_NEXT_REFRESH = today + timedelta(days=1)
+
+    # update in progress games
+    rapi_update_games(RAPI_GAMES)
+
+    # save to cache
+    rapi_save_to_cache()
+
+    return RAPI_GAMES
+
+
+def rapi_get_games_league(league_id):
+    global RAPI_GAMES_LAST_UPDATE
+
+    now = datetime.now()
+    today = datetime.fromordinal(dt_date.today().toordinal())
+    starts_after = to_utc_tz(today - timedelta(days=1))
+    starts_before = to_utc_tz(today + timedelta(days=3))
+
+    # Championship league id = 40
+    # sunderland team id = 746
+    querystring = {
+        # 'league': '40',
+        'season': '2024',
+        'team': '746',
+        'from': starts_after.strftime('%Y-%m-%d'),
+        'to': starts_before.strftime('%Y-%m-%d'),
+    }
+    headers = {
+        'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+        'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
+    }
+    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+    response = requests.request("GET", url, headers=headers, params=querystring)
+    data = response.json()
+
+    games = []
+    for game in data['response']:
+        games.append(game)
+        RAPI_GAMES_LAST_UPDATE[game['fixture']['id']] = now
+
+    return games
+
+
+def rapi_retrieve_from_cache():
+    global RAPI_GAMES, RAPI_TIMESTAMP, RAPI_NEXT_REFRESH, RAPI_GAMES_LAST_UPDATE
+
+    temp_dir = tempfile.gettempdir()
+    cache_file = os.path.join(temp_dir, 'rapi.pickle')
+    if os.path.exists(cache_file):
+        with open(cache_file, 'rb') as file:
+            RAPI_GAMES, RAPI_TIMESTAMP, RAPI_NEXT_REFRESH, RAPI_GAMES_LAST_UPDATE = pickle.load(file)
+
+    return
+
+
+def rapi_save_to_cache():
+    temp_dir = tempfile.gettempdir()
+    cache_file = os.path.join(temp_dir, 'rapi.pickle')
+    with open(cache_file, 'wb') as file:
+        pickle.dump((RAPI_GAMES, RAPI_TIMESTAMP, RAPI_NEXT_REFRESH, RAPI_GAMES_LAST_UPDATE), file)
+
+
+def rapi_update_games(games):
+    global RAPI_GAMES_LAST_UPDATE
+
+    now = datetime.now()
+    for game_ind, game in enumerate(games):
+        has_ended = game['fixture']['status']['short'] == 'FT'
+        has_started = has_ended or game['fixture']['status']['short'] != 'NS'
+        start_time = to_local_tz(parse(game['fixture']['date']))
+        if not has_started and LOCAL_TZ.localize(now) > start_time:
+            has_started = True
+        in_progress = has_started and not has_ended
+
+        # if we're in progress, update as soon as possible
+        if in_progress:
+            next_refresh = RAPI_GAMES_LAST_UPDATE[game['eventID']] + timedelta(seconds=RAPI_REFRESH_RATE)
+            if now > next_refresh:
+                games[game_ind] = rapi_update_game(game)
+                RAPI_GAMES_LAST_UPDATE[game['eventID']] = now
+
+
+def rapi_update_game(game):
+    querystring = {
+        'id': game['fixture']['id'],
+    }
+    headers = {
+        'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+        'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
+    }
+    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+    response = requests.request("GET", url, headers=headers, params=querystring)
+    data = response.json()
+
+    game = data['response'][0]
+    return game
+
+
 def sgo_get_game_icon(game):
-    if game['teams']['away']['teamID'] in SGO_MLB_TEAMS + SGO_NHL_TEAMS + SGO_NFL_TEAMS:
+    if game['teams']['away']['teamID'] in \
+            SGO_MLB_TEAMS + SGO_NHL_TEAMS + SGO_NFL_TEAMS + SGO_MLS_TEAMS:
         icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
     else:
         icon_file = 'icons/32/' + game['teams']['home']['teamID'] + '.png'
@@ -875,35 +1192,52 @@ def sgo_get_game_icon(game):
 
 
 def sgo_get_games():
-    global SGO_GAMES, SGO_TIMESTAMP
+    global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH
 
-    # update all feeds at the interval specified
-    if SGO_TIMESTAMP is None or \
-            (datetime.now() - SGO_TIMESTAMP).total_seconds() > SGO_REFRESH_RATE:
+    if SGO_TIMESTAMP is None:
+        sgo_retrieve_from_cache()
+
+    now = datetime.now()
+
+    # update un-initalised data so we update on first request
+    if SGO_NEXT_REFRESH is None:
+        SGO_NEXT_REFRESH = now - timedelta(days=1)
+
+    # update all feeds when requested but not faster than the refresh rate
+    # update
+    if now > SGO_NEXT_REFRESH:
         SGO_TIMESTAMP = datetime.now()
 
         SGO_GAMES = []
         SGO_GAMES.extend(sgo_get_games_league('MLB'))
         SGO_GAMES.extend(sgo_get_games_league('NHL'))
         SGO_GAMES.extend(sgo_get_games_league('NFL'))
+        SGO_GAMES.extend(sgo_get_games_league('MLS'))
+
+        # update the leagues again tomorrow
+        today = datetime.fromordinal(dt_date.today().toordinal())
+        SGO_NEXT_REFRESH = today + timedelta(days=1)
+
+    # now update games in progress
+    sgo_update_games(SGO_GAMES)
+
+    # save to cache
+    sgo_save_to_cache()
 
     return SGO_GAMES
 
 
 def sgo_get_games_league(league_id):
-    # if os.name == 'nt':
-    #     import pickle
-    #     cache_file = rf'c:\temp\{league_id}.pickle'
-    #     if os.path.exists(cache_file):
-    #         with open(cache_file, 'rb') as file:
-    #             games = pickle.load(file)
-    #         return games
+    global SGO_GAMES_LAST_UPDATE
 
-    starts_after = to_utc_tz(datetime.now() - timedelta(days=1))
+    now = datetime.now()
+    today = datetime.fromordinal(dt_date.today().toordinal())
+
+    starts_after = to_utc_tz(today - timedelta(days=1))
     if league_id in ['MLB', 'NHL']:
-        starts_before = to_utc_tz(datetime.now() + timedelta(days=1))
+        starts_before = to_utc_tz(today + timedelta(days=2))
     else:
-        starts_before = to_utc_tz(datetime.now() + timedelta(days=2))
+        starts_before = to_utc_tz(today + timedelta(days=2))
 
     response = requests.get(
         f'https://api.sportsgameodds.com/v1/events?leagueID={league_id}&'
@@ -922,6 +1256,8 @@ def sgo_get_games_league(league_id):
         league_teams = SGO_NHL_TEAMS
     elif league_id == 'NFL':
         league_teams = SGO_NFL_TEAMS
+    elif league_id == 'MLS':
+        league_teams = SGO_MLS_TEAMS
     else:
         league_teams = []
 
@@ -929,13 +1265,60 @@ def sgo_get_games_league(league_id):
     for game in data['data']:
         if game['teams']['away']['teamID'] in league_teams or \
                 game['teams']['home']['teamID'] in league_teams:
+            SGO_GAMES_LAST_UPDATE[game['eventID']] = now
             games.append(game)
 
-    # if os.name == 'nt':
-    #     with open(cache_file, 'wb') as file:
-    #         pickle.dump(games, file)
-
     return games
+
+
+def sgo_retrieve_from_cache():
+    global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE
+
+    temp_dir = tempfile.gettempdir()
+    cache_file = os.path.join(temp_dir, 'sgo.pickle')
+    if os.path.exists(cache_file):
+        with open(cache_file, 'rb') as file:
+            SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE = pickle.load(file)
+
+    return
+
+
+def sgo_save_to_cache():
+    temp_dir = tempfile.gettempdir()
+    cache_file = os.path.join(temp_dir, 'sgo.pickle')
+    with open(cache_file, 'wb') as file:
+        pickle.dump((SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE), file)
+
+
+def sgo_update_games(games):
+    global SGO_GAMES_LAST_UPDATE
+
+    now = datetime.now()
+    for game_ind, game in enumerate(games):
+        has_started = game['status']['started']
+        start_time = to_local_tz(parse(game['status']['startsAt']))
+        if not has_started and LOCAL_TZ.localize(now) > start_time:
+            has_started = True
+        has_ended = game['status']['ended']
+        in_progress = has_started and not has_ended
+
+        # if we're in progress, update as soon as possible
+        if in_progress:
+            next_refresh = SGO_GAMES_LAST_UPDATE[game['eventID']] + timedelta(seconds=SGO_REFRESH_RATE)
+            if now > next_refresh:
+                games[game_ind] = sgo_update_game(game)
+                SGO_GAMES_LAST_UPDATE[game['eventID']] = now
+
+
+def sgo_update_game(game):
+    response = requests.get(
+        f'https://api.sportsgameodds.com/v1/events?eventID={game["eventID"]}&'
+        f'oddIDs=points-home-game-sp-home',
+        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+    )
+    data = response.json()
+    game = data['data'][0]
+    return game
 
 
 def to_utc_tz(date_time):
@@ -960,6 +1343,13 @@ def main():
 
 
 if __name__ == '__main__':
+    # A query for SGO rate limiting (costs one object)
+    # response = requests.get(
+    #     f'https://api.sportsgameodds.com/v1/account/usage',
+    #     headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+    # )
+    # data = response.json()
+
     main()
 
     # script is here:
@@ -983,8 +1373,10 @@ if __name__ == '__main__':
     # # run
     # export PYTHONPATH=${PYTHONPATH}:${HOME}/src/rpi-rgb-led-matrix/bindings/python
     # export OWM_API_KEY=<Key from https://home.openweathermap.org/api_keys>
+    # export SGO_API_KEY=<Key from https://sportsgameodds.com/>
+    # export RAPI_API_KEY=<Key from https://rapidapi.com/>
     # source ${HOME}/venv/NYCSubwayDisplay/bin/activate
-    # sudo --preserve-env=PYTHONPATH,OWM_API_KEY /home/pi/venv/NYCSubwayDisplay/bin/python main.py --led-gpio-mapping=adafruit-hat-pwm --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=40 --led-slowdown-gpio=1  --led-no-drop-privs
+    # sudo --preserve-env=PYTHONPATH,OWM_API_KEY,SGO_API_KEY,RAPI_API_KEY /home/pi/venv/NYCSubwayDisplay/bin/python main.py --led-gpio-mapping=adafruit-hat-pwm --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=40 --led-slowdown-gpio=1  --led-no-drop-privs
 
     # systemd setup to auto-run follows this:
     # https://www.dexterindustries.com/howto/run-a-program-on-your-raspberry-pi-at-startup/
