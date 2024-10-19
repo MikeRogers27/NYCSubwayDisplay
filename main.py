@@ -205,12 +205,15 @@ class RunMatrix(SampleBase):
             if has_started or has_ended:
                 score_str = f"{score_prefix}{game['teams']['home']['score']}-{game['teams']['away']['score']}"
 
+        today = dt_date.today()
         if in_progress or has_ended:
-            date_str = game['status']['displayShort']
-            if date_str == 'F':
-                date_str = 'Final'
+            if start_time.date() == today:
+                date_str = game['status']['displayShort']
+                if date_str == 'F':
+                    date_str = 'Final'
+            else:
+                date_str = start_time.strftime('%a')
         else:
-            today = dt_date.today()
             if start_time.date() == today:
                 date_str = 'Today'
             else:
@@ -234,7 +237,7 @@ class RunMatrix(SampleBase):
         im = im.convert('RGB')
         canvas.SetImage(im)
 
-        start_time = to_local_tz(datetime.fromtimestamp(game['fixture']['timestamp']))
+        start_time = datetime.fromtimestamp(game['fixture']['timestamp'])
 
         has_ended = game['fixture']['status']['short'] == 'FT'
         has_started = has_ended or game['fixture']['status']['short'] != 'NS'
@@ -285,17 +288,20 @@ class RunMatrix(SampleBase):
             if has_started or has_ended:
                 score_str = f"{score_prefix}{game['goals']['home']}-{game['goals']['away']}"
 
+        today = dt_date.today()
         if in_progress:
             date_str = score_str
         elif has_ended:
-            if game['score']['extratime']['home'] is not None:
-                date_str = 'AET'
-            elif game['score']['penalty']['home'] is not None:
-                date_str = 'PEN'
+            if start_time.date() == today:
+                if game['score']['extratime']['home'] is not None:
+                    date_str = 'AET'
+                elif game['score']['penalty']['home'] is not None:
+                    date_str = 'PEN'
+                else:
+                    date_str = 'FT'
             else:
-                date_str = 'FT'
+                date_str = start_time.strftime('%a')
         else:
-            today = dt_date.today()
             if start_time.date() == today:
                 date_str = 'Today'
             else:
@@ -303,8 +309,8 @@ class RunMatrix(SampleBase):
 
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, team_colour, title_str)
         graphics.DrawText(canvas, self.circle_font, 56, text_y_top, self.text_colour, title_symbol)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_middle, self.text_colour, score_str)
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_bottom, self.text_colour, date_str)
+        graphics.DrawText(canvas, self.sports_font, 34, text_y_middle, self.text_colour, score_str)
+        graphics.DrawText(canvas, self.sports_font, 34, text_y_bottom, self.text_colour, date_str)
 
         return canvas
 
@@ -1146,6 +1152,9 @@ def rapi_update_games(games):
     for game_ind, game in enumerate(games):
         has_ended = game['fixture']['status']['short'] == 'FT'
         has_started = has_ended or game['fixture']['status']['short'] != 'NS'
+        start_time = to_local_tz(parse(game['fixture']['date']))
+        if not has_started and LOCAL_TZ.localize(now) > start_time:
+            has_started = True
         in_progress = has_started and not has_ended
 
         # if we're in progress, update as soon as possible
@@ -1287,6 +1296,9 @@ def sgo_update_games(games):
     now = datetime.now()
     for game_ind, game in enumerate(games):
         has_started = game['status']['started']
+        start_time = to_local_tz(parse(game['status']['startsAt']))
+        if not has_started and LOCAL_TZ.localize(now) > start_time:
+            has_started = True
         has_ended = game['status']['ended']
         in_progress = has_started and not has_ended
 
