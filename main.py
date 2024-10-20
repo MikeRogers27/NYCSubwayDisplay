@@ -71,8 +71,29 @@ class Game(ABC):
     def away_team_score(self):
         pass
 
+    def away_team_score_str(self):
+        if self.has_started() or self.has_ended():
+            if self.has_ended():
+                if self.away_team_score() > self.home_team_score():
+                    score_prefix = 'W'
+                elif self.away_team_score() == self.home_team_score():
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+
+            score_str = f"{score_prefix}{self.away_team_score()}-{self.home_team_score()}"
+        else:
+            score_str = self.start_time().strftime('%H:%M')
+        return score_str
+
     @abstractmethod
     def away_team_short_name(self):
+        pass
+
+    @abstractmethod
+    def away_team_title_symbol(self):
         pass
 
     @abstractmethod
@@ -95,12 +116,33 @@ class Game(ABC):
     def home_team_id(self):
         pass
 
+    def home_team_score_str(self):
+        if self.has_started() or self.has_ended():
+            if self.has_ended():
+                if self.home_team_score() > self.away_team_score():
+                    score_prefix = 'W'
+                elif self.home_team_score() == self.away_team_score():
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+
+            score_str = f"{score_prefix}{self.home_team_score()}-{self.away_team_score()}"
+        else:
+            score_str = self.start_time().strftime('%H:%M')
+        return score_str
+
     @abstractmethod
     def home_team_score(self):
         pass
 
     @abstractmethod
     def home_team_short_name(self):
+        pass
+
+    @abstractmethod
+    def home_team_title_symbol(self):
         pass
 
     @abstractmethod
@@ -113,6 +155,10 @@ class Game(ABC):
 
     @abstractmethod
     def league_id(self):
+        pass
+
+    @abstractmethod
+    def league_name(self):
         pass
 
     @abstractmethod
@@ -197,6 +243,9 @@ class GameRAPI(Game):
             short_name = self.game['teams']['away']['name'][:3].upper()
         return short_name
 
+    def away_team_title_symbol(self):
+        return 'A'
+
     def date_str(self):
         today = dt_date.today()
         start_time = self.start_time()
@@ -248,6 +297,9 @@ class GameRAPI(Game):
             short_name = self.game['teams']['home']['name'][:3].upper()
         return short_name
 
+    def home_team_title_symbol(self):
+        return 'H'
+
     def icon(self):
         icon_file = 'icons/32/SUNDERLAND.png'
         return icon_file
@@ -262,7 +314,7 @@ class GameRAPI(Game):
         return 'Championship'
 
     def start_time(self):
-        return datetime.fromtimestamp(self.game['fixture']['timestamp'])
+        return datetime.fromtimestamp(self.game['fixture']['timestamp'], tz=LOCAL_TZ)
 
 
 class GameSGO(Game):
@@ -281,6 +333,9 @@ class GameSGO(Game):
 
     def away_team_short_name(self):
         return self.game['teams']['away']['names']['short']
+
+    def away_team_title_symbol(self):
+        return '@'
 
     def date_str(self):
         today = dt_date.today()
@@ -318,6 +373,9 @@ class GameSGO(Game):
 
     def home_team_short_name(self):
         return self.game['teams']['home']['names']['short']
+
+    def home_team_title_symbol(self):
+        return 'v'
 
     def icon(self):
         if self.away_team_id() in \
@@ -372,15 +430,7 @@ class RunMatrix(SampleBase):
         self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
     def draw_game(self, canvas, game: Game):
-        # if 'fixture' in game:
-        #     canvas = self.draw_game_rapi(canvas, game)
-        # else:
-        canvas = self.draw_game_sgo(canvas, game)
-
-        return canvas
-
-    def draw_game_sgo(self, canvas, game: Game):
-        league_id = game.league_id()
+        league_id = game.league_name()
         if league_id == 'MLB':
             league_teams = SGO_MLB_TEAMS
         elif league_id == 'NHL':
@@ -389,66 +439,10 @@ class RunMatrix(SampleBase):
             league_teams = SGO_NFL_TEAMS
         elif league_id == 'MLS':
             league_teams = SGO_MLS_TEAMS
+        elif league_id == 'Championship':
+            league_teams = RAPI_TEAMS
         else:
             return canvas
-
-        text_y_top = 10
-        text_y_middle = 20
-        text_y_bottom = 30
-
-        icon_file = sgo_get_game_icon(game)
-        im = Image.open(icon_file)
-        canvas.SetImage(im)
-
-        start_time = game.start_time()
-
-        has_started = game.has_started()
-        has_ended = game.has_ended()
-        score_str = start_time.strftime('%H:%M')
-        if game.away_team_id() in league_teams:
-            title_symbol = '@'
-            title_str = game.home_team_short_name()
-            if has_ended:
-                if game.away_team_score() > game.home_team_score():
-                    score_prefix = 'W'
-                elif game.away_team_score() == game.home_team_score():
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
-            team_colour = game.home_team_colour()
-
-            if has_started or has_ended:
-                score_str = f"{score_prefix}{game.away_team_score()}-{game.home_team_score()}"
-
-        else:
-            title_symbol = 'v'
-            title_str = game.away_team_short_name()
-            if has_ended:
-                if game.home_team_score() > game.away_team_score():
-                    score_prefix = 'W'
-                elif game.home_team_score() == game.away_team_score():
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
-            team_colour = game.away_team_colour()
-
-            if has_started or has_ended:
-                score_str = f"{score_prefix}{game.home_team_score()}-{game.away_team_score()}"
-
-        date_str = game.date_str()
-
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
-        graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
-        graphics.DrawText(canvas, self.sports_font, 34, text_y_middle, self.text_colour, score_str)
-        graphics.DrawText(canvas, self.sports_font, 34, text_y_bottom, self.text_colour, date_str)
-
-        return canvas
-
-    def draw_game_rapi(self, canvas, game):
 
         text_y_top = 10
         text_y_middle = 20
@@ -459,48 +453,25 @@ class RunMatrix(SampleBase):
         im = im.convert('RGB')
         canvas.SetImage(im)
 
-        start_time = game.start_time()
-
-        has_ended = game.has_ended()
-        has_started = game.has_started()
-        score_str = start_time.strftime('%H:%M')
-        if game.away_team_id() in RAPI_TEAMS:
-            title_symbol = 'A'
+        if game.away_team_id() in league_teams:
+            title_symbol = game.away_team_title_symbol()
             title_str = game.home_team_short_name()
-            if has_ended:
-                if game.away_team_score() > game.home_team_score():
-                    score_prefix = 'W'
-                elif game.away_team_score() == game.home_team_score():
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
+            score_str = game.away_team_score_str()
             team_colour = game.home_team_colour()
-
-            if has_started or has_ended:
-                score_str = f"{score_prefix}{game.away_team_score()}-{game.home_team_score()}"
         else:
-            title_symbol = 'H'
+            title_symbol = game.home_team_title_symbol()
             title_str = game.away_team_short_name()
-            if has_ended:
-                if game.home_team_score() > game.away_team_score():
-                    score_prefix = 'W'
-                elif game.home_team_score() == game.away_team_score():
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
+            score_str = game.home_team_score_str()
             team_colour = game.away_team_colour()
-
-            if has_started or has_ended:
-                score_str = f"{score_prefix}{game.home_team_score()}-{game.away_team_score()}"
 
         date_str = game.date_str()
 
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, team_colour, title_str)
-        graphics.DrawText(canvas, self.circle_font, 56, text_y_top, self.text_colour, title_symbol)
+        if isinstance(game, GameRAPI):
+            graphics.DrawText(canvas, self.circle_font, 34, text_y_top, team_colour, title_str)
+            graphics.DrawText(canvas, self.circle_font, 56, text_y_top, self.text_colour, title_symbol)
+        else:
+            graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
+            graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
         graphics.DrawText(canvas, self.sports_font, 34, text_y_middle, self.text_colour, score_str)
         graphics.DrawText(canvas, self.sports_font, 34, text_y_bottom, self.text_colour, date_str)
 
@@ -825,7 +796,7 @@ class RunMatrix(SampleBase):
     def display_sports(self, canvas, display_time=10):
         games = []
         games.extend(sgo_get_games())
-        # games.extend(rapi_get_games())
+        games.extend(rapi_get_games())
         if not len(games):
             return canvas
         games = self._sort_games(games)
