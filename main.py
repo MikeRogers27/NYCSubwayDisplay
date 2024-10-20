@@ -1,8 +1,10 @@
+from collections import namedtuple
 from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
 import importlib
 import os
 import pickle
+import random
 import requests
 import tempfile
 import time
@@ -22,7 +24,7 @@ else:
 from samplebase import SampleBase
 
 LOCAL_TZ = pytz.timezone("America/New_York")
-NOW = None
+NOW = datetime.now()
 
 MTA_FEEDS = None
 MTA_TIMESTAMP = None
@@ -94,6 +96,17 @@ RAPI_TEAM_CODES = {
     1359: 'LUT',  # Luton Town
     18212: 'QPR',  # Queens Park Rangers
 }
+
+Seasonal = namedtuple('Seasonal', ('name', 'start_date', 'end_date', 'images', 'image_behaviour'))
+SEASONAL_DATA = [
+    Seasonal(
+        name='halloween',
+        start_date=datetime(year=NOW.year, month=10, day=20),
+        end_date=datetime(year=NOW.year, month=11, day=1),
+        images=['images/halloween.png', 'images/halloween_anim.gif'],
+        image_behaviour=['scroll_up', 'scroll_up_animation']
+    ),
+]
 
 SGO_GAMES = None
 SGO_TIMESTAMP = None
@@ -474,8 +487,72 @@ class RunMatrix(SampleBase):
             canvas = self.matrix.SwapOnVSync(canvas)
             time.sleep(display_time)
 
-
         return True, canvas
+
+    def draw_seasonal(self, seasonal, canvas, display_time):
+
+        # first pick an image
+        im_ind = random.randrange(len(seasonal.images))
+        image_file = seasonal.images[im_ind]
+        image_behaviour = seasonal.image_behaviour[im_ind]
+
+        if image_behaviour == 'scroll_up':
+            canvas = self.draw_seasonal_scroll_up(canvas, image_file, display_time)
+        elif image_behaviour == 'scroll_up_animation':
+            canvas = self.draw_seasonal_scroll_up_animation(canvas, image_file, display_time)
+
+        return canvas
+
+    def draw_seasonal_scroll_up(self, canvas, image_file, display_time):
+        im = Image.open(image_file)
+        im = im.convert('RGB')
+
+        n_rows_display = 32*2 + im.height
+        sleep_time = display_time / n_rows_display
+
+        offset_y = 32
+        while offset_y > -(im.height+32):
+            canvas.Clear()
+            canvas.SetImage(im, offset_x=0, offset_y=offset_y)
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(sleep_time)
+            offset_y -= 1
+
+        return canvas
+
+    def draw_seasonal_scroll_up_animation(self, canvas, image_file, display_time):
+        im = Image.open(image_file)
+
+        n_rows_display = 32*2 + im.height
+        sleep_time = display_time / n_rows_display
+        center_offset = int(im.height / 2) - 16
+
+        if im.is_animated:
+            im.seek(0)
+        im_disp = im.convert('RGB')
+
+        start_time = datetime.now()
+        offset_y = 32
+        while offset_y > -(im.height+32):
+
+            # play the animation when centered
+            if im.is_animated and offset_y == -center_offset:
+                for frame_ind in range(im.n_frames):
+                    canvas.Clear()
+                    im.seek(frame_ind)
+                    im_disp = im.convert('RGB')
+                    canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
+
+                    canvas = self.matrix.SwapOnVSync(canvas)
+                    time.sleep(im.info['duration'] / 1000)
+            else:
+                canvas.Clear()
+                canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
+                canvas = self.matrix.SwapOnVSync(canvas)
+                time.sleep(sleep_time)
+            offset_y -= 1
+
+        return canvas
 
     def draw_weather(self, canvas, w):
         text_y_top = 10
@@ -631,42 +708,15 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_seasonal(self, canvas, display_time=10):
-        from PIL import GifImagePlugin
-        GifImagePlugin.LOADING_STRATEGY = GifImagePlugin.LoadingStrategy.RGB_ALWAYS
 
-        image_file = 'images/halloween.png'
-        image_file = 'images/halloween_anim.gif'
-        im = Image.open(image_file)
-        # im = im.convert('RGB')
+        # should we display at all
+        if random.uniform(0., 1.) > 1.:  # TODO: set this to limit the frequency of display
+            return canvas
 
-        n_rows_display = 32*2 + im.height
-        sleep_time = display_time / n_rows_display
-        center_offset = int(im.height / 2) - 16
-
-        if im.is_animated:
-            im.seek(0)
-        im_disp = im.convert('RGB')
-
-        start_time = datetime.now()
-        offset_y = 32
-        while offset_y > -(im.height+32):
-
-            # play the animation when centered
-            if im.is_animated and offset_y == -center_offset:
-                for frame_ind in range(im.n_frames):
-                    canvas.Clear()
-                    im.seek(frame_ind)
-                    im_disp = im.convert('RGB')
-                    canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
-
-                    canvas = self.matrix.SwapOnVSync(canvas)
-                    time.sleep(im.info['duration'] / 1000)
-            else:
-                canvas.Clear()
-                canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
-                canvas = self.matrix.SwapOnVSync(canvas)
-                time.sleep(sleep_time)
-            offset_y -= 1
+        now = datetime.now()
+        for seasonal in SEASONAL_DATA:
+            if seasonal.start_date < now < seasonal.end_date:
+                canvas = self.draw_seasonal(seasonal, canvas, display_time)
 
         return canvas
 
