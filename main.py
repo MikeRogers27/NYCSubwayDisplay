@@ -317,7 +317,7 @@ class GameRAPI(Game):
     def start_time(self):
         return datetime.fromtimestamp(self.game['fixture']['timestamp'], tz=LOCAL_TZ)
 
-    def update(self):
+    def update(self, games_last_update):
         querystring = {
             'id': self.id(),
         }
@@ -330,7 +330,8 @@ class GameRAPI(Game):
         data = response.json()
 
         game = GameRAPI(data['response'][0])
-        return game
+        games_last_update[game.id()] = datetime.now()
+        return game, games_last_update
 
 
 class GameSGO(Game):
@@ -414,10 +415,12 @@ class GameSGO(Game):
     def start_time(self):
         return to_local_tz(parse(self.game['status']['startsAt']))
 
-    def update(self):
+    def update(self, games_last_update):
         # we can update the whole league for the cost of one game
+        global SGO_GAMES_LAST_UPDATE
+        SGO_GAMES_LAST_UPDATE = games_last_update
         games = sgo_get_games_league(self.league_id())
-        return next(g.id() == self.id() for g in games)
+        return next(g for g in games if g.id() == self.id()), SGO_GAMES_LAST_UPDATE
 
 
 class GracefulKiller:
@@ -1404,8 +1407,7 @@ def sports_update_games(games: [Game], games_last_update, refresh_rate):
         if in_progress:
             next_refresh = games_last_update[game.id()] + timedelta(seconds=refresh_rate)
             if now > next_refresh:
-                games[game_ind] = game.update()
-                games_last_update[game.id()] = now
+                games[game_ind], games_last_update = game.update(games_last_update)
 
 
 def to_utc_tz(date_time):
