@@ -54,6 +54,7 @@ SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_D
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
 SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
+
 class Game(ABC):
     def __init__(self, game):
         super().__init__()
@@ -316,6 +317,21 @@ class GameRAPI(Game):
     def start_time(self):
         return datetime.fromtimestamp(self.game['fixture']['timestamp'], tz=LOCAL_TZ)
 
+    def update(self):
+        querystring = {
+            'id': self.id(),
+        }
+        headers = {
+            'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+            'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
+        }
+        url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+        response = requests.request("GET", url, headers=headers, params=querystring)
+        data = response.json()
+
+        game = GameRAPI(data['response'][0])
+        return game
+
 
 class GameSGO(Game):
 
@@ -397,6 +413,11 @@ class GameSGO(Game):
 
     def start_time(self):
         return to_local_tz(parse(self.game['status']['startsAt']))
+
+    def update(self):
+        # we can update the whole league for the cost of one game
+        games = sgo_get_games_league(self.league_id())
+        return next(g.id() == self.id() for g in games)
 
 
 class GracefulKiller:
@@ -624,7 +645,7 @@ class RunMatrix(SampleBase):
                     canvas = self.matrix.SwapOnVSync(canvas)
                     time.sleep(display_time)
                 else:
-                    swap_time = max(display_time / len(trains)-1, 2)
+                    swap_time = max(display_time / len(trains) - 1, 2)
                     for i in range(1, len(trains)):
                         canvas.Clear()
                         self.draw_train(0, 1, trains[0], stop_id, canvas)
@@ -636,7 +657,6 @@ class RunMatrix(SampleBase):
             self.draw_trains_none(stop_id, canvas)
             canvas = self.matrix.SwapOnVSync(canvas)
             time.sleep(display_time)
-
 
         return True, canvas
 
@@ -934,7 +954,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def _sort_games(games: [Game]):
-        games = sorted(games, key= lambda g: g.start_time())
+        games = sorted(games, key=lambda g: g.start_time())
         return games
 
 
@@ -1223,33 +1243,10 @@ def owm_weather_to_icon(weather):
 
 
 def rapi_get_games():
-    global RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP
-
-    if RAPI_TIMESTAMP is None:
-        rapi_retrieve_from_cache()
-
-    # update all feeds when requested but not faster than the refresh rate
-    now = datetime.now()
-    # update un-initialised data so we update on first request
-    if RAPI_NEXT_REFRESH is None:
-        RAPI_NEXT_REFRESH = now - timedelta(days=1)
-
-    if now > RAPI_NEXT_REFRESH:
-        RAPI_TIMESTAMP = datetime.now()
-
-        RAPI_GAMES = []
-        RAPI_GAMES.extend(rapi_get_games_league(40))
-
-        # update the leagues again tomorrow
-        today = datetime.fromordinal(dt_date.today().toordinal())
-        RAPI_NEXT_REFRESH = today + timedelta(days=1)
-
-    # update in progress games
-    rapi_update_games(RAPI_GAMES)
-
-    # save to cache
-    rapi_save_to_cache()
-
+    global RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP, RAPI_GAMES_LAST_UPDATE
+    RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP, RAPI_GAMES_LAST_UPDATE = \
+        sports_get_games('RAPI', RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP,
+                         RAPI_GAMES_LAST_UPDATE, RAPI_REFRESH_RATE)
     return RAPI_GAMES
 
 
@@ -1287,94 +1284,11 @@ def rapi_get_games_league(league_id):
     return games
 
 
-def rapi_retrieve_from_cache():
-    global RAPI_GAMES, RAPI_TIMESTAMP, RAPI_NEXT_REFRESH, RAPI_GAMES_LAST_UPDATE
-
-    temp_dir = tempfile.gettempdir()
-    cache_file = os.path.join(temp_dir, 'rapi.pickle')
-    if os.path.exists(cache_file):
-        with open(cache_file, 'rb') as file:
-            RAPI_GAMES, RAPI_TIMESTAMP, RAPI_NEXT_REFRESH, RAPI_GAMES_LAST_UPDATE = pickle.load(file)
-
-    return
-
-
-def rapi_save_to_cache():
-    temp_dir = tempfile.gettempdir()
-    cache_file = os.path.join(temp_dir, 'rapi.pickle')
-    with open(cache_file, 'wb') as file:
-        pickle.dump((RAPI_GAMES, RAPI_TIMESTAMP, RAPI_NEXT_REFRESH, RAPI_GAMES_LAST_UPDATE), file)
-
-
-def rapi_update_games(games: [Game]):
-    global RAPI_GAMES_LAST_UPDATE
-
-    now = datetime.now()
-    for game_ind, game in enumerate(games):
-        has_ended = game.has_ended()
-        has_started = game.has_started()
-        start_time = game.start_time()
-        if not has_started and LOCAL_TZ.localize(now) > start_time:
-            has_started = True
-        in_progress = has_started and not has_ended
-
-        # if we're in progress, update as soon as possible
-        if in_progress:
-            next_refresh = RAPI_GAMES_LAST_UPDATE[game.id()] + timedelta(seconds=RAPI_REFRESH_RATE)
-            if now > next_refresh:
-                games[game_ind] = rapi_update_game(game)
-                RAPI_GAMES_LAST_UPDATE[game.id()] = now
-
-
-def rapi_update_game(game: Game):
-    querystring = {
-        'id': game.id(),
-    }
-    headers = {
-        'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
-        'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
-    }
-    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-    response = requests.request("GET", url, headers=headers, params=querystring)
-    data = response.json()
-
-    game = GameRAPI(data['response'][0])
-    return game
-
-
 def sgo_get_games():
-    global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH
-
-    if SGO_TIMESTAMP is None:
-        sgo_retrieve_from_cache()
-
-    now = datetime.now()
-
-    # update un-initalised data so we update on first request
-    if SGO_NEXT_REFRESH is None:
-        SGO_NEXT_REFRESH = now - timedelta(days=1)
-
-    # update all feeds when requested but not faster than the refresh rate
-    # update
-    if now > SGO_NEXT_REFRESH:
-        SGO_TIMESTAMP = datetime.now()
-
-        SGO_GAMES = []
-        SGO_GAMES.extend(sgo_get_games_league('MLB'))
-        SGO_GAMES.extend(sgo_get_games_league('NHL'))
-        SGO_GAMES.extend(sgo_get_games_league('NFL'))
-        SGO_GAMES.extend(sgo_get_games_league('MLS'))
-
-        # update the leagues again tomorrow
-        today = datetime.fromordinal(dt_date.today().toordinal())
-        SGO_NEXT_REFRESH = today + timedelta(days=1)
-
-    # now update games in progress
-    sgo_update_games(SGO_GAMES)
-
-    # save to cache
-    sgo_save_to_cache()
-
+    global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE
+    SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE = \
+        sports_get_games('SGO', SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH,
+                         SGO_GAMES_LAST_UPDATE, SGO_REFRESH_RATE)
     return SGO_GAMES
 
 
@@ -1422,54 +1336,76 @@ def sgo_get_games_league(league_id):
     return games
 
 
-def sgo_retrieve_from_cache():
-    global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE
+def sports_get_games(type, games, timestamp, next_refresh, games_last_update, refresh_rate):
+    if timestamp is None:
+        games, timestamp, next_refresh, games_last_update = sports_retrieve_from_cache(
+            type, games, timestamp, next_refresh, games_last_update
+        )
 
+    # update all feeds when requested but not faster than the refresh rate
+    now = datetime.now()
+    # update un-initialised data so we update on first request
+    if next_refresh is None:
+        next_refresh = now - timedelta(days=1)
+
+    if now > next_refresh:
+        timestamp = datetime.now()
+
+        games = []
+        if type == 'RAPI':
+            games.extend(rapi_get_games_league(40))
+        elif type == 'SGO':
+            games.extend(sgo_get_games_league('MLB'))
+            games.extend(sgo_get_games_league('NHL'))
+            games.extend(sgo_get_games_league('NFL'))
+            games.extend(sgo_get_games_league('MLS'))
+
+        # update the leagues again tomorrow
+        today = datetime.fromordinal(dt_date.today().toordinal())
+        next_refresh = today + timedelta(days=1)
+
+    # update in progress games
+    sports_update_games(games, games_last_update, refresh_rate)
+
+    # save to cache
+    sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update)
+
+    return games, timestamp, next_refresh, games_last_update
+
+
+def sports_retrieve_from_cache(type, games, timestamp, next_refresh, games_last_update):
     temp_dir = tempfile.gettempdir()
-    cache_file = os.path.join(temp_dir, 'sgo.pickle')
+    cache_file = os.path.join(temp_dir, f'{type}.pickle')
     if os.path.exists(cache_file):
         with open(cache_file, 'rb') as file:
-            SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE = pickle.load(file)
+            games, timestamp, next_refresh, games_last_update = pickle.load(file)
 
-    return
+    return games, timestamp, next_refresh, games_last_update
 
 
-def sgo_save_to_cache():
+def sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update):
     temp_dir = tempfile.gettempdir()
-    cache_file = os.path.join(temp_dir, 'sgo.pickle')
+    cache_file = os.path.join(temp_dir, f'{type}.pickle')
     with open(cache_file, 'wb') as file:
-        pickle.dump((SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE), file)
+        pickle.dump((games, timestamp, next_refresh, games_last_update), file)
 
 
-def sgo_update_games(games: [Game]):
-    global SGO_GAMES_LAST_UPDATE
-
+def sports_update_games(games: [Game], games_last_update, refresh_rate):
     now = datetime.now()
     for game_ind, game in enumerate(games):
+        has_ended = game.has_ended()
         has_started = game.has_started()
         start_time = game.start_time()
         if not has_started and LOCAL_TZ.localize(now) > start_time:
             has_started = True
-        has_ended = game.has_ended()
         in_progress = has_started and not has_ended
 
         # if we're in progress, update as soon as possible
         if in_progress:
-            next_refresh = SGO_GAMES_LAST_UPDATE[game.id()] + timedelta(seconds=SGO_REFRESH_RATE)
+            next_refresh = games_last_update[game.id()] + timedelta(seconds=refresh_rate)
             if now > next_refresh:
-                games[game_ind] = sgo_update_game(game)
-                SGO_GAMES_LAST_UPDATE[game.id()] = now
-
-
-def sgo_update_game(game: Game):
-    response = requests.get(
-        f'https://api.sportsgameodds.com/v1/events?eventID={game.id()}&'
-        f'oddIDs=points-home-game-sp-home',
-        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
-    )
-    data = response.json()
-    game = GameSGO(data['data'][0])
-    return game
+                games[game_ind] = game.update()
+                games_last_update[game.id()] = now
 
 
 def to_utc_tz(date_time):
