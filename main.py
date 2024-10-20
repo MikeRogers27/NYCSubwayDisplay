@@ -527,16 +527,12 @@ class RunMatrix(SampleBase):
         sleep_time = display_time / n_rows_display
         center_offset = int(im.height / 2) - 16
 
-        if im.is_animated:
-            im.seek(0)
-        im_disp = im.convert('RGB')
-
-        start_time = datetime.now()
         offset_y = 32
+        frame_ind = (im.n_frames - (32 + center_offset)) % im.n_frames
         while offset_y > -(im.height+32):
 
             # play the animation when centered
-            if im.is_animated and offset_y == -center_offset:
+            if offset_y == -center_offset:
                 for frame_ind in range(im.n_frames):
                     canvas.Clear()
                     im.seek(frame_ind)
@@ -546,10 +542,16 @@ class RunMatrix(SampleBase):
                     canvas = self.matrix.SwapOnVSync(canvas)
                     time.sleep(im.info['duration'] / 1000)
             else:
+                im.seek(frame_ind)
+                im_disp = im.convert('RGB')
+
                 canvas.Clear()
                 canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
                 canvas = self.matrix.SwapOnVSync(canvas)
                 time.sleep(sleep_time)
+
+                frame_ind = (frame_ind + 1) % im.n_frames
+
             offset_y -= 1
 
         return canvas
