@@ -290,7 +290,7 @@ class RunMatrix(SampleBase):
 
         today = dt_date.today()
         if in_progress:
-            date_str = score_str
+            date_str = game['fixture']['status']['short'] + ' ' + str(game['fixture']['status']['elapsed'])
         elif has_ended:
             if start_time.date() == today:
                 if game['score']['extratime']['home'] is not None:
@@ -683,7 +683,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        # return ['sports'], 10
+        return ['sports'], 10
 
         now = datetime.now()
         timestamp = now.time()
@@ -1170,10 +1170,10 @@ def rapi_update_games(games):
 
         # if we're in progress, update as soon as possible
         if in_progress:
-            next_refresh = RAPI_GAMES_LAST_UPDATE[game['eventID']] + timedelta(seconds=RAPI_REFRESH_RATE)
+            next_refresh = RAPI_GAMES_LAST_UPDATE[game['fixture']['id']] + timedelta(seconds=RAPI_REFRESH_RATE)
             if now > next_refresh:
                 games[game_ind] = rapi_update_game(game)
-                RAPI_GAMES_LAST_UPDATE[game['eventID']] = now
+                RAPI_GAMES_LAST_UPDATE[game['fixture']['id']] = now
 
 
 def rapi_update_game(game):
