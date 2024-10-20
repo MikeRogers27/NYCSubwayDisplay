@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
 import importlib
@@ -105,6 +106,134 @@ SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_D
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
 SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
+class Game(ABC):
+    def __init__(self, game):
+        super().__init__()
+        self.game = game
+
+    @abstractmethod
+    def away_team_colour(self):
+        pass
+
+    @abstractmethod
+    def away_team_id(self):
+        pass
+
+    @abstractmethod
+    def away_team_score(self):
+        pass
+
+    @abstractmethod
+    def away_team_short_name(self):
+        pass
+
+    @abstractmethod
+    def has_ended(self):
+        pass
+
+    @abstractmethod
+    def date_str(self):
+        pass
+
+    @abstractmethod
+    def has_started(self):
+        pass
+
+    @abstractmethod
+    def home_team_colour(self):
+        pass
+
+    @abstractmethod
+    def home_team_id(self):
+        pass
+
+    @abstractmethod
+    def home_team_score(self):
+        pass
+
+    @abstractmethod
+    def home_team_short_name(self):
+        pass
+
+    @abstractmethod
+    def id(self):
+        pass
+
+    @abstractmethod
+    def league_id(self):
+        pass
+
+    @abstractmethod
+    def start_time(self):
+        pass
+
+
+class GameSGO(Game):
+
+    def __init__(self, *args):
+        super().__init__(*args)
+
+    def away_team_colour(self):
+        return graphics.Color(*hex_to_rgb(self.game['teams']['away']['colors']['primary']))
+
+    def away_team_id(self):
+        return self.game['teams']['away']['teamID']
+
+    def away_team_score(self):
+        return self.game['teams']['away']['score']
+
+    def away_team_short_name(self):
+        return self.game['teams']['away']['names']['short']
+
+    def date_str(self):
+        today = dt_date.today()
+        start_time = self.start_time()
+        has_ended = self.has_ended()
+        in_progress = self.has_started() and not has_ended
+        if in_progress or has_ended:
+            if start_time.date() == today:
+                date_str = self.game['status']['displayShort']
+                if date_str == 'F':
+                    date_str = 'Final'
+            else:
+                date_str = start_time.strftime('%a')
+        else:
+            if start_time.date() == today:
+                date_str = 'Today'
+            else:
+                date_str = start_time.strftime('%a')
+        return date_str
+
+    def has_ended(self):
+        return self.game['status']['ended']
+
+    def has_started(self):
+        return self.game['status']['started']
+
+    def home_team_colour(self):
+        return graphics.Color(*hex_to_rgb(self.game['teams']['home']['colors']['primary']))
+
+    def home_team_id(self):
+        return self.game['teams']['home']['teamID']
+
+    def home_team_score(self):
+        return self.game['teams']['home']['score']
+
+    def home_team_short_name(self):
+        return self.game['teams']['home']['names']['short']
+
+    def id(self):
+        return self.game['eventID']
+
+    def league_id(self):
+        return self.game['leagueID']
+
+    def league_name(self):
+        return self.game['leagueID']
+
+    def start_time(self):
+        return parse(self.game['status']['startsAt'])
+
 
 class GracefulKiller:
     def __init__(self):
@@ -136,16 +265,16 @@ class RunMatrix(SampleBase):
         self.circle_colour_g = graphics.Color(108, 190, 69)
         self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
-    def draw_game(self, canvas, game):
-        if 'fixture' in game:
-            canvas = self.draw_game_rapi(canvas, game)
-        else:
-            canvas = self.draw_game_sgo(canvas, game)
+    def draw_game(self, canvas, game: Game):
+        # if 'fixture' in game:
+        #     canvas = self.draw_game_rapi(canvas, game)
+        # else:
+        canvas = self.draw_game_sgo(canvas, game)
 
         return canvas
 
-    def draw_game_sgo(self, canvas, game):
-        league_id = game['leagueID']
+    def draw_game_sgo(self, canvas, game: Game):
+        league_id = game.league_id()
         if league_id == 'MLB':
             league_teams = SGO_MLB_TEAMS
         elif league_id == 'NHL':
@@ -165,59 +294,46 @@ class RunMatrix(SampleBase):
         im = Image.open(icon_file)
         canvas.SetImage(im)
 
-        start_time = to_local_tz(parse(game['status']['startsAt']))
+        start_time = to_local_tz(game.start_time())
 
-        has_started = game['status']['started']
-        has_ended = game['status']['ended']
-        in_progress = has_started and not has_ended
+        has_started = game.has_started()
+        has_ended = game.has_ended()
         score_str = start_time.strftime('%H:%M')
-        if game['teams']['away']['teamID'] in league_teams:
+        if game.away_team_id() in league_teams:
             title_symbol = '@'
-            title_str = game['teams']['home']['names']['short']
+            title_str = game.home_team_short_name()
             if has_ended:
-                if game['teams']['away']['score'] > game['teams']['home']['score']:
+                if game.away_team_score() > game.home_team_score():
                     score_prefix = 'W'
-                elif game['teams']['away']['score'] == game['teams']['home']['score']:
+                elif game.away_team_score() == game.home_team_score():
                     score_prefix = 'D'
                 else:
                     score_prefix = 'L'
             else:
                 score_prefix = ''
-            team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
+            team_colour = game.home_team_colour()
 
             if has_started or has_ended:
-                score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
+                score_str = f"{score_prefix}{game.away_team_score()}-{game.home_team_score()}"
 
         else:
             title_symbol = 'v'
-            title_str = game['teams']['away']['names']['short']
+            title_str = game.away_team_short_name()
             if has_ended:
-                if game['teams']['home']['score'] > game['teams']['away']['score']:
+                if game.home_team_score() > game.away_team_score():
                     score_prefix = 'W'
-                elif game['teams']['home']['score'] == game['teams']['away']['score']:
+                elif game.home_team_score() == game.away_team_score():
                     score_prefix = 'D'
                 else:
                     score_prefix = 'L'
             else:
                 score_prefix = ''
-            team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
+            team_colour = game.away_team_colour()
 
             if has_started or has_ended:
-                score_str = f"{score_prefix}{game['teams']['home']['score']}-{game['teams']['away']['score']}"
+                score_str = f"{score_prefix}{game.home_team_score()}-{game.away_team_score()}"
 
-        today = dt_date.today()
-        if in_progress or has_ended:
-            if start_time.date() == today:
-                date_str = game['status']['displayShort']
-                if date_str == 'F':
-                    date_str = 'Final'
-            else:
-                date_str = start_time.strftime('%a')
-        else:
-            if start_time.date() == today:
-                date_str = 'Today'
-            else:
-                date_str = start_time.strftime('%a')
+        date_str = game.date_str()
 
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
         graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
@@ -633,7 +749,7 @@ class RunMatrix(SampleBase):
     def display_sports(self, canvas, display_time=10):
         games = []
         games.extend(sgo_get_games())
-        games.extend(rapi_get_games())
+        # games.extend(rapi_get_games())
         if not len(games):
             return canvas
         games = self._sort_games(games)
@@ -683,7 +799,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        # return ['sports'], 10
+        return ['sports'], 10
 
         now = datetime.now()
         timestamp = now.time()
@@ -770,13 +886,13 @@ class RunMatrix(SampleBase):
         # graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
 
     @staticmethod
-    def _sort_games(games):
+    def _sort_games(games: [Game]):
 
         def start_time(game):
-            if 'fixture' in game:
-                start_t = to_local_tz(datetime.fromtimestamp(game['fixture']['timestamp']))
-            else:
-                start_t = to_local_tz(parse(game['status']['startsAt']))
+            # if 'fixture' in game:
+            #     start_t = to_local_tz(datetime.fromtimestamp(game['fixture']['timestamp']))
+            # else:
+            start_t = to_local_tz(game.start_time())
             return start_t
 
         games = sorted(games, key=start_time)
@@ -1192,12 +1308,12 @@ def rapi_update_game(game):
     return game
 
 
-def sgo_get_game_icon(game):
-    if game['teams']['away']['teamID'] in \
+def sgo_get_game_icon(game: Game):
+    if game.away_team_id() in \
             SGO_MLB_TEAMS + SGO_NHL_TEAMS + SGO_NFL_TEAMS + SGO_MLS_TEAMS:
-        icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
+        icon_file = 'icons/32/' + game.away_team_id() + '.png'
     else:
-        icon_file = 'icons/32/' + game['teams']['home']['teamID'] + '.png'
+        icon_file = 'icons/32/' + game.home_team_id() + '.png'
 
     return icon_file
 
@@ -1277,7 +1393,7 @@ def sgo_get_games_league(league_id):
         if game['teams']['away']['teamID'] in league_teams or \
                 game['teams']['home']['teamID'] in league_teams:
             SGO_GAMES_LAST_UPDATE[game['eventID']] = now
-            games.append(game)
+            games.append(GameSGO(game))
 
     return games
 
@@ -1301,34 +1417,34 @@ def sgo_save_to_cache():
         pickle.dump((SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE), file)
 
 
-def sgo_update_games(games):
+def sgo_update_games(games: [Game]):
     global SGO_GAMES_LAST_UPDATE
 
     now = datetime.now()
     for game_ind, game in enumerate(games):
-        has_started = game['status']['started']
-        start_time = to_local_tz(parse(game['status']['startsAt']))
+        has_started = game.has_started()
+        start_time = to_local_tz(game.start_time())
         if not has_started and LOCAL_TZ.localize(now) > start_time:
             has_started = True
-        has_ended = game['status']['ended']
+        has_ended = game.has_ended()
         in_progress = has_started and not has_ended
 
         # if we're in progress, update as soon as possible
         if in_progress:
-            next_refresh = SGO_GAMES_LAST_UPDATE[game['eventID']] + timedelta(seconds=SGO_REFRESH_RATE)
+            next_refresh = SGO_GAMES_LAST_UPDATE[game.id()] + timedelta(seconds=SGO_REFRESH_RATE)
             if now > next_refresh:
                 games[game_ind] = sgo_update_game(game)
-                SGO_GAMES_LAST_UPDATE[game['eventID']] = now
+                SGO_GAMES_LAST_UPDATE[game.id()] = now
 
 
-def sgo_update_game(game):
+def sgo_update_game(game: Game):
     response = requests.get(
-        f'https://api.sportsgameodds.com/v1/events?eventID={game["eventID"]}&'
+        f'https://api.sportsgameodds.com/v1/events?eventID={game.id()}&'
         f'oddIDs=points-home-game-sp-home',
         headers={'X-Api-Key': os.environ['SGO_API_KEY']}
     )
     data = response.json()
-    game = data['data'][0]
+    game = GameSGO(data['data'][0])
     return game
 
 
