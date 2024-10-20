@@ -683,7 +683,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        return ['sports'], 10
+        # return ['sports'], 10
 
         now = datetime.now()
         timestamp = now.time()
