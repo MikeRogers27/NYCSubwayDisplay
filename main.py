@@ -11,8 +11,9 @@ import time
 import signal
 import warnings
 
-from PIL import Image
+import holidays
 from nyct_gtfs import NYCTFeed
+from PIL import Image
 from pyowm import OWM
 import pytz
 
@@ -97,14 +98,43 @@ RAPI_TEAM_CODES = {
     18212: 'QPR',  # Queens Park Rangers
 }
 
-Seasonal = namedtuple('Seasonal', ('name', 'start_date', 'end_date', 'images', 'image_behaviour'))
+Seasonal = namedtuple(
+    'Seasonal',
+    ('name', 'date', 'display_days_before', 'display_days_after', 'images', 'image_behaviour')
+)
+_us_holidays = holidays.US(years=NOW.year)
 SEASONAL_DATA = [
     Seasonal(
         name='halloween',
-        start_date=datetime(year=NOW.year, month=10, day=20),
-        end_date=datetime(year=NOW.year, month=11, day=1),
-        images=['images/halloween.png', 'images/halloween_anim.gif'],
-        image_behaviour=['scroll_up', 'scroll_up_animation']
+        date=datetime(year=NOW.year, month=10, day=31),
+        display_days_before=11,
+        display_days_after=1,
+        images=['images/halloween.png', 'images/halloween_anim.gif', 'images/halloween_witch.gif'],
+        image_behaviour=['scroll_up', 'scroll_up_animation', 'scroll_up_animation'],
+    ),
+    Seasonal(
+        name='bonfire night',
+        date=datetime(year=NOW.year, month=11, day=5),
+        display_days_before=1,
+        display_days_after=1,
+        images=['images/bonfire_night.gif', ],
+        image_behaviour=['scroll_up_animation', ],
+    ),
+    Seasonal(
+        name='thanksgiving',
+        date=datetime.combine(_us_holidays.get_named('Thanksgiving')[0], datetime.min.time()),
+        display_days_before=3,
+        display_days_after=3,
+        images=['images/thanksgiving.gif', ],
+        image_behaviour=['scroll_up_animation', ],
+    ),
+    Seasonal(
+        name='christmas',
+        date=datetime(year=NOW.year, month=12, day=25),
+        display_days_before=15,
+        display_days_after=2,
+        images=['images/christmas_tree.gif', ],
+        image_behaviour=['scroll_up_animation', ],
     ),
 ]
 
@@ -524,7 +554,6 @@ class RunMatrix(SampleBase):
         im = Image.open(image_file)
 
         n_rows_display = 32*2 + im.height
-        sleep_time = display_time / n_rows_display
         center_offset = int(im.height / 2) - 16
 
         offset_y = 32
@@ -548,7 +577,7 @@ class RunMatrix(SampleBase):
                 canvas.Clear()
                 canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
                 canvas = self.matrix.SwapOnVSync(canvas)
-                time.sleep(sleep_time)
+                time.sleep(im.info['duration'] / 1000)
 
                 frame_ind = (frame_ind + 1) % im.n_frames
 
@@ -717,7 +746,9 @@ class RunMatrix(SampleBase):
 
         now = datetime.now()
         for seasonal in SEASONAL_DATA:
-            if seasonal.start_date < now < seasonal.end_date:
+            start_date = seasonal.date - timedelta(days=seasonal.display_days_before)
+            end_date = seasonal.date + timedelta(days=seasonal.display_days_after)
+            if start_date < now < end_date:
                 canvas = self.draw_seasonal(seasonal, canvas, display_time)
 
         return canvas
