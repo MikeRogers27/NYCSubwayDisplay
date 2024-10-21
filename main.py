@@ -784,7 +784,7 @@ class RunMatrix(SampleBase):
     def display_seasonal(self, canvas, display_time=10):
 
         # should we display at all
-        if random.uniform(0., 1.) > 1.0:  # Only display roughly once every 10 times
+        if random.uniform(0., 1.) > 0.1:  # Only display roughly once every 10 times
             return canvas
 
         now = datetime.now()
@@ -849,7 +849,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        return ['seasonal'], 5
+        # return ['seasonal'], 5
 
         now = datetime.now()
         timestamp = now.time()
