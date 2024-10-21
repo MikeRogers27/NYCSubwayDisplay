@@ -109,10 +109,8 @@ SEASONAL_DATA = [
         date=datetime(year=NOW.year, month=10, day=31),
         display_days_before=11,
         display_days_after=1,
-        # images=['images/halloween.png', 'images/halloween_anim.gif', 'images/halloween_witch.gif'],
-        # image_behaviour=['scroll_up', 'scroll_up_animation', 'scroll_up_animation'],
-        images=['images/merry_christmas_tree.gif'],
-        image_behaviour=['scroll_up_animation',],
+        images=['images/halloween.png', 'images/halloween_anim.gif', 'images/halloween_witch.gif'],
+        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_animate_centre'],
     ),
     Seasonal(
         name='bonfire night',
@@ -120,7 +118,7 @@ SEASONAL_DATA = [
         display_days_before=1,
         display_days_after=1,
         images=['images/bonfire_night.gif', ],
-        image_behaviour=['scroll_up_animation', ],
+        image_behaviour=['scroll_up', ],
     ),
     Seasonal(
         name='thanksgiving',
@@ -128,7 +126,7 @@ SEASONAL_DATA = [
         display_days_before=3,
         display_days_after=3,
         images=['images/thanksgiving.gif', ],
-        image_behaviour=['scroll_up_animation', ],
+        image_behaviour=['scroll_up_animate_centre', ],
     ),
     Seasonal(
         name='christmas',
@@ -137,16 +135,16 @@ SEASONAL_DATA = [
         display_days_after=2,
         images=['images/christmas_tree.gif', 'images/christmas_snowman.gif', 'images/snow_cat.gif',
                 'images/merry_christmas_santa.gif', 'images/merry_christmas_tree.gif',],
-        image_behaviour=['scroll_up_animation', 'scroll_up_animation', 'scroll_up_animation',
-                         'scroll_up_animation', 'scroll_up_animation'],
+        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up',
+                         'scroll_up', 'scroll_up'],
     ),
     Seasonal(
         name='winter',
         date=datetime(year=NOW.year, month=12, day=31),
         display_days_before=31,
         display_days_after=31,
-        images=['images/snow_cat.gif', ],
-        image_behaviour=['scroll_up_animation', ],
+        images=['images/christmas_snowman.gif', 'images/snow_cat.gif', ],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up'],
     ),
 ]
 
@@ -540,63 +538,91 @@ class RunMatrix(SampleBase):
 
         if image_behaviour == 'scroll_up':
             canvas = self.draw_seasonal_scroll_up(canvas, image_file, display_time)
-        elif image_behaviour == 'scroll_up_animation':
-            canvas = self.draw_seasonal_scroll_up_animation(canvas, image_file, display_time)
+        elif image_behaviour == 'scroll_up_animate_centre':
+            canvas = self.draw_seasonal_scroll_up_animate_centre(canvas, image_file, display_time)
 
         return canvas
 
     def draw_seasonal_scroll_up(self, canvas, image_file, display_time):
         im = Image.open(image_file)
-        im = im.convert('RGB')
 
         n_rows_display = 32*2 + im.height
         sleep_time = display_time / n_rows_display
 
+        frame_ind = 0
+        is_animated = getattr(im, 'is_animated', False)
+        if is_animated:
+            im.seek(frame_ind)
+        im_disp = im.convert('RGB')
+        fstart = datetime.now()
         offset_y = 32
         while offset_y > -(im.height+32):
             canvas.Clear()
-            canvas.SetImage(im, offset_x=0, offset_y=offset_y)
+            canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
             canvas = self.matrix.SwapOnVSync(canvas)
+
+            if is_animated and (datetime.now() - fstart).total_seconds()*1000 >= im.info['duration']:
+                im.seek(frame_ind)
+                im_disp = im.convert('RGB')
+                frame_ind = (frame_ind + 1) % im.n_frames
+                fstart = datetime.now()
+
             time.sleep(sleep_time)
             offset_y -= 1
 
         return canvas
 
-    def draw_seasonal_scroll_up_animation(self, canvas, image_file, display_time):
+    def draw_seasonal_scroll_up_animate_centre(self, canvas, image_file, display_time):
         im = Image.open(image_file)
+        is_animated = getattr(im, 'is_animated', False)
+        if not is_animated:
+            warnings.warn(f'{image_file} is not animated')
+            return canvas
 
         n_rows_display = 32*2 + im.height
-        center_offset = int(im.height / 2) - 16
+        start_offset = 32
+        center_offset = 16 - int(im.height / 2)
         sleep_time = display_time / n_rows_display
 
+        n_rows_to_centre = start_offset - center_offset
+        time_to_centre = n_rows_to_centre * sleep_time
+        # count back until we've reached the frame to start from
+        time_total = 0
+        frame_ind = im.n_frames - 1
+        while time_total<time_to_centre:
+            im.seek(frame_ind)
+            time_total += im.info['duration'] / 1000
+            frame_ind = (frame_ind - 1) % im.n_frames
+        frame_ind = (frame_ind + 1) % im.n_frames
+
         offset_y = 32
-        frame_ind = (im.n_frames - (32 + center_offset)) % im.n_frames
         im.seek(frame_ind)
         im_disp = im.convert('RGB')
         fstart = datetime.now()
         while offset_y > -(im.height+32):
 
             # play the animation when centered
-            if offset_y == -center_offset:
+            if offset_y == center_offset:
                 for frame_ind in range(im.n_frames):
                     canvas.Clear()
                     im.seek(frame_ind)
                     im_disp = im.convert('RGB')
-                    canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
+                    fstart = datetime.now()
 
+                    canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
                     canvas = self.matrix.SwapOnVSync(canvas)
                     time.sleep(im.info['duration'] / 1000)
             else:
-
                 canvas.Clear()
                 canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
                 canvas = self.matrix.SwapOnVSync(canvas)
                 time.sleep(sleep_time)
 
-                if (datetime.now() - fstart).milliseconds >= im.info['duration']:
+                if (datetime.now() - fstart).total_seconds()*1000 >= im.info['duration']:
                     im.seek(frame_ind)
                     im_disp = im.convert('RGB')
                     frame_ind = (frame_ind + 1) % im.n_frames
+                    fstart = datetime.now()
 
             offset_y -= 1
 
@@ -758,7 +784,7 @@ class RunMatrix(SampleBase):
     def display_seasonal(self, canvas, display_time=10):
 
         # should we display at all
-        if random.uniform(0., 1.) > 1.:  # TODO: set this to limit the frequency of display
+        if random.uniform(0., 1.) > 1.0:  # Only display roughly once every 10 times
             return canvas
 
         now = datetime.now()
@@ -839,7 +865,7 @@ class RunMatrix(SampleBase):
                 return ['trains', 'clock', 'weather'], 5
             # evening after 8pm til midnight
             if timestamp > dt_time(19, 30):
-                return ['clock', 'weather', 'sports'], 5
+                return ['clock', 'weather', 'sports', 'seasonal'], 5
 
             # off after midnight
             return ['off'], 600
@@ -848,7 +874,7 @@ class RunMatrix(SampleBase):
         else:
             # all day between 9am and midnight
             if timestamp > dt_time(9, 0):
-                return ['trains', 'clock', 'weather', 'sports'], 10
+                return ['trains', 'clock', 'weather', 'sports', 'seasonal'], 5
 
             # off after midnight
             return ['off'], 600
