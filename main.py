@@ -109,8 +109,10 @@ SEASONAL_DATA = [
         date=datetime(year=NOW.year, month=10, day=31),
         display_days_before=11,
         display_days_after=1,
-        images=['images/halloween.png', 'images/halloween_anim.gif', 'images/halloween_witch.gif'],
-        image_behaviour=['scroll_up', 'scroll_up_animation', 'scroll_up_animation'],
+        # images=['images/halloween.png', 'images/halloween_anim.gif', 'images/halloween_witch.gif'],
+        # image_behaviour=['scroll_up', 'scroll_up_animation', 'scroll_up_animation'],
+        images=['images/merry_christmas_tree.gif'],
+        image_behaviour=['scroll_up_animation',],
     ),
     Seasonal(
         name='bonfire night',
@@ -133,7 +135,17 @@ SEASONAL_DATA = [
         date=datetime(year=NOW.year, month=12, day=25),
         display_days_before=15,
         display_days_after=2,
-        images=['images/christmas_tree.gif', ],
+        images=['images/christmas_tree.gif', 'images/christmas_snowman.gif', 'images/snow_cat.gif',
+                'images/merry_christmas_santa.gif', 'images/merry_christmas_tree.gif',],
+        image_behaviour=['scroll_up_animation', 'scroll_up_animation', 'scroll_up_animation',
+                         'scroll_up_animation', 'scroll_up_animation'],
+    ),
+    Seasonal(
+        name='winter',
+        date=datetime(year=NOW.year, month=12, day=31),
+        display_days_before=31,
+        display_days_after=31,
+        images=['images/snow_cat.gif', ],
         image_behaviour=['scroll_up_animation', ],
     ),
 ]
@@ -555,9 +567,13 @@ class RunMatrix(SampleBase):
 
         n_rows_display = 32*2 + im.height
         center_offset = int(im.height / 2) - 16
+        sleep_time = display_time / n_rows_display
 
         offset_y = 32
         frame_ind = (im.n_frames - (32 + center_offset)) % im.n_frames
+        im.seek(frame_ind)
+        im_disp = im.convert('RGB')
+        fstart = datetime.now()
         while offset_y > -(im.height+32):
 
             # play the animation when centered
@@ -571,15 +587,16 @@ class RunMatrix(SampleBase):
                     canvas = self.matrix.SwapOnVSync(canvas)
                     time.sleep(im.info['duration'] / 1000)
             else:
-                im.seek(frame_ind)
-                im_disp = im.convert('RGB')
 
                 canvas.Clear()
                 canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
                 canvas = self.matrix.SwapOnVSync(canvas)
-                time.sleep(im.info['duration'] / 1000)
+                time.sleep(sleep_time)
 
-                frame_ind = (frame_ind + 1) % im.n_frames
+                if (datetime.now() - fstart).milliseconds >= im.info['duration']:
+                    im.seek(frame_ind)
+                    im_disp = im.convert('RGB')
+                    frame_ind = (frame_ind + 1) % im.n_frames
 
             offset_y -= 1
 
