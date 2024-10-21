@@ -1351,7 +1351,7 @@ def to_local_tz(date_time):
 
 
 def main():
-    led_display_trains = RunMatrix(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
+    led_display_trains = RunMatrix(['F23N', 'F23S', 'R33N', 'R33S'], ['F23N', 'R33N'])
     led_display_trains.process()
 
     pass
