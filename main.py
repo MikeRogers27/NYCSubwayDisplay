@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
+import argparse
 from collections import namedtuple
 from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
 import importlib
+import logging
 import os
 import pickle
 import random
@@ -28,6 +30,8 @@ from samplebase import SampleBase
 LOCAL_TZ = pytz.timezone("America/New_York")
 NOW = datetime.now()
 
+LOG = None
+
 MTA_FEEDS = None
 MTA_TIMESTAMP = None
 MTA_TRAINS = None
@@ -44,7 +48,6 @@ RAPI_GAMES_LAST_UPDATE = {}
 RAPI_TIMESTAMP = None
 RAPI_NEXT_REFRESH = None
 RAPI_REFRESH_RATE = 360
-
 RAPI_TEAMS = [746, ]
 
 Seasonal = namedtuple(
@@ -487,8 +490,8 @@ class GracefulKiller:
 
 
 class RunMatrix(SampleBase):
-    def __init__(self, stop_ids, uptown_stop_ids, *args, **kwargs):
-        super(RunMatrix, self).__init__(*args, **kwargs)
+    def __init__(self, stop_ids, uptown_stop_ids, args):
+        super(RunMatrix, self).__init__(args)
 
         self.stop_ids = stop_ids
         self.uptown_stop_ids = uptown_stop_ids
@@ -1139,6 +1142,27 @@ def k_to_c(k):
     return round(k - 273.15)
 
 
+def logger_setup(args):
+    loglevel = args.log
+
+    global LOG
+    LOG = logging.getLogger('NYCSubwayDisplay')
+    numeric_level = getattr(logging, loglevel.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % loglevel)
+
+    # logs to the command (which gets captured if we're a service)
+    logging.basicConfig(
+        level=numeric_level,
+        format='%(asctime)s %(levelname)s:%(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+    LOG.warning('warning!')
+    LOG.error('error!')
+    pass
+
+
 def mta_arrival_time(train, stop_id):
     if train.location_status == 'STOPPED_AT' and train.location == stop_id:
         return datetime(9999, 1, 1, 0, 0, 0)
@@ -1421,6 +1445,63 @@ def owm_weather_to_icon(weather):
     return icon_file
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog='NYCSubwayDisplay',
+        description='Displays subway times and more!',
+    )
+
+    parser.add_argument("-r", "--led-rows", action="store",
+                             help="Display rows. 16 for 16x32, 32 for 32x32. Default: 32", default=32, type=int)
+    parser.add_argument("--led-cols", action="store", help="Panel columns. Typically 32 or 64. (Default: 32)",
+                             default=32, type=int)
+    parser.add_argument("-c", "--led-chain", action="store", help="Daisy-chained boards. Default: 1.", default=1,
+                             type=int)
+    parser.add_argument("-P", "--led-parallel", action="store",
+                             help="For Plus-models or RPi2: parallel chains. 1..3. Default: 1", default=1, type=int)
+    parser.add_argument("-p", "--led-pwm-bits", action="store",
+                             help="Bits used for PWM. Something between 1..11. Default: 11", default=11, type=int)
+    parser.add_argument("-b", "--led-brightness", action="store",
+                             help="Sets brightness level. Default: 100. Range: 1..100", default=100, type=int)
+    parser.add_argument("-m", "--led-gpio-mapping",
+                             help="Hardware Mapping: regular, adafruit-hat, adafruit-hat-pwm",
+                             choices=['regular', 'regular-pi1', 'adafruit-hat', 'adafruit-hat-pwm'], type=str)
+    parser.add_argument("--led-scan-mode", action="store",
+                             help="Progressive or interlaced scan. 0 Progressive, 1 Interlaced (default)", default=1,
+                             choices=range(2), type=int)
+    parser.add_argument("--led-pwm-lsb-nanoseconds", action="store",
+                             help="Base time-unit for the on-time in the lowest significant bit in nanoseconds. Default: 130",
+                             default=130, type=int)
+    parser.add_argument("--led-show-refresh", action="store_true",
+                             help="Shows the current refresh rate of the LED panel")
+    parser.add_argument("--led-slowdown-gpio", action="store",
+                             help="Slow down writing to GPIO. Range: 0..4. Default: 1", default=1, type=int)
+    parser.add_argument("--led-no-hardware-pulse", action="store", help="Don't use hardware pin-pulse generation")
+    parser.add_argument("--led-rgb-sequence", action="store",
+                             help="Switch if your matrix has led colors swapped. Default: RGB", default="RGB", type=str)
+    parser.add_argument("--led-pixel-mapper", action="store", help="Apply pixel mappers. e.g \"Rotate:90\"",
+                             default="", type=str)
+    parser.add_argument("--led-row-addr-type", action="store",
+                             help="0 = default; 1=AB-addressed panels; 2=row direct; 3=ABC-addressed panels; 4 = ABC Shift + DE direct",
+                             default=0, type=int, choices=[0, 1, 2, 3, 4])
+    parser.add_argument("--led-multiplexing", action="store",
+                             help="Multiplexing type: 0=direct; 1=strip; 2=checker; 3=spiral; 4=ZStripe; 5=ZnMirrorZStripe; 6=coreman; 7=Kaler2Scan; 8=ZStripeUneven... (Default: 0)",
+                             default=0, type=int)
+    parser.add_argument("--led-panel-type", action="store",
+                             help="Needed to initialize special panels. Supported: 'FM6126A'", default="", type=str)
+    parser.add_argument("--led-no-drop-privs", dest="drop_privileges",
+                             help="Don't drop privileges from 'root' after initializing the hardware.",
+                             action='store_false')
+    parser.add_argument("--led-limit-refresh", action="store", help="Hz. Default: 0", default=0, type=int)
+    parser.add_argument('--log',
+                        help='Log Level: DEBUG, INFO, WARNING, ERROR, CRITICAL',
+                        default='ERROR')
+    parser.set_defaults(drop_privileges=True)
+
+    args = parser.parse_args()
+    return args
+
+
 def rapi_get_games():
     global RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP, RAPI_GAMES_LAST_UPDATE
     RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP, RAPI_GAMES_LAST_UPDATE = \
@@ -1600,8 +1681,18 @@ def to_local_tz(date_time):
     return date_time
 
 
+
+
 def main():
-    led_display_trains = RunMatrix(['F23N', 'F23S', 'R33N', 'R33S'], ['F23N', 'R33N'])
+
+    args = parse_args()
+    logger_setup(args)
+
+    led_display_trains = RunMatrix(
+        stop_ids=['F23N', 'F23S', 'R33N', 'R33S'],
+        uptown_stop_ids=['F23N', 'R33N'],
+        args=args,
+    )
     led_display_trains.process()
 
     pass
