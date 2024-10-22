@@ -5,12 +5,14 @@ from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
 import importlib
 import logging
+from logging import Logger
 import os
 import pickle
 import random
 import requests
 import tempfile
 import time
+from typing import Optional
 import signal
 import warnings
 
@@ -30,7 +32,7 @@ from samplebase import SampleBase
 LOCAL_TZ = pytz.timezone("America/New_York")
 NOW = datetime.now()
 
-LOG = None
+LOG = Optional[Logger]
 
 MTA_FEEDS = None
 MTA_TIMESTAMP = None
@@ -1158,10 +1160,6 @@ def logger_setup(args):
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    LOG.warning('warning!')
-    LOG.error('error!')
-    pass
-
 
 def mta_arrival_time(train, stop_id):
     if train.location_status == 'STOPPED_AT' and train.location == stop_id:
@@ -1200,7 +1198,7 @@ def mta_get_feeds():
                 NYCTFeed("R"),
             ]
         except requests.exceptions.ConnectionError as e:
-            warnings.warn(f'ConnectionError: {e}')
+            LOG.error(f'mta_get_feeds - ConnectionError: {e}')
             return None
 
     return MTA_FEEDS
@@ -1258,9 +1256,9 @@ def mta_update_feeds():
             for feed in feeds:
                 try:
                     feed.refresh()
+                    LOG.info(f'mta_update_feeds - feed updated {feed}')
                 except requests.exceptions.ConnectionError as e:
-                    warnings.warn(f'ConnectionError: {e}')
-                    pass
+                    LOG.error(f'mta_update_feeds - ConnectionError: {e}')
 
 
 def owm_forecasts_evening():
@@ -1323,7 +1321,9 @@ def owm_get_weather():
             observation = OWM_MGR.weather_at_place('New York')
             OWM_WEATHER = observation.weather
             OWM_FORECAST = OWM_MGR.forecast_at_place('New York', '3h')
+            LOG.info(f'owm_get_weather - weather and forecast updated')
         except Exception as e:
+            LOG.error(f'owm_get_weather - Failed {type(e)} {e}')
             OWM_WEATHER = None
             OWM_FORECAST = None
 
@@ -1532,14 +1532,24 @@ def rapi_get_games_league(league_id):
         'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
     }
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-    response = requests.request("GET", url, headers=headers, params=querystring)
-    data = response.json()
+    try:
+        response = requests.request("GET", url, headers=headers, params=querystring)
+        data = response.json()
+    except requests.exceptions.ConnectionError as e:
+        LOG.error(f'rapi_get_games_league - ConnectionError {e}')
+        return []
+
+    if response.status_code != 200:
+        LOG.error(f'rapi_get_games_league - Response returned code {response.status_code} {response.reason}')
+        return []
 
     games = []
     for game in data['response']:
         game = GameRAPI(game)
         games.append(game)
         RAPI_GAMES_LAST_UPDATE[game.id()] = now
+
+    LOG.info(f'rapi_get_games_league - Updated {league_id} with {len(games)} games')
 
     return games
 
@@ -1564,15 +1574,25 @@ def sgo_get_games_league(league_id):
     else:
         starts_before = to_utc_tz(today + timedelta(days=2))
 
-    response = requests.get(
-        f'https://api.sportsgameodds.com/v1/events?leagueID={league_id}&'
-        f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
-        f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
-        f'oddIDs=points-home-game-sp-home',
-        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
-    )
+    try:
+        response = requests.get(
+            f'https://api.sportsgameodds.com/v1/events?leagueID={league_id}&'
+            f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
+            f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
+            f'oddIDs=points-home-game-sp-home',
+            headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+        )
+    except requests.exceptions.ConnectionError as e:
+        LOG.error(f'sgo_get_games_league - ConnectionError {e}')
+        return []
+
+    if response.status_code != 200:
+        LOG.error(f'sgo_get_games_league - Response returned code {response.status_code} {response.reason}')
+        return []
+
     data = response.json()
     if not data['success']:
+        LOG.error(f'sgo_get_games_league - Data["success"] == False')
         return []
 
     if league_id == 'MLB':
@@ -1592,6 +1612,8 @@ def sgo_get_games_league(league_id):
                 game['teams']['home']['teamID'] in league_teams:
             SGO_GAMES_LAST_UPDATE[game['eventID']] = now
             games.append(GameSGO(game))
+
+    LOG.info(f'sgo_get_games_league - Updated {league_id} with {len(games)} games')
 
     return games
 
@@ -1639,6 +1661,7 @@ def sports_retrieve_from_cache(type, games, timestamp, next_refresh, games_last_
     if os.path.exists(cache_file):
         with open(cache_file, 'rb') as file:
             games, timestamp, next_refresh, games_last_update = pickle.load(file)
+        LOG.info(f'sports_retrieve_from_cache - Retrieved {type} with {len(games)} games')
 
     return games, timestamp, next_refresh, games_last_update
 
@@ -1648,6 +1671,8 @@ def sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update
     cache_file = os.path.join(temp_dir, f'{type}.pickle')
     with open(cache_file, 'wb') as file:
         pickle.dump((games, timestamp, next_refresh, games_last_update), file)
+
+    LOG.info(f'sports_save_to_cache - Saved {type} with {len(games)} games')
 
 
 def sports_update_games(games: [Game], games_last_update, refresh_rate):
