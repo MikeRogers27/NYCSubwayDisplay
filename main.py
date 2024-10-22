@@ -290,7 +290,7 @@ class RunMatrix(SampleBase):
 
         today = dt_date.today()
         if in_progress:
-            date_str = score_str
+            date_str = game['fixture']['status']['short'] + ' ' + str(game['fixture']['status']['elapsed'])
         elif has_ended:
             if start_time.date() == today:
                 if game['score']['extratime']['home'] is not None:
@@ -317,6 +317,7 @@ class RunMatrix(SampleBase):
     def draw_train_row(self,
                        canvas,
                        row_ind,
+                       arrival_order,
                        text_colour,
                        circle_colour,
                        route_id,
@@ -335,7 +336,7 @@ class RunMatrix(SampleBase):
         route_id_offset_width = self.circle_font.CharacterWidth(ord(route_id))
         route_id_offset = int(route_id_offset_width / 2) - 1
 
-        graphics.DrawText(canvas, self.font, 1, text_y, text_colour, f'{row_ind + 1}')
+        graphics.DrawText(canvas, self.font, 1, text_y, text_colour, f'{arrival_order}')
         graphics.DrawText(canvas, self.font, 7, text_y, text_colour, f'.')
         # graphics.DrawCircle(canvas, 16, circle_y, 5, circle_colour)
         self._draw_filled_circle(canvas, 15, circle_y, circle_colour)
@@ -353,7 +354,7 @@ class RunMatrix(SampleBase):
         else:
             graphics.DrawText(canvas, self.font, 32, text_y, text_colour, arrival_mins)
 
-    def draw_train(self, row_ind, train, stop_id, canvas):
+    def draw_train(self, row_ind, arrival_order, train, stop_id, canvas):
         arrival_mins = mta_arrival_minutes(train, stop_id)
         # arrival_mins = 0
         text_colour = self.text_colour
@@ -385,6 +386,7 @@ class RunMatrix(SampleBase):
 
         self.draw_train_row(canvas,
                             row_ind=row_ind,
+                            arrival_order=arrival_order,
                             text_colour=text_colour,
                             circle_colour=circle_colour,
                             route_id=train.route_id,
@@ -436,9 +438,12 @@ class RunMatrix(SampleBase):
 
         graphics.DrawText(canvas, self.font, 3, text_y_bottom, self.text_colour, '*no trains*')
 
-    def draw_trains(self, trains, stop_id, canvas):
+    def draw_trains(self, trains, stop_id, canvas, display_time):
         if trains is None:
+            canvas.Clear()
             self.draw_train_no_data(stop_id, canvas)
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(display_time)
         elif len(trains):
             # check we don't have stale data
             now = datetime.now()
@@ -450,11 +455,25 @@ class RunMatrix(SampleBase):
             if last_update_time < now - timedelta(minutes=15):
                 self.draw_train_no_data(stop_id, canvas)
             else:
-                self.draw_train(0, trains[0], stop_id, canvas)
-                if len(trains) > 1:
-                    self.draw_train(1, trains[1], stop_id, canvas)
+                if len(trains) == 1:
+                    canvas.Clear()
+                    self.draw_train(0, 1, trains[0], stop_id, canvas)
+                    canvas = self.matrix.SwapOnVSync(canvas)
+                    time.sleep(display_time)
+                else:
+                    swap_time = max(display_time / len(trains)-1, 2)
+                    for i in range(1, len(trains)):
+                        canvas.Clear()
+                        self.draw_train(0, 1, trains[0], stop_id, canvas)
+                        self.draw_train(1, i + 1, trains[i], stop_id, canvas)
+                        canvas = self.matrix.SwapOnVSync(canvas)
+                        time.sleep(swap_time)
         else:
+            canvas.Clear()
             self.draw_trains_none(stop_id, canvas)
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(display_time)
+
 
         return True, canvas
 
@@ -606,16 +625,8 @@ class RunMatrix(SampleBase):
         if uptown_only:
             stop_ids = self.uptown_stop_ids
         for stop_id in stop_ids:
-            trains = mta_get_next_trains(stop_id=stop_id)
-
-            canvas.Clear()
-            success, canvas = self.draw_trains(trains, stop_id, canvas)
-            if success:
-                time.sleep(0.05)
-                canvas = self.matrix.SwapOnVSync(canvas)
-
-            # show display for 10 seconds before update
-            time.sleep(display_time)
+            trains = mta_get_next_trains(stop_id=stop_id, min_num_trains=2, max_arrival_mins=25)
+            success, canvas = self.draw_trains(trains, stop_id, canvas, display_time)
 
         return canvas
 
@@ -792,14 +803,19 @@ def mta_arrival_time(train, stop_id):
 def mta_arrival_minutes(train, stop_id):
     t = mta_arrival_time(train, stop_id)
     tdelta = t - NOW
-    arrival_mins = int(tdelta.total_seconds() / 60)
+    arrival_mins = round(tdelta.total_seconds() / 60)
     return arrival_mins
 
 
-def mta_find_next_trains(trains, num_trains, stop_id):
-    arrival_times = [mta_arrival_time(train, stop_id) for train in trains]
-    train_order = sorted(range(len(arrival_times)), key=lambda k: arrival_times[k])
-    return [trains[train_order[i]] for i in range(num_trains) if len(train_order) > i]
+def mta_find_next_trains(trains, min_num_trains, max_arrival_mins, max_num_trains, stop_id):
+    arrival_mins = [mta_arrival_minutes(train, stop_id) for train in trains]
+    train_order = sorted(range(len(arrival_mins)), key=lambda k: arrival_mins[k])
+    next_trains = [trains[train_order[i]]
+                   for i in range(len(train_order))
+                   if i < min_num_trains or arrival_mins[train_order[i]] <= max_arrival_mins]
+    if len(next_trains) > max_num_trains:
+        next_trains = next_trains[:max_num_trains]
+    return next_trains
 
 
 def mta_get_feeds():
@@ -821,7 +837,9 @@ def mta_get_feeds():
 
 
 def mta_get_next_trains(
-        num_trains=2,
+        min_num_trains=2,
+        max_arrival_mins=25,
+        max_num_trains=9,
         stop_id='F23N'
 ):
     # time from now
@@ -833,7 +851,7 @@ def mta_get_next_trains(
         all_trains = []
         for feed in feeds:
             all_trains.extend(feed.filter_trips(headed_for_stop_id=stop_id))
-        return mta_find_next_trains(all_trains, num_trains, stop_id)
+        return mta_find_next_trains(all_trains, min_num_trains, max_arrival_mins, max_num_trains, stop_id)
     else:
         return None
 
@@ -1159,10 +1177,10 @@ def rapi_update_games(games):
 
         # if we're in progress, update as soon as possible
         if in_progress:
-            next_refresh = RAPI_GAMES_LAST_UPDATE[game['eventID']] + timedelta(seconds=RAPI_REFRESH_RATE)
+            next_refresh = RAPI_GAMES_LAST_UPDATE[game['fixture']['id']] + timedelta(seconds=RAPI_REFRESH_RATE)
             if now > next_refresh:
                 games[game_ind] = rapi_update_game(game)
-                RAPI_GAMES_LAST_UPDATE[game['eventID']] = now
+                RAPI_GAMES_LAST_UPDATE[game['fixture']['id']] = now
 
 
 def rapi_update_game(game):
@@ -1336,7 +1354,7 @@ def to_local_tz(date_time):
 
 
 def main():
-    led_display_trains = RunMatrix(['F23N', 'F23S', 'R33N', 'R23S'], ['F23N', 'R33N'])
+    led_display_trains = RunMatrix(['F23N', 'F23S', 'R33N', 'R33S'], ['F23N', 'R33N'])
     led_display_trains.process()
 
     pass
