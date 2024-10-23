@@ -898,10 +898,10 @@ class RunMatrix(SampleBase):
         else:
             # all day between 9am and midnight
             if timestamp > dt_time(9, 0):
-                return ['trains', 'clock', 'weather', 'sports', 'seasonal'], 5
+                return ['trains', 'clock', 'weather', 'sports', 'seasonal'], [5, 5, 5, 5, 5]
 
             # off after midnight
-            return ['off'], 600
+            return ['off'], [600]
 
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
