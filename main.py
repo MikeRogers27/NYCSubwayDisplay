@@ -1,16 +1,19 @@
+from collections import namedtuple
 from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
 import importlib
 import os
 import pickle
+import random
 import requests
 import tempfile
 import time
 import signal
 import warnings
 
-from PIL import Image
+import holidays
 from nyct_gtfs import NYCTFeed
+from PIL import Image
 from pyowm import OWM
 import pytz
 
@@ -22,7 +25,7 @@ else:
 from samplebase import SampleBase
 
 LOCAL_TZ = pytz.timezone("America/New_York")
-NOW = None
+NOW = datetime.now()
 
 MTA_FEEDS = None
 MTA_TIMESTAMP = None
@@ -94,6 +97,80 @@ RAPI_TEAM_CODES = {
     1359: 'LUT',  # Luton Town
     18212: 'QPR',  # Queens Park Rangers
 }
+
+Seasonal = namedtuple(
+    'Seasonal',
+    ('name', 'date', 'display_days_before', 'display_days_after', 'images', 'image_behaviour')
+)
+_us_holidays = holidays.US(years=NOW.year)
+SEASONAL_DATA = [
+    Seasonal(
+        name='4thjuly',
+        date=datetime(year=NOW.year, month=7, day=4),
+        display_days_before=1,
+        display_days_after=1,
+        images=['images/fireworks.gif', 'images/fireworks2.gif', 'images/fireworks_newyork.gif',],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up_animate_centre',],
+    ),
+    Seasonal(
+        name='halloween',
+        date=datetime(year=NOW.year, month=10, day=31),
+        display_days_before=11,
+        display_days_after=1,
+        images=['images/halloween.png', 'images/halloween_anim.gif', 'images/halloween_witch.gif',
+                'images/halloween_ghost_skel.gif', 'images/halloween_skel.gif', 'images/halloween_ghostbusters.gif',
+                'images/halloween_pump_skel.gif',],
+        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_animate_centre',
+                         'scroll_up', 'scroll_up', 'scroll_up_animate_centre',
+                         'scroll_up',],
+    ),
+    Seasonal(
+        name='bonfire night',
+        date=datetime(year=NOW.year, month=11, day=5),
+        display_days_before=1,
+        display_days_after=1,
+        images=['images/bonfire_night.gif', 'images/fireworks.gif', 'images/fireworks2.gif', ],
+        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_animate_centre',],
+    ),
+    Seasonal(
+        name='thanksgiving',
+        date=datetime.combine(_us_holidays.get_named('Thanksgiving')[0], datetime.min.time()),
+        display_days_before=3,
+        display_days_after=3,
+        images=['images/thanksgiving.gif', 'images/thanksgiving_band.gif', 'images/thanksgiving_snoopy.gif',
+                'images/thanksgiving_beaver.gif', ],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up',
+                         'scroll_up', ],
+    ),
+    Seasonal(
+        name='christmas',
+        date=datetime(year=NOW.year, month=12, day=25),
+        display_days_before=15,
+        display_days_after=2,
+        images=['images/christmas_tree.gif', 'images/christmas_snowman.gif', 'images/snow_cat.gif',
+                'images/merry_christmas_santa.gif', 'images/merry_christmas_tree.gif',],
+        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up',
+                         'scroll_up', 'scroll_up'],
+    ),
+    Seasonal(
+        name='newyearseve',
+        date=datetime(year=NOW.year, month=12, day=31),
+        display_days_before=1,
+        display_days_after=1,
+        images=['images/fireworks.gif', 'images/fireworks2.gif', 'images/fireworks_newyork.gif',],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up_animate_centre',],
+    ),
+    Seasonal(
+        name='winter',
+        date=datetime(year=NOW.year, month=12, day=31),
+        display_days_before=31,
+        display_days_after=31,
+        images=['images/christmas_snowman.gif', 'images/snow_cat.gif', 'images/winter_snow.gif',
+                'images/winter_grouch.gif', ],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up', 'scroll_up_animate_centre',
+                         'scroll_up_animate_centre', ],
+    ),
+]
 
 SGO_GAMES = None
 SGO_TIMESTAMP = None
@@ -474,8 +551,106 @@ class RunMatrix(SampleBase):
             canvas = self.matrix.SwapOnVSync(canvas)
             time.sleep(display_time)
 
-
         return True, canvas
+
+    def draw_seasonal(self, seasonal, canvas, display_time):
+
+        # first pick an image
+        im_ind = random.randrange(len(seasonal.images))
+        image_file = seasonal.images[im_ind]
+        image_behaviour = seasonal.image_behaviour[im_ind]
+
+        if image_behaviour == 'scroll_up':
+            canvas = self.draw_seasonal_scroll_up(canvas, image_file, display_time)
+        elif image_behaviour == 'scroll_up_animate_centre':
+            canvas = self.draw_seasonal_scroll_up_animate_centre(canvas, image_file, display_time)
+
+        return canvas
+
+    def draw_seasonal_scroll_up(self, canvas, image_file, display_time):
+        im = Image.open(image_file)
+
+        n_rows_display = 32*2 + im.height
+        sleep_time = display_time / n_rows_display
+
+        frame_ind = 0
+        is_animated = getattr(im, 'is_animated', False)
+        if is_animated:
+            im.seek(frame_ind)
+        im_disp = im.convert('RGB')
+        fstart = datetime.now()
+        offset_y = 32
+        while offset_y > -(im.height+32):
+            canvas.Clear()
+            canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
+            canvas = self.matrix.SwapOnVSync(canvas)
+
+            if is_animated and (datetime.now() - fstart).total_seconds()*1000 >= im.info['duration']:
+                im.seek(frame_ind)
+                im_disp = im.convert('RGB')
+                frame_ind = (frame_ind + 1) % im.n_frames
+                fstart = datetime.now()
+
+            time.sleep(sleep_time)
+            offset_y -= 1
+
+        return canvas
+
+    def draw_seasonal_scroll_up_animate_centre(self, canvas, image_file, display_time):
+        im = Image.open(image_file)
+        is_animated = getattr(im, 'is_animated', False)
+        if not is_animated:
+            warnings.warn(f'{image_file} is not animated')
+            return canvas
+
+        n_rows_display = 32*2 + im.height
+        start_offset = 32
+        center_offset = 16 - int(im.height / 2)
+        sleep_time = display_time / n_rows_display
+
+        n_rows_to_centre = start_offset - center_offset
+        time_to_centre = n_rows_to_centre * sleep_time
+        # count back until we've reached the frame to start from
+        time_total = 0
+        frame_ind = im.n_frames - 1
+        while time_total<time_to_centre:
+            im.seek(frame_ind)
+            time_total += im.info['duration'] / 1000
+            frame_ind = (frame_ind - 1) % im.n_frames
+        frame_ind = (frame_ind + 1) % im.n_frames
+
+        offset_y = 32
+        im.seek(frame_ind)
+        im_disp = im.convert('RGB')
+        fstart = datetime.now()
+        while offset_y > -(im.height+32):
+
+            # play the animation when centered
+            if offset_y == center_offset:
+                for frame_ind in range(im.n_frames):
+                    canvas.Clear()
+                    im.seek(frame_ind)
+                    im_disp = im.convert('RGB')
+                    fstart = datetime.now()
+
+                    canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
+                    canvas = self.matrix.SwapOnVSync(canvas)
+                    time.sleep(im.info['duration'] / 1000)
+            else:
+                canvas.Clear()
+                canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
+                canvas = self.matrix.SwapOnVSync(canvas)
+                time.sleep(sleep_time)
+
+                if (datetime.now() - fstart).total_seconds()*1000 >= im.info['duration']:
+                    im.seek(frame_ind)
+                    im_disp = im.convert('RGB')
+                    frame_ind = (frame_ind + 1) % im.n_frames
+                    fstart = datetime.now()
+
+            offset_y -= 1
+
+        return canvas
 
     def draw_weather(self, canvas, w):
         text_y_top = 10
@@ -630,6 +805,21 @@ class RunMatrix(SampleBase):
 
         return canvas
 
+    def display_seasonal(self, canvas, display_time=10):
+
+        # should we display at all
+        if random.uniform(0., 1.) > 0.2:  # Only display roughly once every 5 times
+            return canvas
+
+        now = datetime.now()
+        for seasonal in SEASONAL_DATA:
+            start_date = seasonal.date - timedelta(days=seasonal.display_days_before)
+            end_date = seasonal.date + timedelta(days=seasonal.display_days_after)
+            if start_date < now < end_date:
+                canvas = self.draw_seasonal(seasonal, canvas, display_time)
+
+        return canvas
+
     def display_sports(self, canvas, display_time=10):
         games = []
         games.extend(sgo_get_games())
@@ -683,7 +873,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        # return ['sports'], 10
+        # return ['seasonal'], [5]
 
         now = datetime.now()
         timestamp = now.time()
@@ -693,33 +883,33 @@ class RunMatrix(SampleBase):
         if weekday < 5:
             # morning between 7am and 10am
             if dt_time(7, 0) <= timestamp < dt_time(10, 0):
-                return ['trains_uptown', 'clock', 'weather'], 5
+                return ['trains_uptown', 'clock', 'weather'], [5, 5, 5]
             # day between 10am and 8pm
             if dt_time(10, 0) <= timestamp < dt_time(20, 0):
-                return ['trains', 'clock', 'weather'], 5
+                return ['trains', 'clock', 'weather'], [5, 5, 5]
             # evening after 8pm til midnight
             if timestamp > dt_time(19, 30):
-                return ['clock', 'weather', 'sports'], 5
+                return ['clock', 'weather', 'sports', 'seasonal'], [5, 5, 3, 5]
 
             # off after midnight
-            return ['off'], 600
+            return ['off'], [600]
 
         # weekends
         else:
             # all day between 9am and midnight
             if timestamp > dt_time(9, 0):
-                return ['trains', 'clock', 'weather', 'sports'], 10
+                return ['trains', 'clock', 'weather', 'sports', 'seasonal'], [5, 5, 5, 5, 5]
 
             # off after midnight
-            return ['off'], 600
+            return ['off'], [600]
 
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
 
         graceful_killer = GracefulKiller()
         while not graceful_killer.kill_now:
-            display_items, display_time = self.what_should_we_display()
-            for display_item in display_items:
+            display_items, display_times = self.what_should_we_display()
+            for display_item, display_time in zip(display_items, display_times):
                 # break out early if required
                 if graceful_killer.kill_now:
                     break
@@ -733,6 +923,8 @@ class RunMatrix(SampleBase):
                     canvas = self.display_weather(canvas, display_time=display_time)
                 elif display_item == 'sports':
                     canvas = self.display_sports(canvas, display_time=display_time)
+                elif display_item == 'seasonal':
+                    canvas = self.display_seasonal(canvas, display_time=display_time)
                 else:
                     # nothing
                     canvas.Clear()
