@@ -165,8 +165,10 @@ SEASONAL_DATA = [
         date=datetime(year=NOW.year, month=12, day=31),
         display_days_before=31,
         display_days_after=31,
-        images=['images/christmas_snowman.gif', 'images/snow_cat.gif', ],
-        image_behaviour=['scroll_up_animate_centre', 'scroll_up'],
+        images=['images/christmas_snowman.gif', 'images/snow_cat.gif', 'images/winter_snow.gif',
+                'images/winter_grouch.gif', ],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up', 'scroll_up_animate_centre',
+                         'scroll_up_animate_centre', ],
     ),
 ]
 
