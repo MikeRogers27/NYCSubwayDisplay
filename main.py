@@ -129,8 +129,10 @@ SEASONAL_DATA = [
         date=datetime.combine(_us_holidays.get_named('Thanksgiving')[0], datetime.min.time()),
         display_days_before=3,
         display_days_after=3,
-        images=['images/thanksgiving.gif', ],
-        image_behaviour=['scroll_up_animate_centre', ],
+        images=['images/thanksgiving.gif', 'images/thanksgiving_band.gif', 'images/thanksgiving_snoopy.gif',
+                'images/thanksgiving_beaver.gif', ],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up',
+                         'scroll_up', ],
     ),
     Seasonal(
         name='christmas',
