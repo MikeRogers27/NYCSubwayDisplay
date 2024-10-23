@@ -54,28 +54,42 @@ Seasonal = namedtuple(
 _us_holidays = holidays.US(years=NOW.year)
 SEASONAL_DATA = [
     Seasonal(
+        name='4thjuly',
+        date=datetime(year=NOW.year, month=7, day=4),
+        display_days_before=1,
+        display_days_after=1,
+        images=['images/fireworks.gif', 'images/fireworks2.gif', 'images/fireworks_newyork.gif',],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up_animate_centre',],
+    ),
+    Seasonal(
         name='halloween',
         date=datetime(year=NOW.year, month=10, day=31),
         display_days_before=11,
         display_days_after=1,
-        images=['images/halloween.png', 'images/halloween_anim.gif', 'images/halloween_witch.gif'],
-        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_animate_centre'],
+        images=['images/halloween.png', 'images/halloween_anim.gif', 'images/halloween_witch.gif',
+                'images/halloween_ghost_skel.gif', 'images/halloween_skel.gif', 'images/halloween_ghostbusters.gif',
+                'images/halloween_pump_skel.gif',],
+        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_animate_centre',
+                         'scroll_up', 'scroll_up', 'scroll_up_animate_centre',
+                         'scroll_up',],
     ),
     Seasonal(
         name='bonfire night',
         date=datetime(year=NOW.year, month=11, day=5),
         display_days_before=1,
         display_days_after=1,
-        images=['images/bonfire_night.gif', ],
-        image_behaviour=['scroll_up', ],
+        images=['images/bonfire_night.gif', 'images/fireworks.gif', 'images/fireworks2.gif', ],
+        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_animate_centre',],
     ),
     Seasonal(
         name='thanksgiving',
         date=datetime.combine(_us_holidays.get_named('Thanksgiving')[0], datetime.min.time()),
         display_days_before=3,
         display_days_after=3,
-        images=['images/thanksgiving.gif', ],
-        image_behaviour=['scroll_up_animate_centre', ],
+        images=['images/thanksgiving.gif', 'images/thanksgiving_band.gif', 'images/thanksgiving_snoopy.gif',
+                'images/thanksgiving_beaver.gif', ],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up',
+                         'scroll_up', ],
     ),
     Seasonal(
         name='christmas',
@@ -88,12 +102,22 @@ SEASONAL_DATA = [
                          'scroll_up', 'scroll_up'],
     ),
     Seasonal(
+        name='newyearseve',
+        date=datetime(year=NOW.year, month=12, day=31),
+        display_days_before=1,
+        display_days_after=1,
+        images=['images/fireworks.gif', 'images/fireworks2.gif', 'images/fireworks_newyork.gif',],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up_animate_centre',],
+    ),
+    Seasonal(
         name='winter',
         date=datetime(year=NOW.year, month=12, day=31),
         display_days_before=31,
         display_days_after=31,
-        images=['images/christmas_snowman.gif', 'images/snow_cat.gif', ],
-        image_behaviour=['scroll_up_animate_centre', 'scroll_up'],
+        images=['images/christmas_snowman.gif', 'images/snow_cat.gif', 'images/winter_snow.gif',
+                'images/winter_grouch.gif', ],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up', 'scroll_up_animate_centre',
+                         'scroll_up_animate_centre', ],
     ),
 ]
 
@@ -971,7 +995,7 @@ class RunMatrix(SampleBase):
     def display_seasonal(self, canvas, display_time=10):
 
         # should we display at all
-        if random.uniform(0., 1.) > 0.1:  # Only display roughly once every 10 times
+        if random.uniform(0., 1.) > 0.2:  # Only display roughly once every 5 times
             return canvas
 
         now = datetime.now()
@@ -1036,7 +1060,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        return ['sports'], 10
+        return ['sports'], [5]
 
         now = datetime.now()
         timestamp = now.time()
@@ -1046,33 +1070,33 @@ class RunMatrix(SampleBase):
         if weekday < 5:
             # morning between 7am and 10am
             if dt_time(7, 0) <= timestamp < dt_time(10, 0):
-                return ['trains_uptown', 'clock', 'weather'], 5
+                return ['trains_uptown', 'clock', 'weather'], [5, 5, 5]
             # day between 10am and 8pm
             if dt_time(10, 0) <= timestamp < dt_time(20, 0):
-                return ['trains', 'clock', 'weather'], 5
+                return ['trains', 'clock', 'weather'], [5, 5, 5]
             # evening after 8pm til midnight
             if timestamp > dt_time(19, 30):
-                return ['clock', 'weather', 'sports', 'seasonal'], 5
+                return ['clock', 'weather', 'sports', 'seasonal'], [5, 5, 3, 5]
 
             # off after midnight
-            return ['off'], 600
+            return ['off'], [600]
 
         # weekends
         else:
             # all day between 9am and midnight
             if timestamp > dt_time(9, 0):
-                return ['trains', 'clock', 'weather', 'sports', 'seasonal'], 5
+                return ['trains', 'clock', 'weather', 'sports', 'seasonal'], [5, 5, 5, 5, 5]
 
             # off after midnight
-            return ['off'], 600
+            return ['off'], [600]
 
     def run(self):
         canvas = self.matrix.CreateFrameCanvas()
 
         graceful_killer = GracefulKiller()
         while not graceful_killer.kill_now:
-            display_items, display_time = self.what_should_we_display()
-            for display_item in display_items:
+            display_items, display_times = self.what_should_we_display()
+            for display_item, display_time in zip(display_items, display_times):
                 # break out early if required
                 if graceful_killer.kill_now:
                     break
