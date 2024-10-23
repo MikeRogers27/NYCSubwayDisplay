@@ -105,6 +105,14 @@ Seasonal = namedtuple(
 _us_holidays = holidays.US(years=NOW.year)
 SEASONAL_DATA = [
     Seasonal(
+        name='4thjuly',
+        date=datetime(year=NOW.year, month=7, day=4),
+        display_days_before=1,
+        display_days_after=1,
+        images=['images/fireworks.gif', 'images/fireworks2.gif', 'images/fireworks_newyork.gif',],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up_animate_centre',],
+    ),
+    Seasonal(
         name='halloween',
         date=datetime(year=NOW.year, month=10, day=31),
         display_days_before=11,
@@ -121,8 +129,8 @@ SEASONAL_DATA = [
         date=datetime(year=NOW.year, month=11, day=5),
         display_days_before=1,
         display_days_after=1,
-        images=['images/bonfire_night.gif', ],
-        image_behaviour=['scroll_up', ],
+        images=['images/bonfire_night.gif', 'images/fireworks.gif', 'images/fireworks2.gif', ],
+        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_animate_centre',],
     ),
     Seasonal(
         name='thanksgiving',
@@ -143,6 +151,14 @@ SEASONAL_DATA = [
                 'images/merry_christmas_santa.gif', 'images/merry_christmas_tree.gif',],
         image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up',
                          'scroll_up', 'scroll_up'],
+    ),
+    Seasonal(
+        name='newyearseve',
+        date=datetime(year=NOW.year, month=12, day=31),
+        display_days_before=1,
+        display_days_after=1,
+        images=['images/fireworks.gif', 'images/fireworks2.gif', 'images/fireworks_newyork.gif',],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up_animate_centre',],
     ),
     Seasonal(
         name='winter',
