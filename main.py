@@ -873,7 +873,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        # return ['seasonal'], 5
+        # return ['seasonal'], [5]
 
         now = datetime.now()
         timestamp = now.time()
@@ -883,16 +883,16 @@ class RunMatrix(SampleBase):
         if weekday < 5:
             # morning between 7am and 10am
             if dt_time(7, 0) <= timestamp < dt_time(10, 0):
-                return ['trains_uptown', 'clock', 'weather'], 5
+                return ['trains_uptown', 'clock', 'weather'], [5, 5, 5]
             # day between 10am and 8pm
             if dt_time(10, 0) <= timestamp < dt_time(20, 0):
-                return ['trains', 'clock', 'weather'], 5
+                return ['trains', 'clock', 'weather'], [5, 5, 5]
             # evening after 8pm til midnight
             if timestamp > dt_time(19, 30):
-                return ['clock', 'weather', 'sports', 'seasonal'], 5
+                return ['clock', 'weather', 'sports', 'seasonal'], [5, 5, 3, 5]
 
             # off after midnight
-            return ['off'], 600
+            return ['off'], [600]
 
         # weekends
         else:
@@ -908,8 +908,8 @@ class RunMatrix(SampleBase):
 
         graceful_killer = GracefulKiller()
         while not graceful_killer.kill_now:
-            display_items, display_time = self.what_should_we_display()
-            for display_item in display_items:
+            display_items, display_times = self.what_should_we_display()
+            for display_item, display_time in zip(display_items, display_times):
                 # break out early if required
                 if graceful_killer.kill_now:
                     break
