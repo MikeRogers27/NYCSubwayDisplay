@@ -949,17 +949,20 @@ class RunMatrix(SampleBase):
                               current_time.strftime('%M'))
 
             # draw temp
-            temp_c = k_to_c(w.temp["temp"])
-            if temp_c < 0:
-                icon_file = 'icons/32/thermometer_verycold.png'
-            elif temp_c < 10:
-                icon_file = 'icons/32/thermometer_cold.png'
-            elif temp_c < 20:
-                icon_file = 'icons/32/thermometer_mid.png'
-            elif temp_c < 30:
-                icon_file = 'icons/32/thermometer_hot.png'
+            if w is not None:
+                temp_c = k_to_c(w.temp["temp"])
+                if temp_c < 0:
+                    icon_file = 'icons/32/thermometer_verycold.png'
+                elif temp_c < 10:
+                    icon_file = 'icons/32/thermometer_cold.png'
+                elif temp_c < 20:
+                    icon_file = 'icons/32/thermometer_mid.png'
+                elif temp_c < 30:
+                    icon_file = 'icons/32/thermometer_hot.png'
+                else:
+                    icon_file = 'icons/32/thermometer_veryhot.png'
             else:
-                icon_file = 'icons/32/thermometer_veryhot.png'
+                icon_file = 'icons/32/thermometer_mid.png'
 
             im = Image.open(icon_file)
             canvas.SetImage(im, offset_x=clock_pos + 35, offset_y=2)
