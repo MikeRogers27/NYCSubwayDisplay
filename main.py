@@ -1566,9 +1566,8 @@ def sports_get_games(type, games, timestamp, next_refresh, games_last_update, re
             games.extend(sgo_get_games_league('NFL'))
             games.extend(sgo_get_games_league('MLS'))
 
-        # update the leagues again tomorrow
-        today = datetime.fromordinal(dt_date.today().toordinal())
-        next_refresh = today + timedelta(days=1)
+        # update the leagues again tomorrow at 18:00
+        next_refresh = datetime.combine(dt_date.today() + timedelta(days=1), dt_time(18, 00))
 
     # update in progress games
     sports_update_games(games, games_last_update, refresh_rate)
