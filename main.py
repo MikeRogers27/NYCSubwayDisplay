@@ -1099,6 +1099,7 @@ class RunMatrix(SampleBase):
             return ['off'], [600]
 
     def run(self):
+
         canvas = self.matrix.CreateFrameCanvas()
 
         graceful_killer = GracefulKiller()
