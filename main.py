@@ -499,10 +499,8 @@ class GameSGO(Game):
 
     def update(self, games_last_update):
         # we can update the whole league for the cost of one game
-        global SGO_GAMES_LAST_UPDATE
-        SGO_GAMES_LAST_UPDATE = games_last_update
-        games = sgo_get_games_league(self.league_id())
-        return next(g for g in games if g.id() == self.id()), SGO_GAMES_LAST_UPDATE
+        games, games_last_update = sgo_get_games_league(self.league_id(), games_last_update)
+        return next(g for g in games if g.id() == self.id()), games_last_update
 
 
 class GracefulKiller:
@@ -1538,9 +1536,7 @@ def rapi_get_games():
     return RAPI_GAMES
 
 
-def rapi_get_games_league(league_id):
-    global RAPI_GAMES_LAST_UPDATE
-
+def rapi_get_games_league(league_id, games_last_update):
     now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
     starts_after = to_utc_tz(today - timedelta(days=1))
@@ -1575,11 +1571,11 @@ def rapi_get_games_league(league_id):
     for game in data['response']:
         game = GameRAPI(game)
         games.append(game)
-        RAPI_GAMES_LAST_UPDATE[game.id()] = now
+        games_last_update[game.id()] = now
 
     LOG.info(f'rapi_get_games_league - Updated {league_id} with {len(games)} games')
 
-    return games
+    return games, games_last_update
 
 
 def sgo_get_games():
@@ -1590,9 +1586,7 @@ def sgo_get_games():
     return SGO_GAMES
 
 
-def sgo_get_games_league(league_id):
-    global SGO_GAMES_LAST_UPDATE
-
+def sgo_get_games_league(league_id, games_last_update):
     now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
 
@@ -1638,12 +1632,12 @@ def sgo_get_games_league(league_id):
     for game in data['data']:
         if game['teams']['away']['teamID'] in league_teams or \
                 game['teams']['home']['teamID'] in league_teams:
-            SGO_GAMES_LAST_UPDATE[game['eventID']] = now
+            games_last_update[game['eventID']] = now
             games.append(GameSGO(game))
 
     LOG.info(f'sgo_get_games_league - Updated {league_id} with {len(games)} games')
 
-    return games
+    return games, games_last_update
 
 
 def sports_get_games(type, games, timestamp, next_refresh, games_last_update, refresh_rate):
@@ -1663,18 +1657,29 @@ def sports_get_games(type, games, timestamp, next_refresh, games_last_update, re
 
         games = []
         if type == 'RAPI':
-            games.extend(rapi_get_games_league(40))
+            games_league, games_last_update = rapi_get_games_league(40, games_last_update)
+            games.extend(games_league)
         elif type == 'SGO':
-            games.extend(sgo_get_games_league('MLB'))
-            games.extend(sgo_get_games_league('NHL'))
-            games.extend(sgo_get_games_league('NFL'))
-            games.extend(sgo_get_games_league('MLS'))
+            games_league, games_last_update = sgo_get_games_league('MLB', games_last_update)
+            games.extend(games_league)
+            games_league, games_last_update = sgo_get_games_league('NHL', games_last_update)
+            games.extend(games_league)
+            games_league, games_last_update = sgo_get_games_league('NFL', games_last_update)
+            games.extend(games_league)
+            games_league, games_last_update = sgo_get_games_league('MLS', games_last_update)
+            games.extend(games_league)
 
         # update the leagues again tomorrow at 10:00
         next_refresh = datetime.combine(dt_date.today() + timedelta(days=1), dt_time(10, 00))
 
     # update in progress games
-    sports_update_games(games, games_last_update, refresh_rate)
+    games, games_last_update = sports_update_games(games, games_last_update, refresh_rate)
+
+    # clean up games_last_update
+    game_ids = [game.id() for game in games]
+    game_ids_to_remove = list(set(games_last_update.keys()) - set(game_ids))
+    for game_id in game_ids_to_remove:
+        del games_last_update[game_id]
 
     # save to cache
     sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update)
@@ -1717,6 +1722,8 @@ def sports_update_games(games: [Game], games_last_update, refresh_rate):
             next_refresh = games_last_update[game.id()] + timedelta(seconds=refresh_rate)
             if now > next_refresh:
                 games[game_ind], games_last_update = game.update(games_last_update)
+
+    return games, games_last_update
 
 
 def to_utc_tz(date_time):
