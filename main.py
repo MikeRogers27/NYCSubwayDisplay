@@ -600,8 +600,12 @@ class RunMatrix(SampleBase):
             circle_y = 23
             text_y = 28
 
-        route_id_offset_width = self.circle_font.CharacterWidth(ord(route_id))
-        route_id_offset = int(route_id_offset_width / 2) - 1
+        if len(route_id) == 1:
+            route_id_offset_width = self.circle_font.CharacterWidth(ord(route_id))
+            route_id_offset = int(route_id_offset_width / 2) - 1
+        else:
+            # this has happened once so far!
+            route_id_offset = 0
 
         graphics.DrawText(canvas, self.font, 1, text_y, text_colour, f'{arrival_order}')
         graphics.DrawText(canvas, self.font, 7, text_y, text_colour, f'.')
@@ -1102,28 +1106,34 @@ class RunMatrix(SampleBase):
 
         graceful_killer = GracefulKiller()
         while not graceful_killer.kill_now:
-            display_items, display_times = self.what_should_we_display()
-            for display_item, display_time in zip(display_items, display_times):
-                # break out early if required
-                if graceful_killer.kill_now:
-                    break
-                if display_item == 'trains':
-                    canvas = self.display_trains(canvas, display_time=display_time)
-                elif display_item == 'trains_uptown':
-                    canvas = self.display_trains(canvas, display_time=display_time, uptown_only=True)
-                elif display_item == 'clock':
-                    canvas = self.display_clock(canvas, display_time=display_time)
-                elif display_item == 'weather':
-                    canvas = self.display_weather(canvas, display_time=display_time)
-                elif display_item == 'sports':
-                    canvas = self.display_sports(canvas, display_time=display_time)
-                elif display_item == 'seasonal':
-                    canvas = self.display_seasonal(canvas, display_time=display_time)
-                else:
-                    # nothing
-                    canvas.Clear()
-                    canvas = self.matrix.SwapOnVSync(canvas)
-                    time.sleep(display_time)  # check again in 10 mins
+            try:
+                display_items, display_times = self.what_should_we_display()
+                for display_item, display_time in zip(display_items, display_times):
+                    # break out early if required
+                    if graceful_killer.kill_now:
+                        break
+                    if display_item == 'trains':
+                        canvas = self.display_trains(canvas, display_time=display_time)
+                    elif display_item == 'trains_uptown':
+                        canvas = self.display_trains(canvas, display_time=display_time, uptown_only=True)
+                    elif display_item == 'clock':
+                        canvas = self.display_clock(canvas, display_time=display_time)
+                    elif display_item == 'weather':
+                        canvas = self.display_weather(canvas, display_time=display_time)
+                    elif display_item == 'sports':
+                        canvas = self.display_sports(canvas, display_time=display_time)
+                    elif display_item == 'seasonal':
+                        canvas = self.display_seasonal(canvas, display_time=display_time)
+                    else:
+                        # nothing
+                        canvas.Clear()
+                        canvas = self.matrix.SwapOnVSync(canvas)
+                        time.sleep(display_time)  # check again in 10 mins
+            except TypeError as err:
+                LOG.error(f'{err=}')
+            except Exception as err:
+                print(f'Unexpected {err=}, {type(err)=}')
+                raise
 
     @staticmethod
     def _draw_filled_circle(canvas, x, y, color):
