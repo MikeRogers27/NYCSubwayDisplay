@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from collections import namedtuple
 from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
@@ -45,58 +46,6 @@ RAPI_NEXT_REFRESH = None
 RAPI_REFRESH_RATE = 360
 
 RAPI_TEAMS = [746, ]
-RAPI_TEAM_COLOURS = {
-    38: (237, 33, 39),  # Watford
-    43: (0, 112, 181),  # Cardiff City
-    44: (128, 0, 0),  # Burnley
-    56: (226, 26, 35),  # Bristol City
-    58: (0, 25, 74),  # Millwall
-    59: (0, 33, 86),  # Preston North End
-    60: (6, 0, 103),  # West Bromwich Albion
-    62: (236, 34, 39),  # Sheffield United
-    63: (255, 255, 255),  # Leeds
-    64: (241, 138, 1),  # Hull City
-    67: (0, 158, 224),  # Blackburn Rovers
-    69: (255, 255, 255),  # Derby
-    70: (222, 27, 34),  # Middlesbrough
-    71: (255, 242, 0),  # Norwich
-    74: (14, 0, 247),  # Sheffield Wednesday
-    75: (224, 58, 62),  # Stoke City
-    76: (255, 255, 255),  # Swansea City
-    746: (255, 0, 0),  # Sunderland
-    1338: (255, 221, 0),  # Oxford United
-    1346: (5, 157, 217),  # Coventry City
-    1355: (0, 20, 137),  # Portsmouth
-    1357: (20, 135, 62),  # Plymouth Argyle
-    1359: (255, 255, 255),  # Luton Town
-    18212: (29, 91, 164),  # Queens Park Rangers
-}
-RAPI_TEAM_CODES = {
-    38: 'WAT',  # Watford
-    43: 'CAR',  # Cardiff City
-    44: 'BUR',  # Burnley
-    56: 'BRC',  # Bristol City
-    58: 'MIL',  # Millwall
-    59: 'PNE',  # Preston North End
-    60: 'WBA',  # West Bromwich Albion
-    62: 'SHU',  # Sheffield United
-    63: 'LEE',  # Leeds
-    64: 'HUL',  # Hull City
-    67: 'BBR',  # Blackburn Rovers
-    69: 'DER',  # Derby
-    70: 'MID',  # Middlesbrough
-    71: 'NOR',  # Norwich
-    74: 'SHW',  # Sheffield Wednesday
-    75: 'STO',  # Stoke City
-    76: 'SWA',  # Swansea City
-    746: 'SUN',  # Sunderland
-    1338: 'OXF',  # Oxford United
-    1346: 'COV',  # Coventry City
-    1355: 'POR',  # Portsmouth
-    1357: 'PLY',  # Plymouth Argyle
-    1359: 'LUT',  # Luton Town
-    18212: 'QPR',  # Queens Park Rangers
-}
 
 Seasonal = namedtuple(
     'Seasonal',
@@ -183,6 +132,372 @@ SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_N
 SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
 
+class Game(ABC):
+    def __init__(self, game):
+        super().__init__()
+        self.game = game
+
+    @abstractmethod
+    def away_team_colour(self):
+        pass
+
+    @abstractmethod
+    def away_team_id(self):
+        pass
+
+    @abstractmethod
+    def away_team_score(self):
+        pass
+
+    def away_team_score_str(self):
+        if self.has_started() or self.has_ended():
+            if self.has_ended():
+                if self.away_team_score() > self.home_team_score():
+                    score_prefix = 'W'
+                elif self.away_team_score() == self.home_team_score():
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+
+            score_str = f"{score_prefix}{self.away_team_score()}-{self.home_team_score()}"
+        else:
+            score_str = self.start_time().strftime('%H:%M')
+        return score_str
+
+    @abstractmethod
+    def away_team_short_name(self):
+        pass
+
+    @abstractmethod
+    def away_team_title_symbol(self):
+        pass
+
+    @abstractmethod
+    def has_ended(self):
+        pass
+
+    @abstractmethod
+    def date_str(self):
+        pass
+
+    @abstractmethod
+    def has_started(self):
+        pass
+
+    @abstractmethod
+    def home_team_colour(self):
+        pass
+
+    @abstractmethod
+    def home_team_id(self):
+        pass
+
+    def home_team_score_str(self):
+        if self.has_started() or self.has_ended():
+            if self.has_ended():
+                if self.home_team_score() > self.away_team_score():
+                    score_prefix = 'W'
+                elif self.home_team_score() == self.away_team_score():
+                    score_prefix = 'D'
+                else:
+                    score_prefix = 'L'
+            else:
+                score_prefix = ''
+
+            score_str = f"{score_prefix}{self.home_team_score()}-{self.away_team_score()}"
+        else:
+            score_str = self.start_time().strftime('%H:%M')
+        return score_str
+
+    @abstractmethod
+    def home_team_score(self):
+        pass
+
+    @abstractmethod
+    def home_team_short_name(self):
+        pass
+
+    @abstractmethod
+    def home_team_title_symbol(self):
+        pass
+
+    @abstractmethod
+    def icon(self):
+        pass
+
+    @abstractmethod
+    def id(self):
+        pass
+
+    @abstractmethod
+    def league_id(self):
+        pass
+
+    @abstractmethod
+    def league_name(self):
+        pass
+
+    @abstractmethod
+    def start_time(self):
+        pass
+
+
+class GameRAPI(Game):
+    RAPI_TEAM_CODES = {
+        38: 'WAT',  # Watford
+        43: 'CAR',  # Cardiff City
+        44: 'BUR',  # Burnley
+        56: 'BRC',  # Bristol City
+        58: 'MIL',  # Millwall
+        59: 'PNE',  # Preston North End
+        60: 'WBA',  # West Bromwich Albion
+        62: 'SHU',  # Sheffield United
+        63: 'LEE',  # Leeds
+        64: 'HUL',  # Hull City
+        67: 'BBR',  # Blackburn Rovers
+        69: 'DER',  # Derby
+        70: 'MID',  # Middlesbrough
+        71: 'NOR',  # Norwich
+        74: 'SHW',  # Sheffield Wednesday
+        75: 'STO',  # Stoke City
+        76: 'SWA',  # Swansea City
+        746: 'SUN',  # Sunderland
+        1338: 'OXF',  # Oxford United
+        1346: 'COV',  # Coventry City
+        1355: 'POR',  # Portsmouth
+        1357: 'PLY',  # Plymouth Argyle
+        1359: 'LUT',  # Luton Town
+        18212: 'QPR',  # Queens Park Rangers
+    }
+    RAPI_TEAM_COLOURS = {
+        38: (237, 33, 39),  # Watford
+        43: (0, 112, 181),  # Cardiff City
+        44: (128, 0, 0),  # Burnley
+        56: (226, 26, 35),  # Bristol City
+        58: (0, 25, 74),  # Millwall
+        59: (0, 33, 86),  # Preston North End
+        60: (6, 0, 103),  # West Bromwich Albion
+        62: (236, 34, 39),  # Sheffield United
+        63: (255, 255, 255),  # Leeds
+        64: (241, 138, 1),  # Hull City
+        67: (0, 158, 224),  # Blackburn Rovers
+        69: (255, 255, 255),  # Derby
+        70: (222, 27, 34),  # Middlesbrough
+        71: (255, 242, 0),  # Norwich
+        74: (14, 0, 247),  # Sheffield Wednesday
+        75: (224, 58, 62),  # Stoke City
+        76: (255, 255, 255),  # Swansea City
+        746: (255, 0, 0),  # Sunderland
+        1338: (255, 221, 0),  # Oxford United
+        1346: (5, 157, 217),  # Coventry City
+        1355: (0, 20, 137),  # Portsmouth
+        1357: (20, 135, 62),  # Plymouth Argyle
+        1359: (255, 255, 255),  # Luton Town
+        18212: (29, 91, 164),  # Queens Park Rangers
+    }
+
+    def __init__(self, *args):
+        super().__init__(*args)
+
+    def away_team_colour(self):
+        if self.away_team_id() in self.RAPI_TEAM_COLOURS:
+            team_colour = graphics.Color(*self.RAPI_TEAM_COLOURS[self.away_team_id()])
+        else:
+            team_colour = self.text_colour
+        return team_colour
+
+    def away_team_id(self):
+        return self.game['teams']['away']['id']
+
+    def away_team_score(self):
+        return self.game['goals']['away']
+
+    def away_team_short_name(self):
+        if self.away_team_id() in self.RAPI_TEAM_CODES:
+            short_name = self.RAPI_TEAM_CODES[self.away_team_id()]
+        else:
+            short_name = self.game['teams']['away']['name'][:3].upper()
+        return short_name
+
+    def away_team_title_symbol(self):
+        return 'A'
+
+    def date_str(self):
+        today = dt_date.today()
+        start_time = self.start_time()
+        has_ended = self.has_ended()
+        in_progress = self.has_started() and not has_ended
+        if in_progress:
+            date_str = (self.game['fixture']['status']['short'] + ' ' +
+                        str(self.game['fixture']['status']['elapsed']))
+        elif has_ended:
+            if start_time.date() == today:
+                if self.game['score']['extratime']['home'] is not None:
+                    date_str = 'AET'
+                elif self.game['score']['penalty']['home'] is not None:
+                    date_str = 'PEN'
+                else:
+                    date_str = 'FT'
+            else:
+                date_str = start_time.strftime('%a')
+        else:
+            if start_time.date() == today:
+                date_str = 'Today'
+            else:
+                date_str = start_time.strftime('%a')
+        return date_str
+
+    def has_ended(self):
+        return self.game['fixture']['status']['short'] == 'FT'
+
+    def has_started(self):
+        return self.has_ended() or self.game['fixture']['status']['short'] != 'NS'
+
+    def home_team_colour(self):
+        if self.home_team_id() in self.RAPI_TEAM_COLOURS:
+            team_colour = graphics.Color(*self.RAPI_TEAM_COLOURS[self.home_team_id()])
+        else:
+            team_colour = self.text_colour
+        return team_colour
+
+    def home_team_id(self):
+        return self.game['teams']['home']['id']
+
+    def home_team_score(self):
+        return self.game['goals']['home']
+
+    def home_team_short_name(self):
+        if self.home_team_id() in self.RAPI_TEAM_CODES:
+            short_name = self.RAPI_TEAM_CODES[self.home_team_id()]
+        else:
+            short_name = self.game['teams']['home']['name'][:3].upper()
+        return short_name
+
+    def home_team_title_symbol(self):
+        return 'H'
+
+    def icon(self):
+        icon_file = 'icons/32/SUNDERLAND.png'
+        return icon_file
+
+    def id(self):
+        return self.game['fixture']['id']
+
+    def league_id(self):
+        return 40
+
+    def league_name(self):
+        return 'Championship'
+
+    def start_time(self):
+        return datetime.fromtimestamp(self.game['fixture']['timestamp'], tz=LOCAL_TZ)
+
+    def update(self, games_last_update):
+        querystring = {
+            'id': self.id(),
+        }
+        headers = {
+            'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+            'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
+        }
+        url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+        response = requests.request("GET", url, headers=headers, params=querystring)
+        data = response.json()
+
+        game = GameRAPI(data['response'][0])
+        games_last_update[game.id()] = datetime.now()
+        return game, games_last_update
+
+
+class GameSGO(Game):
+
+    def __init__(self, *args):
+        super().__init__(*args)
+
+    def away_team_colour(self):
+        return graphics.Color(*hex_to_rgb(self.game['teams']['away']['colors']['primary']))
+
+    def away_team_id(self):
+        return self.game['teams']['away']['teamID']
+
+    def away_team_score(self):
+        return self.game['teams']['away']['score']
+
+    def away_team_short_name(self):
+        return self.game['teams']['away']['names']['short']
+
+    def away_team_title_symbol(self):
+        return '@'
+
+    def date_str(self):
+        today = dt_date.today()
+        start_time = self.start_time()
+        has_ended = self.has_ended()
+        in_progress = self.has_started() and not has_ended
+        if in_progress or has_ended:
+            if start_time.date() == today:
+                date_str = self.game['status']['displayShort']
+                if date_str == 'F':
+                    date_str = 'Final'
+            else:
+                date_str = start_time.strftime('%a')
+        else:
+            if start_time.date() == today:
+                date_str = 'Today'
+            else:
+                date_str = start_time.strftime('%a')
+        return date_str
+
+    def has_ended(self):
+        return self.game['status']['ended']
+
+    def has_started(self):
+        return self.game['status']['started']
+
+    def home_team_colour(self):
+        return graphics.Color(*hex_to_rgb(self.game['teams']['home']['colors']['primary']))
+
+    def home_team_id(self):
+        return self.game['teams']['home']['teamID']
+
+    def home_team_score(self):
+        return self.game['teams']['home']['score']
+
+    def home_team_short_name(self):
+        return self.game['teams']['home']['names']['short']
+
+    def home_team_title_symbol(self):
+        return 'v'
+
+    def icon(self):
+        if self.away_team_id() in \
+                SGO_MLB_TEAMS + SGO_NHL_TEAMS + SGO_NFL_TEAMS + SGO_MLS_TEAMS:
+            icon_file = 'icons/32/' + self.away_team_id() + '.png'
+        else:
+            icon_file = 'icons/32/' + self.home_team_id() + '.png'
+
+        return icon_file
+
+    def id(self):
+        return self.game['eventID']
+
+    def league_id(self):
+        return self.game['leagueID']
+
+    def league_name(self):
+        return self.game['leagueID']
+
+    def start_time(self):
+        return to_local_tz(parse(self.game['status']['startsAt']))
+
+    def update(self, games_last_update):
+        # we can update the whole league for the cost of one game
+        games, games_last_update = sgo_get_games_league(self.league_id(), games_last_update)
+        return next(g for g in games if g.id() == self.id()), games_last_update
+
+
 class GracefulKiller:
     def __init__(self):
         self.kill_now = False
@@ -213,16 +528,8 @@ class RunMatrix(SampleBase):
         self.circle_colour_g = graphics.Color(108, 190, 69)
         self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
-    def draw_game(self, canvas, game):
-        if 'fixture' in game:
-            canvas = self.draw_game_rapi(canvas, game)
-        else:
-            canvas = self.draw_game_sgo(canvas, game)
-
-        return canvas
-
-    def draw_game_sgo(self, canvas, game):
-        league_id = game['leagueID']
+    def draw_game(self, canvas, game: Game):
+        league_id = game.league_name()
         if league_id == 'MLB':
             league_teams = SGO_MLB_TEAMS
         elif league_id == 'NHL':
@@ -231,6 +538,8 @@ class RunMatrix(SampleBase):
             league_teams = SGO_NFL_TEAMS
         elif league_id == 'MLS':
             league_teams = SGO_MLS_TEAMS
+        elif league_id == 'Championship':
+            league_teams = RAPI_TEAMS
         else:
             return canvas
 
@@ -238,154 +547,30 @@ class RunMatrix(SampleBase):
         text_y_middle = 20
         text_y_bottom = 30
 
-        icon_file = sgo_get_game_icon(game)
-        im = Image.open(icon_file)
-        canvas.SetImage(im)
-
-        start_time = to_local_tz(parse(game['status']['startsAt']))
-
-        has_started = game['status']['started']
-        has_ended = game['status']['ended']
-        in_progress = has_started and not has_ended
-        score_str = start_time.strftime('%H:%M')
-        if game['teams']['away']['teamID'] in league_teams:
-            title_symbol = '@'
-            title_str = game['teams']['home']['names']['short']
-            if has_ended:
-                if game['teams']['away']['score'] > game['teams']['home']['score']:
-                    score_prefix = 'W'
-                elif game['teams']['away']['score'] == game['teams']['home']['score']:
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
-            team_colour = graphics.Color(*hex_to_rgb(game['teams']['home']['colors']['primary']))
-
-            if has_started or has_ended:
-                score_str = f"{score_prefix}{game['teams']['away']['score']}-{game['teams']['home']['score']}"
-
-        else:
-            title_symbol = 'v'
-            title_str = game['teams']['away']['names']['short']
-            if has_ended:
-                if game['teams']['home']['score'] > game['teams']['away']['score']:
-                    score_prefix = 'W'
-                elif game['teams']['home']['score'] == game['teams']['away']['score']:
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
-            team_colour = graphics.Color(*hex_to_rgb(game['teams']['away']['colors']['primary']))
-
-            if has_started or has_ended:
-                score_str = f"{score_prefix}{game['teams']['home']['score']}-{game['teams']['away']['score']}"
-
-        today = dt_date.today()
-        if in_progress or has_ended:
-            if start_time.date() == today:
-                date_str = game['status']['displayShort']
-                if date_str == 'F':
-                    date_str = 'Final'
-            else:
-                date_str = start_time.strftime('%a')
-        else:
-            if start_time.date() == today:
-                date_str = 'Today'
-            else:
-                date_str = start_time.strftime('%a')
-
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
-        graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
-        graphics.DrawText(canvas, self.sports_font, 34, text_y_middle, self.text_colour, score_str)
-        graphics.DrawText(canvas, self.sports_font, 34, text_y_bottom, self.text_colour, date_str)
-
-        return canvas
-
-    def draw_game_rapi(self, canvas, game):
-
-        text_y_top = 10
-        text_y_middle = 20
-        text_y_bottom = 30
-
-        icon_file = rapi_get_game_icon(game)
+        icon_file = game.icon()
         im = Image.open(icon_file)
         im = im.convert('RGB')
         canvas.SetImage(im)
 
-        start_time = datetime.fromtimestamp(game['fixture']['timestamp'])
-
-        has_ended = game['fixture']['status']['short'] == 'FT'
-        has_started = has_ended or game['fixture']['status']['short'] != 'NS'
-        in_progress = has_started and not has_ended
-        score_str = start_time.strftime('%H:%M')
-        if game['teams']['away']['id'] in RAPI_TEAMS:
-            title_symbol = 'A'
-            if game['teams']['home']['id'] in RAPI_TEAM_CODES:
-                title_str = RAPI_TEAM_CODES[game['teams']['home']['id']]
-            else:
-                title_str = game['teams']['home']['name'][:3].upper()
-            if has_ended:
-                if game['goals']['away'] > game['goals']['home']:
-                    score_prefix = 'W'
-                elif game['goals']['away'] == game['goals']['home']:
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
-            if game['teams']['home']['id'] in RAPI_TEAM_COLOURS:
-                team_colour = graphics.Color(*RAPI_TEAM_COLOURS[game['teams']['home']['id']])
-            else:
-                team_colour = self.text_colour
-
-            if has_started or has_ended:
-                score_str = f"{score_prefix}{game['goals']['away']}-{game['goals']['home']}"
+        if game.away_team_id() in league_teams:
+            title_symbol = game.away_team_title_symbol()
+            title_str = game.home_team_short_name()
+            score_str = game.away_team_score_str()
+            team_colour = game.home_team_colour()
         else:
-            title_symbol = 'H'
-            if game['teams']['away']['id'] in RAPI_TEAM_CODES:
-                title_str = RAPI_TEAM_CODES[game['teams']['away']['id']]
-            else:
-                title_str = game['teams']['away']['name'][:3].upper()
-            if has_ended:
-                if game['goals']['home'] > game['goals']['away']:
-                    score_prefix = 'W'
-                elif game['goals']['home'] == game['goals']['away']:
-                    score_prefix = 'D'
-                else:
-                    score_prefix = 'L'
-            else:
-                score_prefix = ''
-            if game['teams']['away']['id'] in RAPI_TEAM_COLOURS:
-                team_colour = graphics.Color(*RAPI_TEAM_COLOURS[game['teams']['away']['id']])
-            else:
-                team_colour = self.text_colour
+            title_symbol = game.home_team_title_symbol()
+            title_str = game.away_team_short_name()
+            score_str = game.home_team_score_str()
+            team_colour = game.away_team_colour()
 
-            if has_started or has_ended:
-                score_str = f"{score_prefix}{game['goals']['home']}-{game['goals']['away']}"
+        date_str = game.date_str()
 
-        today = dt_date.today()
-        if in_progress:
-            date_str = game['fixture']['status']['short'] + ' ' + str(game['fixture']['status']['elapsed'])
-        elif has_ended:
-            if start_time.date() == today:
-                if game['score']['extratime']['home'] is not None:
-                    date_str = 'AET'
-                elif game['score']['penalty']['home'] is not None:
-                    date_str = 'PEN'
-                else:
-                    date_str = 'FT'
-            else:
-                date_str = start_time.strftime('%a')
+        if isinstance(game, GameRAPI):
+            graphics.DrawText(canvas, self.circle_font, 34, text_y_top, team_colour, title_str)
+            graphics.DrawText(canvas, self.circle_font, 56, text_y_top, self.text_colour, title_symbol)
         else:
-            if start_time.date() == today:
-                date_str = 'Today'
-            else:
-                date_str = start_time.strftime('%a')
-
-        graphics.DrawText(canvas, self.circle_font, 34, text_y_top, team_colour, title_str)
-        graphics.DrawText(canvas, self.circle_font, 56, text_y_top, self.text_colour, title_symbol)
+            graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_symbol)
+            graphics.DrawText(canvas, self.circle_font, 40, text_y_top, team_colour, title_str)
         graphics.DrawText(canvas, self.sports_font, 34, text_y_middle, self.text_colour, score_str)
         graphics.DrawText(canvas, self.sports_font, 34, text_y_bottom, self.text_colour, date_str)
 
@@ -538,7 +723,7 @@ class RunMatrix(SampleBase):
                     canvas = self.matrix.SwapOnVSync(canvas)
                     time.sleep(display_time)
                 else:
-                    swap_time = max(display_time / len(trains)-1, 2)
+                    swap_time = max(display_time / len(trains) - 1, 2)
                     for i in range(1, len(trains)):
                         canvas.Clear()
                         self.draw_train(0, 1, trains[0], stop_id, canvas)
@@ -762,17 +947,20 @@ class RunMatrix(SampleBase):
                               current_time.strftime('%M'))
 
             # draw temp
-            temp_c = k_to_c(w.temp["temp"])
-            if temp_c < 0:
-                icon_file = 'icons/32/thermometer_verycold.png'
-            elif temp_c < 10:
-                icon_file = 'icons/32/thermometer_cold.png'
-            elif temp_c < 20:
-                icon_file = 'icons/32/thermometer_mid.png'
-            elif temp_c < 30:
-                icon_file = 'icons/32/thermometer_hot.png'
+            if w is not None:
+                temp_c = k_to_c(w.temp["temp"])
+                if temp_c < 0:
+                    icon_file = 'icons/32/thermometer_verycold.png'
+                elif temp_c < 10:
+                    icon_file = 'icons/32/thermometer_cold.png'
+                elif temp_c < 20:
+                    icon_file = 'icons/32/thermometer_mid.png'
+                elif temp_c < 30:
+                    icon_file = 'icons/32/thermometer_hot.png'
+                else:
+                    icon_file = 'icons/32/thermometer_veryhot.png'
             else:
-                icon_file = 'icons/32/thermometer_veryhot.png'
+                icon_file = 'icons/32/thermometer_mid.png'
 
             im = Image.open(icon_file)
             canvas.SetImage(im, offset_x=clock_pos + 35, offset_y=2)
@@ -873,7 +1061,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        # return ['seasonal'], [5]
+        # return ['sports'], [5]
 
         now = datetime.now()
         timestamp = now.time()
@@ -886,10 +1074,10 @@ class RunMatrix(SampleBase):
                 return ['trains_uptown', 'clock', 'weather'], [5, 5, 5]
             # day between 10am and 8pm
             if dt_time(10, 0) <= timestamp < dt_time(20, 0):
-                return ['trains', 'clock', 'weather'], [5, 5, 5]
+                return ['trains', 'clock', 'weather'], [5, 10, 5]
             # evening after 8pm til midnight
             if timestamp > dt_time(19, 30):
-                return ['clock', 'weather', 'sports', 'seasonal'], [5, 5, 3, 5]
+                return ['clock', 'weather', 'sports', 'seasonal'], [30, 5, 3, 5]
 
             # off after midnight
             return ['off'], [600]
@@ -898,7 +1086,7 @@ class RunMatrix(SampleBase):
         else:
             # all day between 9am and midnight
             if timestamp > dt_time(9, 0):
-                return ['trains', 'clock', 'weather', 'sports', 'seasonal'], [5, 5, 5, 5, 5]
+                return ['trains', 'clock', 'weather', 'sports', 'seasonal'], [5, 30, 5, 3, 5]
 
             # off after midnight
             return ['off'], [600]
@@ -962,17 +1150,8 @@ class RunMatrix(SampleBase):
         # graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
 
     @staticmethod
-    def _sort_games(games):
-
-        def start_time(game):
-            if 'fixture' in game:
-                start_t = to_local_tz(datetime.fromtimestamp(game['fixture']['timestamp']))
-            else:
-                start_t = to_local_tz(parse(game['status']['startsAt']))
-            return start_t
-
-        games = sorted(games, key=start_time)
-
+    def _sort_games(games: [Game]):
+        games = sorted(games, key=lambda g: g.start_time())
         return games
 
 
@@ -1267,45 +1446,15 @@ def owm_weather_to_icon(weather):
     return icon_file
 
 
-def rapi_get_game_icon(game):
-    icon_file = 'icons/32/SUNDERLAND.png'
-    return icon_file
-
-
 def rapi_get_games():
-    global RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP
-
-    if RAPI_TIMESTAMP is None:
-        rapi_retrieve_from_cache()
-
-    # update all feeds when requested but not faster than the refresh rate
-    now = datetime.now()
-    # update un-initialised data so we update on first request
-    if RAPI_NEXT_REFRESH is None:
-        RAPI_NEXT_REFRESH = now - timedelta(days=1)
-
-    if now > RAPI_NEXT_REFRESH:
-        RAPI_TIMESTAMP = datetime.now()
-
-        RAPI_GAMES = []
-        RAPI_GAMES.extend(rapi_get_games_league(40))
-
-        # update the leagues again tomorrow
-        today = datetime.fromordinal(dt_date.today().toordinal())
-        RAPI_NEXT_REFRESH = today + timedelta(days=1)
-
-    # update in progress games
-    rapi_update_games(RAPI_GAMES)
-
-    # save to cache
-    rapi_save_to_cache()
-
+    global RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP, RAPI_GAMES_LAST_UPDATE
+    RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP, RAPI_GAMES_LAST_UPDATE = \
+        sports_get_games('RAPI', RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP,
+                         RAPI_GAMES_LAST_UPDATE, RAPI_REFRESH_RATE)
     return RAPI_GAMES
 
 
-def rapi_get_games_league(league_id):
-    global RAPI_GAMES_LAST_UPDATE
-
+def rapi_get_games_league(league_id, games_last_update):
     now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
     starts_after = to_utc_tz(today - timedelta(days=1))
@@ -1330,116 +1479,22 @@ def rapi_get_games_league(league_id):
 
     games = []
     for game in data['response']:
+        game = GameRAPI(game)
         games.append(game)
-        RAPI_GAMES_LAST_UPDATE[game['fixture']['id']] = now
+        games_last_update[game.id()] = now
 
-    return games
-
-
-def rapi_retrieve_from_cache():
-    global RAPI_GAMES, RAPI_TIMESTAMP, RAPI_NEXT_REFRESH, RAPI_GAMES_LAST_UPDATE
-
-    temp_dir = tempfile.gettempdir()
-    cache_file = os.path.join(temp_dir, 'rapi.pickle')
-    if os.path.exists(cache_file):
-        with open(cache_file, 'rb') as file:
-            RAPI_GAMES, RAPI_TIMESTAMP, RAPI_NEXT_REFRESH, RAPI_GAMES_LAST_UPDATE = pickle.load(file)
-
-    return
-
-
-def rapi_save_to_cache():
-    temp_dir = tempfile.gettempdir()
-    cache_file = os.path.join(temp_dir, 'rapi.pickle')
-    with open(cache_file, 'wb') as file:
-        pickle.dump((RAPI_GAMES, RAPI_TIMESTAMP, RAPI_NEXT_REFRESH, RAPI_GAMES_LAST_UPDATE), file)
-
-
-def rapi_update_games(games):
-    global RAPI_GAMES_LAST_UPDATE
-
-    now = datetime.now()
-    for game_ind, game in enumerate(games):
-        has_ended = game['fixture']['status']['short'] == 'FT'
-        has_started = has_ended or game['fixture']['status']['short'] != 'NS'
-        start_time = to_local_tz(parse(game['fixture']['date']))
-        if not has_started and LOCAL_TZ.localize(now) > start_time:
-            has_started = True
-        in_progress = has_started and not has_ended
-
-        # if we're in progress, update as soon as possible
-        if in_progress:
-            next_refresh = RAPI_GAMES_LAST_UPDATE[game['fixture']['id']] + timedelta(seconds=RAPI_REFRESH_RATE)
-            if now > next_refresh:
-                games[game_ind] = rapi_update_game(game)
-                RAPI_GAMES_LAST_UPDATE[game['fixture']['id']] = now
-
-
-def rapi_update_game(game):
-    querystring = {
-        'id': game['fixture']['id'],
-    }
-    headers = {
-        'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
-        'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
-    }
-    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-    response = requests.request("GET", url, headers=headers, params=querystring)
-    data = response.json()
-
-    game = data['response'][0]
-    return game
-
-
-def sgo_get_game_icon(game):
-    if game['teams']['away']['teamID'] in \
-            SGO_MLB_TEAMS + SGO_NHL_TEAMS + SGO_NFL_TEAMS + SGO_MLS_TEAMS:
-        icon_file = 'icons/32/' + game['teams']['away']['teamID'] + '.png'
-    else:
-        icon_file = 'icons/32/' + game['teams']['home']['teamID'] + '.png'
-
-    return icon_file
+    return games, games_last_update
 
 
 def sgo_get_games():
-    global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH
-
-    if SGO_TIMESTAMP is None:
-        sgo_retrieve_from_cache()
-
-    now = datetime.now()
-
-    # update un-initalised data so we update on first request
-    if SGO_NEXT_REFRESH is None:
-        SGO_NEXT_REFRESH = now - timedelta(days=1)
-
-    # update all feeds when requested but not faster than the refresh rate
-    # update
-    if now > SGO_NEXT_REFRESH:
-        SGO_TIMESTAMP = datetime.now()
-
-        SGO_GAMES = []
-        SGO_GAMES.extend(sgo_get_games_league('MLB'))
-        SGO_GAMES.extend(sgo_get_games_league('NHL'))
-        SGO_GAMES.extend(sgo_get_games_league('NFL'))
-        SGO_GAMES.extend(sgo_get_games_league('MLS'))
-
-        # update the leagues again tomorrow
-        today = datetime.fromordinal(dt_date.today().toordinal())
-        SGO_NEXT_REFRESH = today + timedelta(days=1)
-
-    # now update games in progress
-    sgo_update_games(SGO_GAMES)
-
-    # save to cache
-    sgo_save_to_cache()
-
+    global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE
+    SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE = \
+        sports_get_games('SGO', SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH,
+                         SGO_GAMES_LAST_UPDATE, SGO_REFRESH_RATE)
     return SGO_GAMES
 
 
-def sgo_get_games_league(league_id):
-    global SGO_GAMES_LAST_UPDATE
-
+def sgo_get_games_league(league_id, games_last_update):
     now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
 
@@ -1475,60 +1530,93 @@ def sgo_get_games_league(league_id):
     for game in data['data']:
         if game['teams']['away']['teamID'] in league_teams or \
                 game['teams']['home']['teamID'] in league_teams:
-            SGO_GAMES_LAST_UPDATE[game['eventID']] = now
-            games.append(game)
+            games_last_update[game['eventID']] = now
+            games.append(GameSGO(game))
 
-    return games
+    return games, games_last_update
 
 
-def sgo_retrieve_from_cache():
-    global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE
+def sports_get_games(type, games, timestamp, next_refresh, games_last_update, refresh_rate):
+    if timestamp is None:
+        games, timestamp, next_refresh, games_last_update = sports_retrieve_from_cache(
+            type, games, timestamp, next_refresh, games_last_update
+        )
 
+    # update all feeds when requested but not faster than the refresh rate
+    now = datetime.now()
+    # update un-initialised data so we update on first request
+    if next_refresh is None:
+        next_refresh = now - timedelta(days=1)
+
+    if now > next_refresh:
+        timestamp = datetime.now()
+
+        games = []
+        if type == 'RAPI':
+            games_league, games_last_update = rapi_get_games_league(40, games_last_update)
+            games.extend(games_league)
+        elif type == 'SGO':
+            games_league, games_last_update = sgo_get_games_league('MLB', games_last_update)
+            games.extend(games_league)
+            games_league, games_last_update = sgo_get_games_league('NHL', games_last_update)
+            games.extend(games_league)
+            games_league, games_last_update = sgo_get_games_league('NFL', games_last_update)
+            games.extend(games_league)
+            games_league, games_last_update = sgo_get_games_league('MLS', games_last_update)
+            games.extend(games_league)
+
+        # update the leagues again tomorrow at 10:00
+        next_refresh = datetime.combine(dt_date.today() + timedelta(days=1), dt_time(10, 00))
+
+    # update in progress games
+    games, games_last_update = sports_update_games(games, games_last_update, refresh_rate)
+
+    # clean up games_last_update
+    game_ids = [game.id() for game in games]
+    game_ids_to_remove = list(set(games_last_update.keys()) - set(game_ids))
+    for game_id in game_ids_to_remove:
+        del games_last_update[game_id]
+
+    # save to cache
+    sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update)
+
+    return games, timestamp, next_refresh, games_last_update
+
+
+def sports_retrieve_from_cache(type, games, timestamp, next_refresh, games_last_update):
     temp_dir = tempfile.gettempdir()
-    cache_file = os.path.join(temp_dir, 'sgo.pickle')
+    cache_file = os.path.join(temp_dir, f'{type}.pickle')
     if os.path.exists(cache_file):
         with open(cache_file, 'rb') as file:
-            SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE = pickle.load(file)
+            games, timestamp, next_refresh, games_last_update = pickle.load(file)
 
-    return
+    return games, timestamp, next_refresh, games_last_update
 
 
-def sgo_save_to_cache():
+def sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update):
     temp_dir = tempfile.gettempdir()
-    cache_file = os.path.join(temp_dir, 'sgo.pickle')
+    cache_file = os.path.join(temp_dir, f'{type}.pickle')
     with open(cache_file, 'wb') as file:
-        pickle.dump((SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE), file)
+        pickle.dump((games, timestamp, next_refresh, games_last_update), file)
 
 
-def sgo_update_games(games):
-    global SGO_GAMES_LAST_UPDATE
-
+def sports_update_games(games: [Game], games_last_update, refresh_rate):
     now = datetime.now()
     for game_ind, game in enumerate(games):
-        has_started = game['status']['started']
-        start_time = to_local_tz(parse(game['status']['startsAt']))
+        has_ended = game.has_ended()
+        has_started = game.has_started()
+        start_time = game.start_time()
         if not has_started and LOCAL_TZ.localize(now) > start_time:
             has_started = True
-        has_ended = game['status']['ended']
         in_progress = has_started and not has_ended
 
         # if we're in progress, update as soon as possible
         if in_progress:
-            next_refresh = SGO_GAMES_LAST_UPDATE[game['eventID']] + timedelta(seconds=SGO_REFRESH_RATE)
+            next_refresh = games_last_update[game.id()] + timedelta(seconds=refresh_rate)
             if now > next_refresh:
-                games[game_ind] = sgo_update_game(game)
-                SGO_GAMES_LAST_UPDATE[game['eventID']] = now
+                games[game_ind], games_last_update = game.update(games_last_update)
 
-
-def sgo_update_game(game):
-    response = requests.get(
-        f'https://api.sportsgameodds.com/v1/events?eventID={game["eventID"]}&'
-        f'oddIDs=points-home-game-sp-home',
-        headers={'X-Api-Key': os.environ['SGO_API_KEY']}
-    )
-    data = response.json()
-    game = data['data'][0]
-    return game
+    return games, games_last_update
 
 
 def to_utc_tz(date_time):
