@@ -305,13 +305,13 @@ class GameRAPI(Game):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.text_colour = graphics.Color(74, 214, 9)
+        self.text_colour = (74, 214, 9)
 
     def away_team_colour(self):
         if self.away_team_id() in self.RAPI_TEAM_COLOURS:
             team_colour = graphics.Color(*self.RAPI_TEAM_COLOURS[self.away_team_id()])
         else:
-            team_colour = self.text_colour
+            team_colour = graphics.Color(self.text_colour)
         return team_colour
 
     def away_team_id(self):
@@ -365,7 +365,7 @@ class GameRAPI(Game):
         if self.home_team_id() in self.RAPI_TEAM_COLOURS:
             team_colour = graphics.Color(*self.RAPI_TEAM_COLOURS[self.home_team_id()])
         else:
-            team_colour = self.text_colour
+            team_colour = graphics.Color(self.text_colour)
         return team_colour
 
     def home_team_id(self):
