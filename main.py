@@ -63,8 +63,8 @@ SEASONAL_DATA = [
         date=datetime(year=NOW.year, month=7, day=4),
         display_days_before=1,
         display_days_after=1,
-        images=['images/fireworks.gif', 'images/fireworks2.gif', 'images/fireworks_newyork.gif',],
-        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up_animate_centre',],
+        images=['images/fireworks.gif', 'images/fireworks2.gif', 'images/fireworks_newyork.gif', ],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up_animate_centre', ],
     ),
     Seasonal(
         name='halloween',
@@ -73,10 +73,10 @@ SEASONAL_DATA = [
         display_days_after=1,
         images=['images/halloween.png', 'images/halloween_anim.gif', 'images/halloween_witch.gif',
                 'images/halloween_ghost_skel.gif', 'images/halloween_skel.gif', 'images/halloween_ghostbusters.gif',
-                'images/halloween_pump_skel.gif',],
+                'images/halloween_pump_skel.gif', ],
         image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_animate_centre',
                          'scroll_up', 'scroll_up', 'scroll_up_animate_centre',
-                         'scroll_up',],
+                         'scroll_up', ],
     ),
     Seasonal(
         name='bonfire night',
@@ -84,7 +84,7 @@ SEASONAL_DATA = [
         display_days_before=1,
         display_days_after=1,
         images=['images/bonfire_night.gif', 'images/fireworks.gif', 'images/fireworks2.gif', ],
-        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_animate_centre',],
+        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_animate_centre', ],
     ),
     Seasonal(
         name='thanksgiving',
@@ -102,7 +102,7 @@ SEASONAL_DATA = [
         display_days_before=15,
         display_days_after=2,
         images=['images/christmas_tree.gif', 'images/christmas_snowman.gif', 'images/snow_cat.gif',
-                'images/merry_christmas_santa.gif', 'images/merry_christmas_tree.gif',],
+                'images/merry_christmas_santa.gif', 'images/merry_christmas_tree.gif', ],
         image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up',
                          'scroll_up', 'scroll_up'],
     ),
@@ -111,8 +111,8 @@ SEASONAL_DATA = [
         date=datetime(year=NOW.year, month=12, day=31),
         display_days_before=1,
         display_days_after=1,
-        images=['images/fireworks.gif', 'images/fireworks2.gif', 'images/fireworks_newyork.gif',],
-        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up_animate_centre',],
+        images=['images/fireworks.gif', 'images/fireworks2.gif', 'images/fireworks_newyork.gif', ],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up_animate_centre', ],
     ),
     Seasonal(
         name='winter',
@@ -305,6 +305,7 @@ class GameRAPI(Game):
 
     def __init__(self, *args):
         super().__init__(*args)
+        self.text_colour = graphics.Color(74, 214, 9)
 
     def away_team_colour(self):
         if self.away_team_id() in self.RAPI_TEAM_COLOURS:
@@ -764,7 +765,7 @@ class RunMatrix(SampleBase):
     def draw_seasonal_scroll_up(self, canvas, image_file, display_time):
         im = Image.open(image_file)
 
-        n_rows_display = 32*2 + im.height
+        n_rows_display = 32 * 2 + im.height
         sleep_time = display_time / n_rows_display
 
         frame_ind = 0
@@ -774,12 +775,12 @@ class RunMatrix(SampleBase):
         im_disp = im.convert('RGB')
         fstart = datetime.now()
         offset_y = 32
-        while offset_y > -(im.height+32):
+        while offset_y > -(im.height + 32):
             canvas.Clear()
             canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
             canvas = self.matrix.SwapOnVSync(canvas)
 
-            if is_animated and (datetime.now() - fstart).total_seconds()*1000 >= im.info['duration']:
+            if is_animated and (datetime.now() - fstart).total_seconds() * 1000 >= im.info['duration']:
                 im.seek(frame_ind)
                 im_disp = im.convert('RGB')
                 frame_ind = (frame_ind + 1) % im.n_frames
@@ -797,7 +798,7 @@ class RunMatrix(SampleBase):
             warnings.warn(f'{image_file} is not animated')
             return canvas
 
-        n_rows_display = 32*2 + im.height
+        n_rows_display = 32 * 2 + im.height
         start_offset = 32
         center_offset = 16 - int(im.height / 2)
         sleep_time = display_time / n_rows_display
@@ -807,7 +808,7 @@ class RunMatrix(SampleBase):
         # count back until we've reached the frame to start from
         time_total = 0
         frame_ind = im.n_frames - 1
-        while time_total<time_to_centre:
+        while time_total < time_to_centre:
             im.seek(frame_ind)
             time_total += im.info['duration'] / 1000
             frame_ind = (frame_ind - 1) % im.n_frames
@@ -817,7 +818,7 @@ class RunMatrix(SampleBase):
         im.seek(frame_ind)
         im_disp = im.convert('RGB')
         fstart = datetime.now()
-        while offset_y > -(im.height+32):
+        while offset_y > -(im.height + 32):
 
             # play the animation when centered
             if offset_y == center_offset:
@@ -836,7 +837,7 @@ class RunMatrix(SampleBase):
                 canvas = self.matrix.SwapOnVSync(canvas)
                 time.sleep(sleep_time)
 
-                if (datetime.now() - fstart).total_seconds()*1000 >= im.info['duration']:
+                if (datetime.now() - fstart).total_seconds() * 1000 >= im.info['duration']:
                     im.seek(frame_ind)
                     im_disp = im.convert('RGB')
                     frame_ind = (frame_ind + 1) % im.n_frames
@@ -1488,46 +1489,46 @@ def parse_args():
     )
 
     parser.add_argument("-r", "--led-rows", action="store",
-                             help="Display rows. 16 for 16x32, 32 for 32x32. Default: 32", default=32, type=int)
+                        help="Display rows. 16 for 16x32, 32 for 32x32. Default: 32", default=32, type=int)
     parser.add_argument("--led-cols", action="store", help="Panel columns. Typically 32 or 64. (Default: 32)",
-                             default=32, type=int)
+                        default=32, type=int)
     parser.add_argument("-c", "--led-chain", action="store", help="Daisy-chained boards. Default: 1.", default=1,
-                             type=int)
+                        type=int)
     parser.add_argument("-P", "--led-parallel", action="store",
-                             help="For Plus-models or RPi2: parallel chains. 1..3. Default: 1", default=1, type=int)
+                        help="For Plus-models or RPi2: parallel chains. 1..3. Default: 1", default=1, type=int)
     parser.add_argument("-p", "--led-pwm-bits", action="store",
-                             help="Bits used for PWM. Something between 1..11. Default: 11", default=11, type=int)
+                        help="Bits used for PWM. Something between 1..11. Default: 11", default=11, type=int)
     parser.add_argument("-b", "--led-brightness", action="store",
-                             help="Sets brightness level. Default: 100. Range: 1..100", default=100, type=int)
+                        help="Sets brightness level. Default: 100. Range: 1..100", default=100, type=int)
     parser.add_argument("-m", "--led-gpio-mapping",
-                             help="Hardware Mapping: regular, adafruit-hat, adafruit-hat-pwm",
-                             choices=['regular', 'regular-pi1', 'adafruit-hat', 'adafruit-hat-pwm'], type=str)
+                        help="Hardware Mapping: regular, adafruit-hat, adafruit-hat-pwm",
+                        choices=['regular', 'regular-pi1', 'adafruit-hat', 'adafruit-hat-pwm'], type=str)
     parser.add_argument("--led-scan-mode", action="store",
-                             help="Progressive or interlaced scan. 0 Progressive, 1 Interlaced (default)", default=1,
-                             choices=range(2), type=int)
+                        help="Progressive or interlaced scan. 0 Progressive, 1 Interlaced (default)", default=1,
+                        choices=range(2), type=int)
     parser.add_argument("--led-pwm-lsb-nanoseconds", action="store",
-                             help="Base time-unit for the on-time in the lowest significant bit in nanoseconds. Default: 130",
-                             default=130, type=int)
+                        help="Base time-unit for the on-time in the lowest significant bit in nanoseconds. Default: 130",
+                        default=130, type=int)
     parser.add_argument("--led-show-refresh", action="store_true",
-                             help="Shows the current refresh rate of the LED panel")
+                        help="Shows the current refresh rate of the LED panel")
     parser.add_argument("--led-slowdown-gpio", action="store",
-                             help="Slow down writing to GPIO. Range: 0..4. Default: 1", default=1, type=int)
+                        help="Slow down writing to GPIO. Range: 0..4. Default: 1", default=1, type=int)
     parser.add_argument("--led-no-hardware-pulse", action="store", help="Don't use hardware pin-pulse generation")
     parser.add_argument("--led-rgb-sequence", action="store",
-                             help="Switch if your matrix has led colors swapped. Default: RGB", default="RGB", type=str)
+                        help="Switch if your matrix has led colors swapped. Default: RGB", default="RGB", type=str)
     parser.add_argument("--led-pixel-mapper", action="store", help="Apply pixel mappers. e.g \"Rotate:90\"",
-                             default="", type=str)
+                        default="", type=str)
     parser.add_argument("--led-row-addr-type", action="store",
-                             help="0 = default; 1=AB-addressed panels; 2=row direct; 3=ABC-addressed panels; 4 = ABC Shift + DE direct",
-                             default=0, type=int, choices=[0, 1, 2, 3, 4])
+                        help="0 = default; 1=AB-addressed panels; 2=row direct; 3=ABC-addressed panels; 4 = ABC Shift + DE direct",
+                        default=0, type=int, choices=[0, 1, 2, 3, 4])
     parser.add_argument("--led-multiplexing", action="store",
-                             help="Multiplexing type: 0=direct; 1=strip; 2=checker; 3=spiral; 4=ZStripe; 5=ZnMirrorZStripe; 6=coreman; 7=Kaler2Scan; 8=ZStripeUneven... (Default: 0)",
-                             default=0, type=int)
+                        help="Multiplexing type: 0=direct; 1=strip; 2=checker; 3=spiral; 4=ZStripe; 5=ZnMirrorZStripe; 6=coreman; 7=Kaler2Scan; 8=ZStripeUneven... (Default: 0)",
+                        default=0, type=int)
     parser.add_argument("--led-panel-type", action="store",
-                             help="Needed to initialize special panels. Supported: 'FM6126A'", default="", type=str)
+                        help="Needed to initialize special panels. Supported: 'FM6126A'", default="", type=str)
     parser.add_argument("--led-no-drop-privs", dest="drop_privileges",
-                             help="Don't drop privileges from 'root' after initializing the hardware.",
-                             action='store_false')
+                        help="Don't drop privileges from 'root' after initializing the hardware.",
+                        action='store_false')
     parser.add_argument("--led-limit-refresh", action="store", help="Hz. Default: 0", default=0, type=int)
     parser.add_argument('--log',
                         help='Log Level: DEBUG, INFO, WARNING, ERROR, CRITICAL',
@@ -1750,10 +1751,7 @@ def to_local_tz(date_time):
     return date_time
 
 
-
-
 def main():
-
     args = parse_args()
     logger_setup(args)
 
