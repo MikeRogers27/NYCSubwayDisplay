@@ -265,6 +265,7 @@ class GameRAPI(Game):
         69: 'DER',  # Derby
         70: 'MID',  # Middlesbrough
         71: 'NOR',  # Norwich
+        72: 'QPR',  # Queens Park Rangers
         74: 'SHW',  # Sheffield Wednesday
         75: 'STO',  # Stoke City
         76: 'SWA',  # Swansea City
@@ -274,7 +275,6 @@ class GameRAPI(Game):
         1355: 'POR',  # Portsmouth
         1357: 'PLY',  # Plymouth Argyle
         1359: 'LUT',  # Luton Town
-        18212: 'QPR',  # Queens Park Rangers
     }
     RAPI_TEAM_COLOURS = {
         38: (237, 33, 39),  # Watford
@@ -290,6 +290,7 @@ class GameRAPI(Game):
         67: (0, 158, 224),  # Blackburn Rovers
         69: (255, 255, 255),  # Derby
         70: (222, 27, 34),  # Middlesbrough
+        72: (29, 91, 164),  # Queens Park Rangers
         71: (255, 242, 0),  # Norwich
         74: (14, 0, 247),  # Sheffield Wednesday
         75: (224, 58, 62),  # Stoke City
@@ -300,7 +301,6 @@ class GameRAPI(Game):
         1355: (0, 20, 137),  # Portsmouth
         1357: (20, 135, 62),  # Plymouth Argyle
         1359: (255, 255, 255),  # Luton Town
-        18212: (29, 91, 164),  # Queens Park Rangers
     }
 
     def __init__(self, *args):
