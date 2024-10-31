@@ -1617,16 +1617,16 @@ def sgo_get_games_league(league_id, games_last_update):
         )
     except requests.exceptions.ConnectionError as e:
         LOG.error(f'sgo_get_games_league - ConnectionError {e}')
-        return []
+        return [], games_last_update
 
     if response.status_code != 200:
         LOG.error(f'sgo_get_games_league - Response returned code {response.status_code} {response.reason}')
-        return []
+        return [], games_last_update
 
     data = response.json()
     if not data['success']:
         LOG.error(f'sgo_get_games_league - Data["success"] == False')
-        return []
+        return [], games_last_update
 
     if league_id == 'MLB':
         league_teams = SGO_MLB_TEAMS
