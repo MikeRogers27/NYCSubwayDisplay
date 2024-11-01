@@ -33,6 +33,7 @@ LOCAL_TZ = pytz.timezone("America/New_York")
 NOW = datetime.now()
 
 LOG = Optional[Logger]
+MIN_DISPLAY_TIME = 3
 
 MTA_FEEDS = None
 MTA_TIMESTAMP = None
@@ -733,7 +734,7 @@ class RunMatrix(SampleBase):
                     canvas = self.matrix.SwapOnVSync(canvas)
                     time.sleep(display_time)
                 else:
-                    swap_time = max(display_time / len(trains) - 1, 2)
+                    swap_time = max(display_time / len(trains) - 1, MIN_DISPLAY_TIME)
                     for i in range(1, len(trains)):
                         canvas.Clear()
                         self.draw_train(0, 1, trains[0], stop_id, canvas)
@@ -1048,7 +1049,7 @@ class RunMatrix(SampleBase):
             forecasts = owm_forecasts_tomorrow()
 
         if len(forecasts):
-            weather_time = max(3, round(display_time / (len(forecasts) + 2)))
+            weather_time = max(round(display_time / (len(forecasts) + 2)), MIN_DISPLAY_TIME)
 
             canvas.Clear()
             canvas = self.draw_weather_summary(canvas, forecasts, title_str)
@@ -1087,7 +1088,7 @@ class RunMatrix(SampleBase):
                 return ['trains', 'clock', 'weather'], [5, 10, 5]
             # evening after 8pm til midnight
             if timestamp > dt_time(19, 30):
-                return ['clock', 'weather', 'sports', 'seasonal'], [30, 5, 3, 5]
+                return ['clock', 'weather', 'sports', 'seasonal'], [30, 5, MIN_DISPLAY_TIME, 5]
 
             # off after midnight
             return ['off'], [600]
@@ -1096,7 +1097,7 @@ class RunMatrix(SampleBase):
         else:
             # all day between 9am and midnight
             if timestamp > dt_time(9, 0):
-                return ['trains', 'clock', 'weather', 'sports', 'seasonal'], [5, 30, 5, 3, 5]
+                return ['trains', 'clock', 'weather', 'sports', 'seasonal'], [5, 30, 5, MIN_DISPLAY_TIME, 5]
 
             # off after midnight
             return ['off'], [600]
@@ -1152,19 +1153,6 @@ class RunMatrix(SampleBase):
         graphics.DrawLine(canvas, x - 4, y + 4, x + 4, y + 4, color)
         graphics.DrawLine(canvas, x - 3, y + 5, x + 3, y + 5, color)
         graphics.DrawLine(canvas, x - 1, y + 6, x + 1, y + 6, color)
-
-        # # Draw circle with lines
-        # graphics.DrawLine(canvas, x - 2, y - 5, x + 2, y - 5, color)
-        # graphics.DrawLine(canvas, x - 3, y - 4, x + 3, y - 4, color)
-        # graphics.DrawLine(canvas, x - 4, y - 3, x + 4, y - 3, color)
-        # graphics.DrawLine(canvas, x - 5, y - 2, x + 5, y - 2, color)
-        # graphics.DrawLine(canvas, x - 5, y - 1, x + 5, y - 1, color)
-        # graphics.DrawLine(canvas, x - 5, y, x + 5, y, color)
-        # graphics.DrawLine(canvas, x - 5, y + 1, x + 5, y + 1, color)
-        # graphics.DrawLine(canvas, x - 5, y + 2, x + 5, y + 2, color)
-        # graphics.DrawLine(canvas, x - 4, y + 3, x + 4, y + 3, color)
-        # graphics.DrawLine(canvas, x - 3, y + 4, x + 3, y + 4, color)
-        # graphics.DrawLine(canvas, x - 2, y + 5, x + 2, y + 5, color)
 
     @staticmethod
     def _sort_games(games: [Game]):
