@@ -1307,9 +1307,10 @@ def owm_forecasts_get(time_start, time_end):
     # icon_weather = w
 
     forecasts = []
-    for w in forecast.forecast.weathers:
-        if time_start.timestamp() <= w.reference_time() <= time_end.timestamp():
-            forecasts.append(w)
+    if forecast is not None:
+        for w in forecast.forecast.weathers:
+            if time_start.timestamp() <= w.reference_time() <= time_end.timestamp():
+                forecasts.append(w)
 
     return forecasts
 
