@@ -888,6 +888,7 @@ class RunMatrix(SampleBase):
 
         icon_file = 'icons/32/weather-forecast.png'
         im = Image.open(icon_file)
+        im = im.convert('RGB')
         canvas.SetImage(im)
 
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, '***')
