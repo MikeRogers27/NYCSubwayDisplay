@@ -726,7 +726,10 @@ class RunMatrix(SampleBase):
                     last_update_time = train.last_position_update
             # if the latest update was more than 15 minutes ago, the data is stale
             if last_update_time < now - timedelta(minutes=15):
+                canvas.Clear()
                 self.draw_train_no_data(stop_id, canvas)
+                canvas = self.matrix.SwapOnVSync(canvas)
+                time.sleep(display_time)
             else:
                 if len(trains) == 1:
                     canvas.Clear()
@@ -1000,7 +1003,7 @@ class RunMatrix(SampleBase):
         if uptown_only:
             stop_ids = self.uptown_stop_ids
         for stop_id in stop_ids:
-            trains = mta_get_next_trains(stop_id=stop_id, min_num_trains=2, max_arrival_mins=25)
+            trains = mta_get_next_trains(stop_id=stop_id, max_arrival_mins=25)
             success, canvas = self.draw_trains(trains, stop_id, canvas, display_time)
 
         return canvas
@@ -1098,7 +1101,8 @@ class RunMatrix(SampleBase):
         else:
             # all day between 9am and midnight
             if timestamp > dt_time(9, 0):
-                return ['trains', 'clock', 'weather', 'sports', 'seasonal'], [5, 30, 5, MIN_DISPLAY_TIME, 5]
+                # return ['trains', 'clock', 'weather', 'sports', 'seasonal'], [5, 30, 5, MIN_DISPLAY_TIME, 5]
+                return ['trains', ], [5, ]
 
             # off after midnight
             return ['off'], [600]
@@ -1201,12 +1205,12 @@ def mta_arrival_minutes(train, stop_id):
     return arrival_mins
 
 
-def mta_find_next_trains(trains, min_num_trains, max_arrival_mins, max_num_trains, stop_id):
+def mta_find_next_trains(trains, max_arrival_mins, max_num_trains, stop_id):
     arrival_mins = [mta_arrival_minutes(train, stop_id) for train in trains]
     train_order = sorted(range(len(arrival_mins)), key=lambda k: arrival_mins[k])
     next_trains = [trains[train_order[i]]
                    for i in range(len(train_order))
-                   if i < min_num_trains or arrival_mins[train_order[i]] <= max_arrival_mins]
+                   if arrival_mins[train_order[i]] <= max_arrival_mins]
     if len(next_trains) > max_num_trains:
         next_trains = next_trains[:max_num_trains]
     return next_trains
@@ -1231,7 +1235,6 @@ def mta_get_feeds():
 
 
 def mta_get_next_trains(
-        min_num_trains=2,
         max_arrival_mins=25,
         max_num_trains=9,
         stop_id='F23N'
@@ -1245,7 +1248,7 @@ def mta_get_next_trains(
         all_trains = []
         for feed in feeds:
             all_trains.extend(feed.filter_trips(headed_for_stop_id=stop_id))
-        return mta_find_next_trains(all_trains, min_num_trains, max_arrival_mins, max_num_trains, stop_id)
+        return mta_find_next_trains(all_trains, max_arrival_mins, max_num_trains, stop_id)
     else:
         return None
 
