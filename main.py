@@ -763,8 +763,8 @@ class RunMatrix(SampleBase):
             canvas = self.draw_seasonal_scroll_up(canvas, image_file, display_time,
                                                   pause=0.)
         elif image_behaviour == 'scroll_up_pause':
-                canvas = self.draw_seasonal_scroll_up(canvas, image_file, display_time,
-                                                      pause=2.)
+            canvas = self.draw_seasonal_scroll_up(canvas, image_file, display_time,
+                                                  pause=2.)
         elif image_behaviour == 'scroll_up_animate_centre':
             canvas = self.draw_seasonal_scroll_up_animate_centre(canvas, image_file, display_time)
 
@@ -1089,7 +1089,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        return ['seasonal'], [5]
+        # return ['seasonal'], [5]
 
         now = datetime.now()
         timestamp = now.time()
