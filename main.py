@@ -94,7 +94,7 @@ SEASONAL_DATA = [
         display_days_after=3,
         images=['images/thanksgiving.gif', 'images/thanksgiving_band.gif', 'images/thanksgiving_snoopy.gif',
                 'images/thanksgiving_beaver.gif', ],
-        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_pause', 'scroll_up_pause',
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_pause', 'scroll_up_pause',
                          'scroll_up_pause', ],
     ),
     Seasonal(
