@@ -85,7 +85,7 @@ SEASONAL_DATA = [
         display_days_before=1,
         display_days_after=1,
         images=['images/bonfire_night.gif', 'images/fireworks.gif', 'images/fireworks2.gif', ],
-        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_animate_centre', ],
+        image_behaviour=['scroll_up_pause', 'scroll_up_animate_centre', 'scroll_up_animate_centre', ],
     ),
     Seasonal(
         name='thanksgiving',
@@ -94,8 +94,8 @@ SEASONAL_DATA = [
         display_days_after=3,
         images=['images/thanksgiving.gif', 'images/thanksgiving_band.gif', 'images/thanksgiving_snoopy.gif',
                 'images/thanksgiving_beaver.gif', ],
-        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up',
-                         'scroll_up', ],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_pause', 'scroll_up_pause',
+                         'scroll_up_pause', ],
     ),
     Seasonal(
         name='christmas',
@@ -104,8 +104,8 @@ SEASONAL_DATA = [
         display_days_after=2,
         images=['images/christmas_tree.gif', 'images/christmas_snowman.gif', 'images/snow_cat.gif',
                 'images/merry_christmas_santa.gif', 'images/merry_christmas_tree.gif', ],
-        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up',
-                         'scroll_up', 'scroll_up'],
+        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_pause',
+                         'scroll_up_pause', 'scroll_up_pause'],
     ),
     Seasonal(
         name='newyearseve',
@@ -122,7 +122,7 @@ SEASONAL_DATA = [
         display_days_after=31,
         images=['images/christmas_snowman.gif', 'images/snow_cat.gif', 'images/winter_snow.gif',
                 'images/winter_grouch.gif', ],
-        image_behaviour=['scroll_up_animate_centre', 'scroll_up', 'scroll_up_animate_centre',
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_pause', 'scroll_up_animate_centre',
                          'scroll_up_animate_centre', ],
     ),
 ]
@@ -760,17 +760,24 @@ class RunMatrix(SampleBase):
         image_behaviour = seasonal.image_behaviour[im_ind]
 
         if image_behaviour == 'scroll_up':
-            canvas = self.draw_seasonal_scroll_up(canvas, image_file, display_time)
+            canvas = self.draw_seasonal_scroll_up(canvas, image_file, display_time,
+                                                  pause=0.)
+        elif image_behaviour == 'scroll_up_pause':
+                canvas = self.draw_seasonal_scroll_up(canvas, image_file, display_time,
+                                                      pause=2.)
         elif image_behaviour == 'scroll_up_animate_centre':
             canvas = self.draw_seasonal_scroll_up_animate_centre(canvas, image_file, display_time)
 
         return canvas
 
-    def draw_seasonal_scroll_up(self, canvas, image_file, display_time):
+    def draw_seasonal_scroll_up(self, canvas, image_file, display_time,
+                                pause=0.):
         im = Image.open(image_file)
 
         n_rows_display = 32 * 2 + im.height
         sleep_time = display_time / n_rows_display
+        n_center_frames = pause / sleep_time
+        center_offset = 16 - int(im.height / 2)
 
         frame_ind = 0
         is_animated = getattr(im, 'is_animated', False)
@@ -779,6 +786,7 @@ class RunMatrix(SampleBase):
         im_disp = im.convert('RGB')
         fstart = datetime.now()
         offset_y = 32
+        center_counter = 0
         while offset_y > -(im.height + 32):
             canvas.Clear()
             canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
@@ -791,6 +799,11 @@ class RunMatrix(SampleBase):
                 fstart = datetime.now()
 
             time.sleep(sleep_time)
+            if offset_y == center_offset:
+                if center_counter < n_center_frames:
+                    offset_y += 1
+                center_counter += 1
+
             offset_y -= 1
 
         return canvas
