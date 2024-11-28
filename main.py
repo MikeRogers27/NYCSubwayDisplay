@@ -992,6 +992,7 @@ class RunMatrix(SampleBase):
                 icon_file = 'icons/32/thermometer_mid.png'
 
             im = Image.open(icon_file)
+            im = im.convert('RGB')
             canvas.SetImage(im, offset_x=clock_pos + 35, offset_y=2)
 
             if w is not None:
