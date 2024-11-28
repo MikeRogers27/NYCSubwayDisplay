@@ -875,6 +875,7 @@ class RunMatrix(SampleBase):
 
         if icon_file is not None:
             im = Image.open(icon_file)
+            im = im.convert('RGB')
             canvas.SetImage(im)
 
         # get forecast time in local (this automatically happens with from timestamp)
