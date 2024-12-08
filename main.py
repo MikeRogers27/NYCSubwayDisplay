@@ -956,7 +956,7 @@ class RunMatrix(SampleBase):
     def display_clock(self, canvas, display_time=10):
         text_y_top = 13
         text_y_bottom = 28
-        clock_pos = 1
+        clock_pos = 2
 
         w, _ = owm_get_weather()
 
@@ -976,6 +976,7 @@ class RunMatrix(SampleBase):
                               current_time.strftime('%M'))
 
             # draw temp
+            temp_c = 0
             if w is not None:
                 temp_c = k_to_c(w.temp["temp"])
                 if temp_c < 0:
@@ -1004,7 +1005,7 @@ class RunMatrix(SampleBase):
 
             # draw date
             date_str = current_time.strftime('%a ') + f'{current_time.day} ' + current_time.strftime('%b')
-            graphics.DrawText(canvas, self.circle_font, clock_pos + 1, text_y_bottom, self.text_colour, date_str)
+            graphics.DrawText(canvas, self.circle_font, clock_pos, text_y_bottom, self.text_colour, date_str)
 
             canvas = self.matrix.SwapOnVSync(canvas)
             show_colon = not show_colon
