@@ -1628,7 +1628,8 @@ def sgo_get_games_league(league_id, games_last_update):
         return [], games_last_update
 
     if response.status_code != 200:
-        LOG.error(f'sgo_get_games_league - Response returned code {response.status_code} {response.reason}')
+        LOG.error(f'sgo_get_games_league - Response returned code {response.status_code} {response.reason}'
+                  f'{response.request.url}')
         return [], games_last_update
 
     data = response.json()
