@@ -411,7 +411,10 @@ class GameRAPI(Game):
         }
         url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
         response = requests.request("GET", url, headers=headers, params=querystring)
-        data = response.json()
+        try:
+            data = response.json()
+        except requests.exceptions.JSONDecodeError:
+            return self, games_last_update
 
         game = GameRAPI(data['response'][0])
         games_last_update[game.id()] = datetime.now()
