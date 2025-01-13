@@ -1589,6 +1589,9 @@ def rapi_get_games_league(league_id, games_last_update):
         LOG.error(f'rapi_get_games_league - Response returned code {response.status_code} {response.reason}')
         return []
 
+    if int(response.headers['x-ratelimit-requests-remaining']) < 25:
+        LOG.warning(f'rapi_get_games_league - Remaining requests {response.headers["x-ratelimit-requests-remaining"]}')
+
     games = []
     for game in data['response']:
         game = GameRAPI(game)
