@@ -357,7 +357,7 @@ class GameRAPI(Game):
         return date_str
 
     def has_ended(self):
-        return self.game['fixture']['status']['short'] == 'FT'
+        return self.game['fixture']['status']['short'] == 'FT' or self.game['fixture']['status']['short'] == 'AET'
 
     def has_started(self):
         return self.has_ended() or self.game['fixture']['status']['short'] != 'NS'
