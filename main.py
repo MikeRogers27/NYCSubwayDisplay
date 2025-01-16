@@ -85,7 +85,7 @@ SEASONAL_DATA = [
         display_days_before=1,
         display_days_after=1,
         images=['images/bonfire_night.gif', 'images/fireworks.gif', 'images/fireworks2.gif', ],
-        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_animate_centre', ],
+        image_behaviour=['scroll_up_pause', 'scroll_up_animate_centre', 'scroll_up_animate_centre', ],
     ),
     Seasonal(
         name='thanksgiving',
@@ -94,8 +94,8 @@ SEASONAL_DATA = [
         display_days_after=3,
         images=['images/thanksgiving.gif', 'images/thanksgiving_band.gif', 'images/thanksgiving_snoopy.gif',
                 'images/thanksgiving_beaver.gif', ],
-        image_behaviour=['scroll_up_animate_centre', 'scroll_up_animate_centre', 'scroll_up',
-                         'scroll_up', ],
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_pause', 'scroll_up_pause',
+                         'scroll_up_pause', ],
     ),
     Seasonal(
         name='christmas',
@@ -104,8 +104,8 @@ SEASONAL_DATA = [
         display_days_after=2,
         images=['images/christmas_tree.gif', 'images/christmas_snowman.gif', 'images/snow_cat.gif',
                 'images/merry_christmas_santa.gif', 'images/merry_christmas_tree.gif', ],
-        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up',
-                         'scroll_up', 'scroll_up'],
+        image_behaviour=['scroll_up', 'scroll_up_animate_centre', 'scroll_up_pause',
+                         'scroll_up_pause', 'scroll_up_pause'],
     ),
     Seasonal(
         name='newyearseve',
@@ -122,7 +122,7 @@ SEASONAL_DATA = [
         display_days_after=31,
         images=['images/christmas_snowman.gif', 'images/snow_cat.gif', 'images/winter_snow.gif',
                 'images/winter_grouch.gif', ],
-        image_behaviour=['scroll_up_animate_centre', 'scroll_up', 'scroll_up_animate_centre',
+        image_behaviour=['scroll_up_animate_centre', 'scroll_up_pause', 'scroll_up_animate_centre',
                          'scroll_up_animate_centre', ],
     ),
 ]
@@ -357,7 +357,7 @@ class GameRAPI(Game):
         return date_str
 
     def has_ended(self):
-        return self.game['fixture']['status']['short'] == 'FT'
+        return self.game['fixture']['status']['short'] == 'FT' or self.game['fixture']['status']['short'] == 'AET'
 
     def has_started(self):
         return self.has_ended() or self.game['fixture']['status']['short'] != 'NS'
@@ -411,7 +411,10 @@ class GameRAPI(Game):
         }
         url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
         response = requests.request("GET", url, headers=headers, params=querystring)
-        data = response.json()
+        try:
+            data = response.json()
+        except requests.exceptions.JSONDecodeError:
+            return self, games_last_update
 
         game = GameRAPI(data['response'][0])
         games_last_update[game.id()] = datetime.now()
@@ -760,17 +763,24 @@ class RunMatrix(SampleBase):
         image_behaviour = seasonal.image_behaviour[im_ind]
 
         if image_behaviour == 'scroll_up':
-            canvas = self.draw_seasonal_scroll_up(canvas, image_file, display_time)
+            canvas = self.draw_seasonal_scroll_up(canvas, image_file, display_time,
+                                                  pause=0.)
+        elif image_behaviour == 'scroll_up_pause':
+            canvas = self.draw_seasonal_scroll_up(canvas, image_file, display_time,
+                                                  pause=2.)
         elif image_behaviour == 'scroll_up_animate_centre':
             canvas = self.draw_seasonal_scroll_up_animate_centre(canvas, image_file, display_time)
 
         return canvas
 
-    def draw_seasonal_scroll_up(self, canvas, image_file, display_time):
+    def draw_seasonal_scroll_up(self, canvas, image_file, display_time,
+                                pause=0.):
         im = Image.open(image_file)
 
         n_rows_display = 32 * 2 + im.height
         sleep_time = display_time / n_rows_display
+        n_center_frames = pause / sleep_time
+        center_offset = 16 - int(im.height / 2)
 
         frame_ind = 0
         is_animated = getattr(im, 'is_animated', False)
@@ -779,6 +789,7 @@ class RunMatrix(SampleBase):
         im_disp = im.convert('RGB')
         fstart = datetime.now()
         offset_y = 32
+        center_counter = 0
         while offset_y > -(im.height + 32):
             canvas.Clear()
             canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
@@ -791,6 +802,11 @@ class RunMatrix(SampleBase):
                 fstart = datetime.now()
 
             time.sleep(sleep_time)
+            if offset_y == center_offset:
+                if center_counter < n_center_frames:
+                    offset_y += 1
+                center_counter += 1
+
             offset_y -= 1
 
         return canvas
@@ -862,6 +878,7 @@ class RunMatrix(SampleBase):
 
         if icon_file is not None:
             im = Image.open(icon_file)
+            im = im.convert('RGB')
             canvas.SetImage(im)
 
         # get forecast time in local (this automatically happens with from timestamp)
@@ -942,7 +959,7 @@ class RunMatrix(SampleBase):
     def display_clock(self, canvas, display_time=10):
         text_y_top = 13
         text_y_bottom = 28
-        clock_pos = 1
+        clock_pos = 2
 
         w, _ = owm_get_weather()
 
@@ -962,6 +979,7 @@ class RunMatrix(SampleBase):
                               current_time.strftime('%M'))
 
             # draw temp
+            temp_c = 0
             if w is not None:
                 temp_c = k_to_c(w.temp["temp"])
                 if temp_c < 0:
@@ -978,6 +996,7 @@ class RunMatrix(SampleBase):
                 icon_file = 'icons/32/thermometer_mid.png'
 
             im = Image.open(icon_file)
+            im = im.convert('RGB')
             canvas.SetImage(im, offset_x=clock_pos + 35, offset_y=2)
 
             if w is not None:
@@ -989,7 +1008,7 @@ class RunMatrix(SampleBase):
 
             # draw date
             date_str = current_time.strftime('%a ') + f'{current_time.day} ' + current_time.strftime('%b')
-            graphics.DrawText(canvas, self.circle_font, clock_pos + 1, text_y_bottom, self.text_colour, date_str)
+            graphics.DrawText(canvas, self.circle_font, clock_pos, text_y_bottom, self.text_colour, date_str)
 
             canvas = self.matrix.SwapOnVSync(canvas)
             show_colon = not show_colon
@@ -1076,7 +1095,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        # return ['sports'], [5]
+        # return ['seasonal'], [5]
 
         now = datetime.now()
         timestamp = now.time()
@@ -1570,6 +1589,9 @@ def rapi_get_games_league(league_id, games_last_update):
         LOG.error(f'rapi_get_games_league - Response returned code {response.status_code} {response.reason}')
         return []
 
+    if int(response.headers['x-ratelimit-requests-remaining']) < 25:
+        LOG.warning(f'rapi_get_games_league - Remaining requests {response.headers["x-ratelimit-requests-remaining"]}')
+
     games = []
     for game in data['response']:
         game = GameRAPI(game)
@@ -1612,7 +1634,8 @@ def sgo_get_games_league(league_id, games_last_update):
         return [], games_last_update
 
     if response.status_code != 200:
-        LOG.error(f'sgo_get_games_league - Response returned code {response.status_code} {response.reason}')
+        LOG.error(f'sgo_get_games_league - Response returned code {response.status_code} {response.reason}'
+                  f'{response.request.url}')
         return [], games_last_update
 
     data = response.json()
