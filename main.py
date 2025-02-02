@@ -1021,9 +1021,16 @@ class RunMatrix(SampleBase):
         stop_ids = self.stop_ids
         if uptown_only:
             stop_ids = self.uptown_stop_ids
-        for stop_id in stop_ids:
-            trains = mta_get_next_trains(stop_id=stop_id, max_arrival_mins=25)
-            success, canvas = self.draw_trains(trains, stop_id, canvas, display_time)
+        for stop_ids in stop_ids:
+            all_trains = []
+            for stop_id in stop_ids:
+                trains = mta_get_next_trains(stop_id=stop_id, max_arrival_mins=25)
+                if trains is None or len(trains) == 0:
+                    self.draw_trains(trains, stop_id, canvas, display_time)
+                else:
+                    all_trains.extend(trains)
+            if len(all_trains):
+                success, canvas = self.draw_trains(all_trains, None, canvas, display_time)
 
         return canvas
 
@@ -1771,8 +1778,8 @@ def main():
     logger_setup(args)
 
     led_display_trains = RunMatrix(
-        stop_ids=['F23N', 'F23S', 'R33N', 'R33S'],
-        uptown_stop_ids=['F23N', 'R33N'],
+        stop_ids=[['F23N', 'F23S'], ['R33N', 'R33S']],
+        uptown_stop_ids=[['F23N'], ['R33N']],
         args=args,
     )
     led_display_trains.process()
