@@ -447,7 +447,7 @@ class GameSGO(Game):
         has_ended = self.has_ended()
         in_progress = self.has_started() and not has_ended
         if in_progress or has_ended:
-            if start_time.date() == today:
+            if start_time.date() == today and 'displayShort' in self.game['status']:
                 date_str = self.game['status']['displayShort']
                 if date_str == 'F':
                     date_str = 'Final'
