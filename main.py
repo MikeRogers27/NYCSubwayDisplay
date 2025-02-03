@@ -714,13 +714,34 @@ class RunMatrix(SampleBase):
 
         graphics.DrawText(canvas, self.font, 3, text_y_bottom, self.text_colour, '*no trains*')
 
-    def draw_trains(self, trains, stop_id, canvas, display_time):
+    def draw_trains_grouped(self, trains, stop_ids, canvas, display_time):
+        if len(trains) == 1:
+            canvas.Clear()
+            self.draw_train(0, 1, trains[0], stop_ids[0], canvas)
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(display_time)
+        else:
+            swap_time = max(display_time / len(trains) - 1, MIN_DISPLAY_TIME)
+            for i in range(1, len(trains)):
+                canvas.Clear()
+                self.draw_train(0, 1, trains[0], stop_ids[0], canvas)
+                train_order = min(i + 1, 9)
+                self.draw_train(1, train_order, trains[i], stop_ids[i], canvas)
+                canvas = self.matrix.SwapOnVSync(canvas)
+                time.sleep(swap_time)
+
+        return True, canvas
+
+    def draw_trains_error(self, trains, stop_id, canvas, display_time):
         if trains is None:
             canvas.Clear()
             self.draw_train_no_data(stop_id, canvas)
             canvas = self.matrix.SwapOnVSync(canvas)
             time.sleep(display_time)
-        elif len(trains):
+
+            return True, canvas
+
+        if len(trains):
             # check we don't have stale data
             now = datetime.now()
             last_update_time = now - timedelta(minutes=60)
@@ -733,27 +754,18 @@ class RunMatrix(SampleBase):
                 self.draw_train_no_data(stop_id, canvas)
                 canvas = self.matrix.SwapOnVSync(canvas)
                 time.sleep(display_time)
-            else:
-                if len(trains) == 1:
-                    canvas.Clear()
-                    self.draw_train(0, 1, trains[0], stop_id, canvas)
-                    canvas = self.matrix.SwapOnVSync(canvas)
-                    time.sleep(display_time)
-                else:
-                    swap_time = max(display_time / len(trains) - 1, MIN_DISPLAY_TIME)
-                    for i in range(1, len(trains)):
-                        canvas.Clear()
-                        self.draw_train(0, 1, trains[0], stop_id, canvas)
-                        self.draw_train(1, i + 1, trains[i], stop_id, canvas)
-                        canvas = self.matrix.SwapOnVSync(canvas)
-                        time.sleep(swap_time)
+
+                return True, canvas
+
         else:
             canvas.Clear()
             self.draw_trains_none(stop_id, canvas)
             canvas = self.matrix.SwapOnVSync(canvas)
             time.sleep(display_time)
 
-        return True, canvas
+            return True, canvas
+
+        return False, canvas
 
     def draw_seasonal(self, seasonal, canvas, display_time):
 
@@ -1021,16 +1033,21 @@ class RunMatrix(SampleBase):
         stop_ids = self.stop_ids
         if uptown_only:
             stop_ids = self.uptown_stop_ids
-        for stop_ids in stop_ids:
+        for group_stop_ids in stop_ids:
             all_trains = []
-            for stop_id in stop_ids:
+            all_stop_ids = []
+            for stop_id in group_stop_ids:
                 trains = mta_get_next_trains(stop_id=stop_id, max_arrival_mins=25)
-                if trains is None or len(trains) == 0:
-                    self.draw_trains(trains, stop_id, canvas, display_time)
-                else:
+                trains_drawn, canvas = self.draw_trains_error(trains, stop_id, canvas, display_time)
+                if not trains_drawn:
                     all_trains.extend(trains)
+                    all_stop_ids.extend([stop_id] * len(trains))
             if len(all_trains):
-                success, canvas = self.draw_trains(all_trains, None, canvas, display_time)
+                arrival_times = [mta_arrival_time(train, stop_id) for train, stop_id in zip(all_trains, all_stop_ids)]
+                sort_ind = sorted(range(len(arrival_times)), key=lambda k: arrival_times[k])
+                all_trains_sorted = [all_trains[i] for i in sort_ind]
+                all_stop_ids_sorted = [all_stop_ids[i] for i in sort_ind]
+                success, canvas = self.draw_trains_grouped(all_trains_sorted, all_stop_ids_sorted, canvas, display_time)
 
         return canvas
 
@@ -1102,7 +1119,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        # return ['seasonal'], [5]
+        # return ['trains'], [5]
 
         now = datetime.now()
         timestamp = now.time()
@@ -1778,7 +1795,7 @@ def main():
     logger_setup(args)
 
     led_display_trains = RunMatrix(
-        stop_ids=[['F23N', 'F23S'], ['R33N', 'R33S']],
+        stop_ids=[['F23N', 'R33N'], ['F23S', 'R33S']],
         uptown_stop_ids=[['F23N'], ['R33N']],
         args=args,
     )
