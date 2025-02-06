@@ -1321,13 +1321,6 @@ def owm_forecasts_get(time_start, time_end):
     time_end = to_utc_tz(time_end)
 
     w, forecast = owm_get_weather()
-    # if w is None:
-    #     return None, None, 'icons/32/weather-forecast-sign-16552.png'
-    #
-    # max_temp = k_to_c(w.temp['temp_max'])
-    # min_temp = k_to_c(w.temp['temp_min'])
-    # icon_weather = w
-
     forecasts = []
     if forecast is not None:
         for w in forecast.forecast.weathers:
@@ -1345,8 +1338,8 @@ def owm_forecasts_today():
 
 
 def owm_forecasts_tomorrow():
-    # tomorrow's forecast is between 7am and 7pm tomorrow
-    start_time = datetime.today().replace(hour=7, minute=0, second=0) + timedelta(days=1)
+    # tomorrow's forecast is between 6am and 7pm tomorrow
+    start_time = datetime.today().replace(hour=6, minute=0, second=0) + timedelta(days=1)
     end_time = datetime.today().replace(hour=19, minute=0, second=0) + timedelta(days=1)
     return owm_forecasts_get(start_time, end_time)
 
