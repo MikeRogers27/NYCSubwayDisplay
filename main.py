@@ -1022,7 +1022,7 @@ class RunMatrix(SampleBase):
         if uptown_only:
             stop_ids = self.uptown_stop_ids
         for stop_id in stop_ids:
-            trains = mta_get_next_trains(stop_id=stop_id, max_arrival_mins=25)
+            trains = mta_get_next_trains(stop_id=stop_id, max_num_trains=5, max_arrival_mins=25)
             success, canvas = self.draw_trains(trains, stop_id, canvas, display_time)
 
         return canvas
