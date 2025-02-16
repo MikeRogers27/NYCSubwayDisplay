@@ -1575,6 +1575,8 @@ def rapi_get_games():
 
 
 def rapi_get_games_league(league_id, games_last_update):
+    LOG.debug(f'rapi_get_games_league - league_id {league_id}')
+
     now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
     starts_after = to_utc_tz(today - timedelta(days=1))
@@ -1628,6 +1630,8 @@ def sgo_get_games():
 
 
 def sgo_get_games_league(league_id, games_last_update):
+    LOG.debug(f'sgo_get_games_league - league_id {league_id}')
+
     now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
 
@@ -1683,6 +1687,8 @@ def sgo_get_games_league(league_id, games_last_update):
 
 
 def sports_get_games(type, games, timestamp, next_refresh, games_last_update, refresh_rate):
+    LOG.debug(f'sports_get_games - type {type}')
+
     if timestamp is None:
         games, timestamp, next_refresh, games_last_update = sports_retrieve_from_cache(
             type, games, timestamp, next_refresh, games_last_update
@@ -1695,6 +1701,8 @@ def sports_get_games(type, games, timestamp, next_refresh, games_last_update, re
         next_refresh = now - timedelta(days=1)
 
     if now > next_refresh:
+        LOG.debug(f'sports_get_games - refreshing feed')
+
         timestamp = datetime.now()
 
         games = []
@@ -1730,12 +1738,16 @@ def sports_get_games(type, games, timestamp, next_refresh, games_last_update, re
 
 
 def sports_retrieve_from_cache(type, games, timestamp, next_refresh, games_last_update):
+    LOG.debug(f'sports_retrieve_from_cache - type {type}')
+
     temp_dir = tempfile.gettempdir()
     cache_file = os.path.join(temp_dir, f'{type}.pickle')
     if os.path.exists(cache_file):
         with open(cache_file, 'rb') as file:
             games, timestamp, next_refresh, games_last_update = pickle.load(file)
         LOG.info(f'sports_retrieve_from_cache - Retrieved {type} with {len(games)} games')
+    else:
+        LOG.debug(f'sports_retrieve_from_cache - cache hit failed')
 
     return games, timestamp, next_refresh, games_last_update
 
@@ -1750,6 +1762,8 @@ def sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update
 
 
 def sports_update_games(games: [Game], games_last_update, refresh_rate):
+    LOG.debug(f'sports_update_games - updating in progress games')
+
     now = datetime.now()
     for game_ind, game in enumerate(games):
         has_ended = game.has_ended()
@@ -1761,8 +1775,10 @@ def sports_update_games(games: [Game], games_last_update, refresh_rate):
 
         # if we're in progress, update as soon as possible
         if in_progress:
+            LOG.debug(f'sports_update_games - {games[game_ind]} in progress')
             next_refresh = games_last_update[game.id()] + timedelta(seconds=refresh_rate)
             if now > next_refresh:
+                LOG.debug(f'sports_update_games - {games[game_ind]} updating')
                 games[game_ind], games_last_update = game.update(games_last_update)
 
     return games, games_last_update
