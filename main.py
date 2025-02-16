@@ -539,6 +539,7 @@ class RunMatrix(SampleBase):
         self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
     def draw_game(self, canvas, game: Game):
+        LOG.debug(f'RunMatrix.draw_game - drawing game {game}')
         league_id = game.league_name()
         if league_id == 'MLB':
             league_teams = SGO_MLB_TEAMS
@@ -674,6 +675,8 @@ class RunMatrix(SampleBase):
                            stop_id,
                            canvas,
                            ):
+        LOG.debug(f'RunMatrix.draw_train_no_data - stop_id {stop_id}')
+
         # Top line
         text_y_top = 13
         text_y_bottom = 28
@@ -696,6 +699,8 @@ class RunMatrix(SampleBase):
                          stop_id,
                          canvas,
                          ):
+        LOG.debug(f'RunMatrix.draw_trains_none - stop_id {stop_id}')
+
         # Top line
         text_y_top = 13
         text_y_bottom = 28
@@ -715,6 +720,8 @@ class RunMatrix(SampleBase):
         graphics.DrawText(canvas, self.font, 3, text_y_bottom, self.text_colour, '*no trains*')
 
     def draw_trains(self, trains, stop_id, canvas, display_time):
+        LOG.debug(f'RunMatrix.draw_trains - stop_id {stop_id}')
+
         if trains is None:
             canvas.Clear()
             self.draw_train_no_data(stop_id, canvas)
@@ -756,6 +763,7 @@ class RunMatrix(SampleBase):
         return True, canvas
 
     def draw_seasonal(self, seasonal, canvas, display_time):
+        LOG.debug(f'RunMatrix.draw_seasonal - seasonal {seasonal}')
 
         # first pick an image
         im_ind = random.randrange(len(seasonal.images))
@@ -868,6 +876,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def draw_weather(self, canvas, w):
+        LOG.debug(f'RunMatrix.draw_weather - w {w}')
+
         text_y_top = 10
         text_y_middle = 20
         text_y_bottom = 30
@@ -902,6 +912,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def draw_weather_no_data(self, canvas):
+        LOG.debug(f'RunMatrix.draw_weather_no_data')
+
         text_y_top = 10
         text_y_middle = 20
         text_y_bottom = 30
@@ -925,6 +937,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def draw_weather_summary(self, canvas, w_list, title_str):
+        LOG.debug(f'RunMatrix.draw_weather_summary - title_str {title_str}')
+
         text_y_top = 10
         text_y_middle = 20
         text_y_bottom = 30
@@ -957,6 +971,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_clock(self, canvas, display_time=10):
+        LOG.debug(f'RunMatrix.display_clock')
+
         text_y_top = 13
         text_y_bottom = 28
         clock_pos = 2
@@ -1017,6 +1033,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_trains(self, canvas, display_time=10, uptown_only=False):
+        LOG.debug(f'RunMatrix.display_trains - uptown_only {uptown_only}')
+
         mta_update_feeds()
         stop_ids = self.stop_ids
         if uptown_only:
@@ -1028,6 +1046,7 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_seasonal(self, canvas, display_time=10):
+        LOG.debug(f'RunMatrix.display_seasonal')
 
         # should we display at all
         if random.uniform(0., 1.) > 0.2:  # Only display roughly once every 5 times
@@ -1043,6 +1062,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_sports(self, canvas, display_time=10):
+        LOG.debug(f'RunMatrix.display_sports')
+
         games = []
         games.extend(sgo_get_games())
         games.extend(rapi_get_games())
@@ -1059,6 +1080,7 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_weather(self, canvas, display_time=10):
+        LOG.debug(f'RunMatrix.display_weather')
 
         timestamp = datetime.now().time()
         if timestamp < dt_time(13, 0):  # before 12 show today's forecast
@@ -1355,8 +1377,9 @@ def owm_get_weather():
         OWM_MGR = owm.weather_manager()
 
     # we only get the weather every 0.5 hours
-    if OWN_TIMESTAMP is None or \
+    if OWM_WEATHER is None or OWN_TIMESTAMP is None or \
             (datetime.now() - OWN_TIMESTAMP).total_seconds() > OWM_REFRESH_RATE:
+        LOG.debug(f'owm_get_weather - updating weather')
         OWN_TIMESTAMP = datetime.now()
         try:
             observation = OWM_MGR.weather_at_place('New York')
