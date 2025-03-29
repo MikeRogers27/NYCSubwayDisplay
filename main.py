@@ -505,7 +505,7 @@ class GameSGO(Game):
     def update(self, games_last_update):
         # we can update the whole league for the cost of one game
         games, games_last_update = sgo_get_games_league(self.league_id(), games_last_update)
-        return next(g for g in games if g.id() == self.id()), games_last_update
+        return next((g for g in games if g.id() == self.id()), self), games_last_update
 
 
 class GracefulKiller:
