@@ -1655,7 +1655,7 @@ def sgo_get_games_league(league_id, games_last_update):
 
     if response.status_code != 200:
         LOG.error(f'sgo_get_games_league - Response returned code {response.status_code} {response.reason}'
-                  f'{response.request.url}')
+                  f' {response.request.url}')
         return [], games_last_update
 
     data = response.json()
@@ -1689,7 +1689,7 @@ def sgo_get_games_league(league_id, games_last_update):
 def sports_get_games(type, games, timestamp, next_refresh, games_last_update, refresh_rate):
     LOG.debug(f'sports_get_games - type {type}')
 
-    if timestamp is None:
+    if timestamp is not None:
         games, timestamp, next_refresh, games_last_update = sports_retrieve_from_cache(
             type, games, timestamp, next_refresh, games_last_update
         )
