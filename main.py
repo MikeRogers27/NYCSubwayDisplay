@@ -1641,6 +1641,17 @@ def sgo_get_games_league(league_id, games_last_update):
     else:
         starts_before = to_utc_tz(today + timedelta(days=2))
 
+    if league_id == 'MLB':
+        league_teams = SGO_MLB_TEAMS
+    elif league_id == 'NHL':
+        league_teams = SGO_NHL_TEAMS
+    elif league_id == 'NFL':
+        league_teams = SGO_NFL_TEAMS
+    elif league_id == 'MLS':
+        league_teams = SGO_MLS_TEAMS
+    else:
+        league_teams = []
+
     next_cursor = None
     event_data = []
     while True:
@@ -1650,6 +1661,7 @@ def sgo_get_games_league(league_id, games_last_update):
                 headers={'X-Api-Key': os.environ['SGO_API_KEY']},
                 params={
                     'leagueID': league_id,
+                    'teamID': ','.join(league_teams),
                     'startsAfter': starts_after.strftime("%Y-%m-%d %H:%M:%S"),
                     'startsBefore': starts_before.strftime("%Y-%m-%d %H:%M:%S"),
                     'oddIDs': 'points-home-game-sp-home',
@@ -1680,17 +1692,6 @@ def sgo_get_games_league(league_id, games_last_update):
         except Exception as error:
             print(f'Error fetching events: {error}')
             break
-
-    if league_id == 'MLB':
-        league_teams = SGO_MLB_TEAMS
-    elif league_id == 'NHL':
-        league_teams = SGO_NHL_TEAMS
-    elif league_id == 'NFL':
-        league_teams = SGO_NFL_TEAMS
-    elif league_id == 'MLS':
-        league_teams = SGO_MLS_TEAMS
-    else:
-        league_teams = []
 
     games = []
     for game in event_data:
