@@ -1641,27 +1641,45 @@ def sgo_get_games_league(league_id, games_last_update):
     else:
         starts_before = to_utc_tz(today + timedelta(days=2))
 
-    try:
-        response = requests.get(
-            f'https://api.sportsgameodds.com/v1/events?leagueID={league_id}&'
-            f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
-            f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
-            f'oddIDs=points-home-game-sp-home',
-            headers={'X-Api-Key': os.environ['SGO_API_KEY']}
-        )
-    except requests.exceptions.ConnectionError as e:
-        LOG.error(f'sgo_get_games_league - ConnectionError {e}')
-        return [], games_last_update
+    next_cursor = None
+    event_data = []
+    while True:
+        try:
+            response = requests.get(
+                'https://api.sportsgameodds.com/v2/events',
+                headers={'X-Api-Key': os.environ['SGO_API_KEY']},
+                params={
+                    'leagueID': league_id,
+                    'startsAfter': starts_after.strftime("%Y-%m-%d %H:%M:%S"),
+                    'startsBefore': starts_before.strftime("%Y-%m-%d %H:%M:%S"),
+                    'oddIDs': 'points-home-game-sp-home',
+                    'limit': 10,
+                    'cursor': next_cursor
+                })
 
-    if response.status_code != 200:
-        LOG.error(f'sgo_get_games_league - Response returned code {response.status_code} {response.reason}'
-                  f' {response.request.url}')
-        return [], games_last_update
+            if response.status_code != 200:
+                LOG.error(f'sgo_get_games_league - Response returned code {response.status_code} {response.reason}'
+                          f' {response.request.url}')
+                return [], games_last_update
 
-    data = response.json()
-    if not data['success']:
-        LOG.error(f'sgo_get_games_league - Data["success"] == False')
-        return [], games_last_update
+            data = response.json()
+            if not data['success']:
+                LOG.error(f'sgo_get_games_league - Data["success"] == False')
+                return [], games_last_update
+
+            event_data.extend(data['data'])
+
+            next_cursor = data.get('nextCursor')
+            if not next_cursor:
+                break
+
+        except requests.exceptions.ConnectionError as e:
+            LOG.error(f'sgo_get_games_league - ConnectionError {e}')
+            return [], games_last_update
+
+        except Exception as error:
+            print(f'Error fetching events: {error}')
+            break
 
     if league_id == 'MLB':
         league_teams = SGO_MLB_TEAMS
@@ -1675,7 +1693,7 @@ def sgo_get_games_league(league_id, games_last_update):
         league_teams = []
 
     games = []
-    for game in data['data']:
+    for game in event_data:
         if game['teams']['away']['teamID'] in league_teams or \
                 game['teams']['home']['teamID'] in league_teams:
             games_last_update[game['eventID']] = now
@@ -1813,11 +1831,11 @@ def main():
 
 
 if __name__ == '__main__':
-    # A query for SGO rate limiting (costs one object)
+    # # A query for SGO rate limiting (costs one object)
     # response = requests.get(
-    #     f'https://api.sportsgameodds.com/v1/account/usage',
+    #     f'https://api.sportsgameodds.com/v2/account/usage',
     #     headers={'X-Api-Key': os.environ['SGO_API_KEY']}
     # )
     # data = response.json()
-
+    # pass
     main()
