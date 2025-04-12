@@ -427,6 +427,10 @@ class GameSGO(Game):
         super().__init__(*args)
 
     def away_team_colour(self):
+        # overrides
+        if self.away_team_id() == 'SAN_FRANCISCO_GIANTS_MLB':
+            return graphics.Color(*hex_to_rgb('#FD5A1E'))
+        # default
         return graphics.Color(*hex_to_rgb(self.game['teams']['away']['colors']['primary']))
 
     def away_team_id(self):
@@ -467,6 +471,10 @@ class GameSGO(Game):
         return self.game['status']['started']
 
     def home_team_colour(self):
+        # overrides
+        if self.home_team_id() == 'SAN_FRANCISCO_GIANTS_MLB':
+            return graphics.Color(*hex_to_rgb('#FD5A1E'))
+        # default
         return graphics.Color(*hex_to_rgb(self.game['teams']['home']['colors']['primary']))
 
     def home_team_id(self):
