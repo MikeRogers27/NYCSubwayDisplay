@@ -511,9 +511,41 @@ class GameSGO(Game):
         return to_local_tz(parse(self.game['status']['startsAt']))
 
     def update(self, games_last_update):
-        # we can update the whole league for the cost of one game
-        games, games_last_update = sgo_get_games_league(self.league_id(), games_last_update)
-        return next((g for g in games if g.id() == self.id()), self), games_last_update
+        try:
+            response = requests.get(
+                'https://api.sportsgameodds.com/v2/events',
+                headers={'X-Api-Key': os.environ['SGO_API_KEY']},
+                params={
+                    'eventID': self.id(),
+                    'oddIDs': 'points-home-game-sp-home',
+                })
+
+            if response.status_code != 200:
+                LOG.error(f'GameSGO.update - Response returned code {response.status_code} {response.reason}'
+                          f' {response.request.url}')
+                return self, games_last_update
+
+            data = response.json()
+            if not data['success']:
+                LOG.error(f'GameSGO.update - Data["success"] == False')
+                return self, games_last_update
+
+            self.game = data['data'][0]
+            games_last_update[self.id()] = datetime.now()
+
+        except requests.exceptions.ConnectionError as e:
+            LOG.error(f'GameSGO.update - ConnectionError {e}')
+            return self, games_last_update
+
+        except Exception as error:
+            print(f'GameSGO.update - Error fetching events: {error}')
+            return self, games_last_update
+
+        return self, games_last_update
+
+        # # we can update the whole league for the cost of one game
+        # games, games_last_update = sgo_get_games_league(self.league_id(), games_last_update)
+        # return next((g for g in games if g.id() == self.id()), self), games_last_update
 
 
 class GracefulKiller:
