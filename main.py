@@ -136,6 +136,7 @@ SGO_MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGE
 SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
 SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
+HIDE_SCORE_TEAMS = ['LOS_ANGELES_KINGS_NHL']
 
 
 class Game(ABC):
@@ -613,6 +614,9 @@ class RunMatrix(SampleBase):
             title_str = game.away_team_short_name()
             score_str = game.home_team_score_str()
             team_colour = game.away_team_colour()
+
+        if game.away_team_id() in HIDE_SCORE_TEAMS or game.home_team_id() in HIDE_SCORE_TEAMS:
+            score_str = '-'
 
         date_str = game.date_str()
 
