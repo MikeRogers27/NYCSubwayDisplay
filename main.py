@@ -158,6 +158,10 @@ class Game(ABC):
 
     def away_team_score_str(self):
         if self.has_started() or self.has_ended():
+            if self.away_team_id() in HIDE_SCORE_TEAMS or self.home_team_id() in HIDE_SCORE_TEAMS:
+                score_str = '-'
+                return score_str
+
             if self.has_ended():
                 if self.away_team_score() > self.home_team_score():
                     score_prefix = 'W'
@@ -203,6 +207,10 @@ class Game(ABC):
 
     def home_team_score_str(self):
         if self.has_started() or self.has_ended():
+            if self.away_team_id() in HIDE_SCORE_TEAMS or self.home_team_id() in HIDE_SCORE_TEAMS:
+                score_str = '-'
+                return score_str
+
             if self.has_ended():
                 if self.home_team_score() > self.away_team_score():
                     score_prefix = 'W'
@@ -614,9 +622,6 @@ class RunMatrix(SampleBase):
             title_str = game.away_team_short_name()
             score_str = game.home_team_score_str()
             team_colour = game.away_team_colour()
-
-        if game.away_team_id() in HIDE_SCORE_TEAMS or game.home_team_id() in HIDE_SCORE_TEAMS:
-            score_str = '-'
 
         date_str = game.date_str()
 
