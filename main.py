@@ -439,6 +439,8 @@ class GameSGO(Game):
         # overrides
         if self.away_team_id() == 'SAN_FRANCISCO_GIANTS_MLB':
             return graphics.Color(*hex_to_rgb('#FD5A1E'))
+        elif self.away_team_id() == 'PITTSBURGH_PIRATES_MLB':
+            return graphics.Color(*hex_to_rgb('#FDB827'))
         # default
         return graphics.Color(*hex_to_rgb(self.game['teams']['away']['colors']['primary']))
 
@@ -483,6 +485,8 @@ class GameSGO(Game):
         # overrides
         if self.home_team_id() == 'SAN_FRANCISCO_GIANTS_MLB':
             return graphics.Color(*hex_to_rgb('#FD5A1E'))
+        elif self.home_team_id() == 'PITTSBURGH_PIRATES_MLB':
+            return graphics.Color(*hex_to_rgb('#FDB827'))
         # default
         return graphics.Color(*hex_to_rgb(self.game['teams']['home']['colors']['primary']))
 
