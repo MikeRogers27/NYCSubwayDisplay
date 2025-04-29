@@ -1381,6 +1381,8 @@ def mta_update_feeds():
                     LOG.info(f'mta_update_feeds - feed updated {feed}')
                 except requests.exceptions.ConnectionError as e:
                     LOG.error(f'mta_update_feeds - ConnectionError: {e}')
+                except RuntimeError as e:
+                    LOG.error(f'mta_update_feeds - RuntimeError: {e}')
 
 
 def owm_forecasts_evening():
