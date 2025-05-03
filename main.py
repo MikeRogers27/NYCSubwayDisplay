@@ -566,6 +566,12 @@ class GameSGO(Game):
                     'oddIDs': 'points-home-game-sp-home',
                 })
 
+            if response.status_code == 429:
+                LOG.warning(f'GameSGO.update - Rate limits hit {response.status_code} {response.reason}'
+                          f' {response.request.url}')
+                setup_env()
+                return self, games_last_update
+
             if response.status_code != 200:
                 LOG.error(f'GameSGO.update - Response returned code {response.status_code} {response.reason}'
                           f' {response.request.url}')
@@ -1709,6 +1715,50 @@ def rapi_get_games_league(league_id, games_last_update):
     return games, games_last_update
 
 
+def setup_env():
+    if 'SGO_API_KEY' in os.environ:
+        return
+
+    if 'SGO_API_KEYS' not in os.environ:
+        LOG.error(f'setup_env - SGO_API_KEY and SGO_API_KEYS are not found')
+        exit(1)
+
+    LOG.info(f'setup_env - selecting SGO_API_KEY')
+
+    sgo_api_keys = os.environ['SGO_API_KEYS'].split(',')
+
+    # Find the first, active, non-limited API key
+    for sgo_api_key in sgo_api_keys:
+        try:
+            response = requests.get(
+                f'https://api.sportsgameodds.com/v2/account/usage',
+                headers={'X-Api-Key': sgo_api_key}
+            )
+            data = response.json()
+            if not data['data']['isActive']:
+                continue
+
+            is_limited = False
+            for limit in data['data']['rateLimits'].values():
+                if isinstance(limit['max-entities'], int):
+                    if limit['current-entities'] == limit['max-entities']:
+                        is_limited = True
+                        break
+
+            if not is_limited:
+                os.environ['SGO_API_KEY'] = sgo_api_key
+                break
+
+        except requests.exceptions.ConnectionError as e:
+            LOG.error(f'setup_env - ConnectionError {e}')
+
+    if 'SGO_API_KEY' not in os.environ:
+        LOG.error(f'setup_env - SGO_API_KEY is not found')
+        exit(1)
+
+    LOG.info(f'setup_env - selected SGO_API_KEY=={os.environ["SGO_API_KEY"]}')
+
+
 def sgo_get_games():
     global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE
     SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE = \
@@ -1756,6 +1806,12 @@ def sgo_get_games_league(league_id, games_last_update):
                     'limit': 10,
                     'cursor': next_cursor
                 })
+
+            if response.status_code == 429:
+                LOG.warning(f'sgo_get_games_league - Rate limits hit {response.status_code} {response.reason}'
+                          f' {response.request.url}')
+                setup_env()
+                return [], games_last_update
 
             if response.status_code != 200:
                 LOG.error(f'sgo_get_games_league - Response returned code {response.status_code} {response.reason}'
@@ -1908,6 +1964,8 @@ def to_local_tz(date_time):
 def main():
     args = parse_args()
     logger_setup(args)
+
+    setup_env()
 
     led_display_trains = RunMatrix(
         stop_ids=['F23N', 'F23S', 'R33N', 'R33S'],
