@@ -3,6 +3,7 @@ import argparse
 from collections import namedtuple
 from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
+from dateutil.relativedelta import relativedelta
 import importlib
 import logging
 from logging import Logger
@@ -136,7 +137,11 @@ SGO_MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGE
 SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
 SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
-HIDE_SCORE_TEAMS = ['LOS_ANGELES_KINGS_NHL']
+
+HIDE_SCORES = dict(
+    LOS_ANGELES_KINGS_NHL=[relativedelta(months=3, weeks=2), relativedelta(months=6)],
+    WIGAN_WARRIORS_SL=[relativedelta(), relativedelta(months=12)],
+)
 
 
 class Game(ABC):
@@ -158,8 +163,8 @@ class Game(ABC):
 
     def away_team_score_str(self):
         if self.has_started() or self.has_ended():
-            if self.away_team_id() in HIDE_SCORE_TEAMS or self.home_team_id() in HIDE_SCORE_TEAMS:
-                score_str = '-'
+            score_str = self._hide_scores()
+            if score_str is not None:
                 return score_str
 
             if self.has_ended():
@@ -207,8 +212,8 @@ class Game(ABC):
 
     def home_team_score_str(self):
         if self.has_started() or self.has_ended():
-            if self.away_team_id() in HIDE_SCORE_TEAMS or self.home_team_id() in HIDE_SCORE_TEAMS:
-                score_str = '-'
+            score_str = self._hide_scores()
+            if score_str is not None:
                 return score_str
 
             if self.has_ended():
@@ -258,6 +263,34 @@ class Game(ABC):
     def start_time(self):
         pass
 
+    def _hide_scores(self):
+        if self.away_team_id() in HIDE_SCORES or self.home_team_id() in HIDE_SCORES:
+
+            # Get the current year
+            current_year = datetime.now().year
+
+            # Define the start of the year
+            start_of_year = datetime(current_year, 1, 1)
+
+            # Calculate relative dates
+            # start date to hide scores
+            hide_scores_start = datetime(current_year, 12, 31)
+            hide_scores_end = start_of_year
+
+            if self.away_team_id() in HIDE_SCORES:
+                hide_scores_start = min(hide_scores_start, start_of_year + HIDE_SCORES[self.away_team_id()][0])
+                hide_scores_end = max(hide_scores_start, start_of_year + HIDE_SCORES[self.away_team_id()][1])
+            if self.home_team_id() in HIDE_SCORES:
+                hide_scores_start = min(hide_scores_start, start_of_year + HIDE_SCORES[self.home_team_id()][0])
+                hide_scores_end = max(hide_scores_start, start_of_year + HIDE_SCORES[self.home_team_id()][1])
+
+            hide_scores_start = to_local_tz(hide_scores_start)
+            hide_scores_end = to_local_tz(hide_scores_end)
+
+            if hide_scores_start <= self.start_time() < hide_scores_end:
+                score_str = '-'
+                return score_str
+        return None
 
 class GameRAPI(Game):
     RAPI_TEAM_CODES = {
@@ -1170,7 +1203,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        # return ['seasonal'], [5]
+        return ['sports'], [5]
 
         now = datetime.now()
         timestamp = now.time()
@@ -1895,3 +1928,20 @@ if __name__ == '__main__':
     # data = response.json()
     # pass
     main()
+
+    # response = requests.get(
+    #     f'https://api.sportsgameodds.com/v2/account/usage',
+    #     headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+    # )
+    # data = response.json()
+    #
+    # game = GameSGO({'eventID': '15bjZTutLgZwwvkP26A9'})
+    # games_last_update = {}
+    # game.update(games_last_update)
+    #
+    # response = requests.get(
+    #     f'https://api.sportsgameodds.com/v2/account/usage',
+    #     headers={'X-Api-Key': os.environ['SGO_API_KEY']}
+    # )
+    # data = response.json()
+    # pass
