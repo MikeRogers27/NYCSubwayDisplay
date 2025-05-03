@@ -1209,7 +1209,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        return ['sports'], [5]
+        # return ['sports'], [5]
 
         now = datetime.now()
         timestamp = now.time()
@@ -1986,20 +1986,3 @@ if __name__ == '__main__':
     # data = response.json()
     # pass
     main()
-
-    # response = requests.get(
-    #     f'https://api.sportsgameodds.com/v2/account/usage',
-    #     headers={'X-Api-Key': os.environ['SGO_API_KEY']}
-    # )
-    # data = response.json()
-    #
-    # game = GameSGO({'eventID': '15bjZTutLgZwwvkP26A9'})
-    # games_last_update = {}
-    # game.update(games_last_update)
-    #
-    # response = requests.get(
-    #     f'https://api.sportsgameodds.com/v2/account/usage',
-    #     headers={'X-Api-Key': os.environ['SGO_API_KEY']}
-    # )
-    # data = response.json()
-    # pass
