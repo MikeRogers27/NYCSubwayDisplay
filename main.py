@@ -59,7 +59,7 @@ RAPI_RUGBY_GAMES_LAST_UPDATE = {}
 RAPI_RUGBY_TIMESTAMP = None
 RAPI_RUGBY_NEXT_REFRESH = None
 RAPI_RUGBY_REFRESH_RATE = 360
-RAPI_RUGBY_TEAMS = [4233, ]
+RAPI_RUGBY_TEAMS = ['WGW', 'LEL']
 
 Seasonal = namedtuple(
     'Seasonal',
@@ -147,7 +147,7 @@ SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
 HIDE_SCORES = dict(
     LOS_ANGELES_KINGS_NHL=[relativedelta(months=3, weeks=2), relativedelta(months=6)],
-    WIGAN_WARRIORS_SL=[relativedelta(), relativedelta(months=12)],
+    WGW=[relativedelta(), relativedelta(months=12)],
 )
 
 
@@ -474,13 +474,12 @@ class GameRAPIRugby(Game):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.text_colour = (74, 214, 9)
 
     def away_team_colour(self):
-        return self.game['awayTeam']['teamColors']['primary']
+        return graphics.Color(*hex_to_rgb(self.game['awayTeam']['teamColors']['primary']))
 
     def away_team_id(self):
-        return self.game['awayTeam']['id']
+        return self.game['awayTeam']['nameCode']
 
     def away_team_score(self):
         if 'display' in self.game['awayScore']:
@@ -499,8 +498,7 @@ class GameRAPIRugby(Game):
         has_ended = self.has_ended()
         in_progress = self.has_started() and not has_ended
         if in_progress:
-            # TODO
-            date_str = 'elapsed time'
+            date_str = str(int(self.game['time']['played'] / 60))
         elif has_ended:
             if start_time.date() == today:
                 # TODO: AET
@@ -521,10 +519,10 @@ class GameRAPIRugby(Game):
         return self.has_ended() or self.game['status']['type'] == 'inprogress'
 
     def home_team_colour(self):
-        return self.game['homeTeam']['teamColors']['primary']
+        return graphics.Color(*hex_to_rgb(self.game['homeTeam']['teamColors']['primary']))
 
     def home_team_id(self):
-        return self.game['homeTeam']['id']
+        return self.game['homeTeam']['nameCode']
 
     def home_team_score(self):
         if 'display' in self.game['homeScore']:
@@ -743,17 +741,19 @@ class RunMatrix(SampleBase):
 
     def draw_game(self, canvas, game: Game):
         LOG.debug(f'RunMatrix.draw_game - drawing game {game}')
-        league_id = game.league_name()
-        if league_id == 'MLB':
+        league_name = game.league_name()
+        if league_name == 'MLB':
             league_teams = SGO_MLB_TEAMS
-        elif league_id == 'NHL':
+        elif league_name == 'NHL':
             league_teams = SGO_NHL_TEAMS
-        elif league_id == 'NFL':
+        elif league_name == 'NFL':
             league_teams = SGO_NFL_TEAMS
-        elif league_id == 'MLS':
+        elif league_name == 'MLS':
             league_teams = SGO_MLS_TEAMS
-        elif league_id == 'Championship':
+        elif league_name == 'Championship':
             league_teams = RAPI_FOOTBALL_TEAMS
+        elif league_name == 'Super League':
+            league_teams = RAPI_RUGBY_TEAMS
         else:
             return canvas
 
@@ -779,7 +779,7 @@ class RunMatrix(SampleBase):
 
         date_str = game.date_str()
 
-        if isinstance(game, GameRAPIFootball):
+        if isinstance(game, (GameRAPIFootball, GameRAPIRugby)):
             graphics.DrawText(canvas, self.circle_font, 34, text_y_top, team_colour, title_str)
             graphics.DrawText(canvas, self.circle_font, 56, text_y_top, self.text_colour, title_symbol)
         else:
@@ -1807,11 +1807,11 @@ def rapi_football_get_games_league(league_id, games_last_update):
         data = response.json()
     except requests.exceptions.ConnectionError as e:
         LOG.error(f'rapi_football_get_games_league - ConnectionError {e}')
-        return []
+        return [], games_last_update
 
     if response.status_code != 200:
         LOG.error(f'rapi_football_get_games_league - Response returned code {response.status_code} {response.reason}')
-        return []
+        return [], games_last_update
 
     if int(response.headers['x-ratelimit-requests-remaining']) < 25:
         LOG.warning(f'rapi_football_get_games_league - Remaining requests {response.headers["x-ratelimit-requests-remaining"]}')
@@ -1868,11 +1868,11 @@ def rapi_rugby_get_games_league(league_id, games_last_update):
             data = response.json()
         except requests.exceptions.ConnectionError as e:
             LOG.error(f'rapi_rugby_get_games_league - ConnectionError {e}')
-            return []
+            return [], games_last_update
 
         if response.status_code != 200:
             LOG.error(f'rapi_rugby_get_games_league - Response returned code {response.status_code} {response.reason}')
-            return []
+            return [], games_last_update
 
         for game in data['events']:
             # discard duplicates
@@ -1880,7 +1880,7 @@ def rapi_rugby_get_games_league(league_id, games_last_update):
                 continue
 
             # keep only games involving our teams
-            if game['homeTeam']['id'] in RAPI_RUGBY_TEAMS or game['awayTeam']['id'] in RAPI_RUGBY_TEAMS:
+            if game['homeTeam']['nameCode'] in RAPI_RUGBY_TEAMS or game['awayTeam']['nameCode'] in RAPI_RUGBY_TEAMS:
                 events.append(game)
 
     games = []
