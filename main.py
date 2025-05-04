@@ -536,8 +536,7 @@ class GameRAPIRugby(Game):
         return 'H'
 
     def icon(self):
-        # TODO
-        icon_file = 'icons/32/SUNDERLAND.png'
+        icon_file = 'icons/32/WIGAN_WARRIORS_SL.png'
         return icon_file
 
     def id(self):
@@ -2164,18 +2163,6 @@ def main():
 
 
 if __name__ == '__main__':
-    # import requests
-    #
-    # url = "https://api-rugby.p.rapidapi.com/leagues"
-    #
-    # headers = {
-    #     "x-rapidapi-key": "c9bb26b1cemsh3d17e4233c7ef08p1a64d9jsn366e7cadd90f",
-    #     "x-rapidapi-host": "api-rugby.p.rapidapi.com"
-    # }
-    #
-    # response = requests.get(url, headers=headers)
-    #
-    # print(response.json())
 
     # # A query for SGO rate limiting (costs one object)
     # response = requests.get(
