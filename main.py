@@ -481,7 +481,9 @@ class GameSGO(Game):
         return self.game['teams']['away']['teamID']
 
     def away_team_score(self):
-        return self.game['teams']['away']['score']
+        if 'score' in self.game['teams']['away']:
+            return self.game['teams']['away']['score']
+        return '-'
 
     def away_team_short_name(self):
         return self.game['teams']['away']['names']['short']
@@ -527,7 +529,9 @@ class GameSGO(Game):
         return self.game['teams']['home']['teamID']
 
     def home_team_score(self):
-        return self.game['teams']['home']['score']
+        if 'score' in self.game['teams']['home']:
+            return self.game['teams']['home']['score']
+        return '-'
 
     def home_team_short_name(self):
         return self.game['teams']['home']['names']['short']
