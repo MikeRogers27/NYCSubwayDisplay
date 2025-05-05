@@ -3,6 +3,7 @@ import argparse
 from collections import namedtuple
 from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
+from dateutil.relativedelta import relativedelta
 import importlib
 import logging
 from logging import Logger
@@ -137,6 +138,11 @@ SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_D
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
 SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
+HIDE_SCORES = dict(
+    LOS_ANGELES_KINGS_NHL=[relativedelta(months=3, weeks=2), relativedelta(months=6)],
+    WIGAN_WARRIORS_SL=[relativedelta(), relativedelta(months=12)],
+)
+
 
 class Game(ABC):
     def __init__(self, game):
@@ -157,6 +163,10 @@ class Game(ABC):
 
     def away_team_score_str(self):
         if self.has_started() or self.has_ended():
+            score_str = self._hide_scores()
+            if score_str is not None:
+                return score_str
+
             if self.has_ended():
                 if self.away_team_score() > self.home_team_score():
                     score_prefix = 'W'
@@ -202,6 +212,10 @@ class Game(ABC):
 
     def home_team_score_str(self):
         if self.has_started() or self.has_ended():
+            score_str = self._hide_scores()
+            if score_str is not None:
+                return score_str
+
             if self.has_ended():
                 if self.home_team_score() > self.away_team_score():
                     score_prefix = 'W'
@@ -249,6 +263,34 @@ class Game(ABC):
     def start_time(self):
         pass
 
+    def _hide_scores(self):
+        if self.away_team_id() in HIDE_SCORES or self.home_team_id() in HIDE_SCORES:
+
+            # Get the current year
+            current_year = datetime.now().year
+
+            # Define the start of the year
+            start_of_year = datetime(current_year, 1, 1)
+
+            # Calculate relative dates
+            # start date to hide scores
+            hide_scores_start = datetime(current_year, 12, 31)
+            hide_scores_end = start_of_year
+
+            if self.away_team_id() in HIDE_SCORES:
+                hide_scores_start = min(hide_scores_start, start_of_year + HIDE_SCORES[self.away_team_id()][0])
+                hide_scores_end = max(hide_scores_start, start_of_year + HIDE_SCORES[self.away_team_id()][1])
+            if self.home_team_id() in HIDE_SCORES:
+                hide_scores_start = min(hide_scores_start, start_of_year + HIDE_SCORES[self.home_team_id()][0])
+                hide_scores_end = max(hide_scores_start, start_of_year + HIDE_SCORES[self.home_team_id()][1])
+
+            hide_scores_start = to_local_tz(hide_scores_start)
+            hide_scores_end = to_local_tz(hide_scores_end)
+
+            if hide_scores_start <= self.start_time() < hide_scores_end:
+                score_str = '-'
+                return score_str
+        return None
 
 class GameRAPI(Game):
     RAPI_TEAM_CODES = {
@@ -427,13 +469,21 @@ class GameSGO(Game):
         super().__init__(*args)
 
     def away_team_colour(self):
+        # overrides
+        if self.away_team_id() == 'SAN_FRANCISCO_GIANTS_MLB':
+            return graphics.Color(*hex_to_rgb('#FD5A1E'))
+        elif self.away_team_id() == 'PITTSBURGH_PIRATES_MLB':
+            return graphics.Color(*hex_to_rgb('#FDB827'))
+        # default
         return graphics.Color(*hex_to_rgb(self.game['teams']['away']['colors']['primary']))
 
     def away_team_id(self):
         return self.game['teams']['away']['teamID']
 
     def away_team_score(self):
-        return self.game['teams']['away']['score']
+        if 'score' in self.game['teams']['away']:
+            return self.game['teams']['away']['score']
+        return '-'
 
     def away_team_short_name(self):
         return self.game['teams']['away']['names']['short']
@@ -467,13 +517,21 @@ class GameSGO(Game):
         return self.game['status']['started']
 
     def home_team_colour(self):
+        # overrides
+        if self.home_team_id() == 'SAN_FRANCISCO_GIANTS_MLB':
+            return graphics.Color(*hex_to_rgb('#FD5A1E'))
+        elif self.home_team_id() == 'PITTSBURGH_PIRATES_MLB':
+            return graphics.Color(*hex_to_rgb('#FDB827'))
+        # default
         return graphics.Color(*hex_to_rgb(self.game['teams']['home']['colors']['primary']))
 
     def home_team_id(self):
         return self.game['teams']['home']['teamID']
 
     def home_team_score(self):
-        return self.game['teams']['home']['score']
+        if 'score' in self.game['teams']['home']:
+            return self.game['teams']['home']['score']
+        return '-'
 
     def home_team_short_name(self):
         return self.game['teams']['home']['names']['short']
@@ -503,9 +561,47 @@ class GameSGO(Game):
         return to_local_tz(parse(self.game['status']['startsAt']))
 
     def update(self, games_last_update):
-        # we can update the whole league for the cost of one game
-        games, games_last_update = sgo_get_games_league(self.league_id(), games_last_update)
-        return next(g for g in games if g.id() == self.id()), games_last_update
+        try:
+            response = requests.get(
+                'https://api.sportsgameodds.com/v2/events',
+                headers={'X-Api-Key': os.environ['SGO_API_KEY']},
+                params={
+                    'eventID': self.id(),
+                    'oddIDs': 'points-home-game-sp-home',
+                })
+
+            if response.status_code == 429:
+                LOG.warning(f'GameSGO.update - Rate limits hit {response.status_code} {response.reason}'
+                          f' {response.request.url}')
+                setup_env()
+                return self, games_last_update
+
+            if response.status_code != 200:
+                LOG.error(f'GameSGO.update - Response returned code {response.status_code} {response.reason}'
+                          f' {response.request.url}')
+                return self, games_last_update
+
+            data = response.json()
+            if not data['success']:
+                LOG.error(f'GameSGO.update - Data["success"] == False')
+                return self, games_last_update
+
+            self.game = data['data'][0]
+            games_last_update[self.id()] = datetime.now()
+
+        except requests.exceptions.ConnectionError as e:
+            LOG.error(f'GameSGO.update - ConnectionError {e}')
+            return self, games_last_update
+
+        except Exception as error:
+            print(f'GameSGO.update - Error fetching events: {error}')
+            return self, games_last_update
+
+        return self, games_last_update
+
+        # # we can update the whole league for the cost of one game
+        # games, games_last_update = sgo_get_games_league(self.league_id(), games_last_update)
+        # return next((g for g in games if g.id() == self.id()), self), games_last_update
 
 
 class GracefulKiller:
@@ -539,6 +635,7 @@ class RunMatrix(SampleBase):
         self.circle_colour_nqrw = graphics.Color(252, 204, 10)
 
     def draw_game(self, canvas, game: Game):
+        LOG.debug(f'RunMatrix.draw_game - drawing game {game}')
         league_id = game.league_name()
         if league_id == 'MLB':
             league_teams = SGO_MLB_TEAMS
@@ -674,6 +771,8 @@ class RunMatrix(SampleBase):
                            stop_id,
                            canvas,
                            ):
+        LOG.debug(f'RunMatrix.draw_train_no_data - stop_id {stop_id}')
+
         # Top line
         text_y_top = 13
         text_y_bottom = 28
@@ -696,6 +795,8 @@ class RunMatrix(SampleBase):
                          stop_id,
                          canvas,
                          ):
+        LOG.debug(f'RunMatrix.draw_trains_none - stop_id {stop_id}')
+
         # Top line
         text_y_top = 13
         text_y_bottom = 28
@@ -715,6 +816,8 @@ class RunMatrix(SampleBase):
         graphics.DrawText(canvas, self.font, 3, text_y_bottom, self.text_colour, '*no trains*')
 
     def draw_trains(self, trains, stop_id, canvas, display_time):
+        LOG.debug(f'RunMatrix.draw_trains - stop_id {stop_id}')
+
         if trains is None:
             canvas.Clear()
             self.draw_train_no_data(stop_id, canvas)
@@ -756,6 +859,7 @@ class RunMatrix(SampleBase):
         return True, canvas
 
     def draw_seasonal(self, seasonal, canvas, display_time):
+        LOG.debug(f'RunMatrix.draw_seasonal - seasonal {seasonal}')
 
         # first pick an image
         im_ind = random.randrange(len(seasonal.images))
@@ -868,6 +972,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def draw_weather(self, canvas, w):
+        LOG.debug(f'RunMatrix.draw_weather - w {w}')
+
         text_y_top = 10
         text_y_middle = 20
         text_y_bottom = 30
@@ -902,6 +1008,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def draw_weather_no_data(self, canvas):
+        LOG.debug(f'RunMatrix.draw_weather_no_data')
+
         text_y_top = 10
         text_y_middle = 20
         text_y_bottom = 30
@@ -925,6 +1033,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def draw_weather_summary(self, canvas, w_list, title_str):
+        LOG.debug(f'RunMatrix.draw_weather_summary - title_str {title_str}')
+
         text_y_top = 10
         text_y_middle = 20
         text_y_bottom = 30
@@ -957,6 +1067,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_clock(self, canvas, display_time=10):
+        LOG.debug(f'RunMatrix.display_clock')
+
         text_y_top = 13
         text_y_bottom = 28
         clock_pos = 2
@@ -1017,6 +1129,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_trains(self, canvas, display_time=10, uptown_only=False):
+        LOG.debug(f'RunMatrix.display_trains - uptown_only {uptown_only}')
+
         mta_update_feeds()
         stop_ids = self.stop_ids
         if uptown_only:
@@ -1028,6 +1142,7 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_seasonal(self, canvas, display_time=10):
+        LOG.debug(f'RunMatrix.display_seasonal')
 
         # should we display at all
         if random.uniform(0., 1.) > 0.2:  # Only display roughly once every 5 times
@@ -1043,6 +1158,8 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_sports(self, canvas, display_time=10):
+        LOG.debug(f'RunMatrix.display_sports')
+
         games = []
         games.extend(sgo_get_games())
         games.extend(rapi_get_games())
@@ -1059,6 +1176,7 @@ class RunMatrix(SampleBase):
         return canvas
 
     def display_weather(self, canvas, display_time=10):
+        LOG.debug(f'RunMatrix.display_weather')
 
         timestamp = datetime.now().time()
         if timestamp < dt_time(13, 0):  # before 12 show today's forecast
@@ -1095,7 +1213,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        # return ['seasonal'], [5]
+        # return ['sports'], [5]
 
         now = datetime.now()
         timestamp = now.time()
@@ -1306,6 +1424,8 @@ def mta_update_feeds():
                     LOG.info(f'mta_update_feeds - feed updated {feed}')
                 except requests.exceptions.ConnectionError as e:
                     LOG.error(f'mta_update_feeds - ConnectionError: {e}')
+                except RuntimeError as e:
+                    LOG.error(f'mta_update_feeds - RuntimeError: {e}')
 
 
 def owm_forecasts_evening():
@@ -1355,8 +1475,9 @@ def owm_get_weather():
         OWM_MGR = owm.weather_manager()
 
     # we only get the weather every 0.5 hours
-    if OWN_TIMESTAMP is None or \
+    if OWM_WEATHER is None or OWN_TIMESTAMP is None or \
             (datetime.now() - OWN_TIMESTAMP).total_seconds() > OWM_REFRESH_RATE:
+        LOG.debug(f'owm_get_weather - updating weather')
         OWN_TIMESTAMP = datetime.now()
         try:
             observation = OWM_MGR.weather_at_place('New York')
@@ -1552,6 +1673,8 @@ def rapi_get_games():
 
 
 def rapi_get_games_league(league_id, games_last_update):
+    LOG.debug(f'rapi_get_games_league - league_id {league_id}')
+
     now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
     starts_after = to_utc_tz(today - timedelta(days=1))
@@ -1596,6 +1719,50 @@ def rapi_get_games_league(league_id, games_last_update):
     return games, games_last_update
 
 
+def setup_env():
+    if 'SGO_API_KEY' in os.environ:
+        return
+
+    if 'SGO_API_KEYS' not in os.environ:
+        LOG.error(f'setup_env - SGO_API_KEY and SGO_API_KEYS are not found')
+        exit(1)
+
+    LOG.info(f'setup_env - selecting SGO_API_KEY')
+
+    sgo_api_keys = os.environ['SGO_API_KEYS'].split(',')
+
+    # Find the first, active, non-limited API key
+    for sgo_api_key in sgo_api_keys:
+        try:
+            response = requests.get(
+                f'https://api.sportsgameodds.com/v2/account/usage',
+                headers={'X-Api-Key': sgo_api_key}
+            )
+            data = response.json()
+            if not data['data']['isActive']:
+                continue
+
+            is_limited = False
+            for limit in data['data']['rateLimits'].values():
+                if isinstance(limit['max-entities'], int):
+                    if limit['current-entities'] == limit['max-entities']:
+                        is_limited = True
+                        break
+
+            if not is_limited:
+                os.environ['SGO_API_KEY'] = sgo_api_key
+                break
+
+        except requests.exceptions.ConnectionError as e:
+            LOG.error(f'setup_env - ConnectionError {e}')
+
+    if 'SGO_API_KEY' not in os.environ:
+        LOG.error(f'setup_env - SGO_API_KEY is not found')
+        exit(1)
+
+    LOG.info(f'setup_env - selected SGO_API_KEY=={os.environ["SGO_API_KEY"]}')
+
+
 def sgo_get_games():
     global SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE
     SGO_GAMES, SGO_TIMESTAMP, SGO_NEXT_REFRESH, SGO_GAMES_LAST_UPDATE = \
@@ -1605,6 +1772,8 @@ def sgo_get_games():
 
 
 def sgo_get_games_league(league_id, games_last_update):
+    LOG.debug(f'sgo_get_games_league - league_id {league_id}')
+
     now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
 
@@ -1613,28 +1782,6 @@ def sgo_get_games_league(league_id, games_last_update):
         starts_before = to_utc_tz(today + timedelta(days=2))
     else:
         starts_before = to_utc_tz(today + timedelta(days=2))
-
-    try:
-        response = requests.get(
-            f'https://api.sportsgameodds.com/v1/events?leagueID={league_id}&'
-            f'startsAfter={starts_after.strftime("%Y-%m-%d %H:%M:%S")}&'
-            f'startsBefore={starts_before.strftime("%Y-%m-%d %H:%M:%S")}&'
-            f'oddIDs=points-home-game-sp-home',
-            headers={'X-Api-Key': os.environ['SGO_API_KEY']}
-        )
-    except requests.exceptions.ConnectionError as e:
-        LOG.error(f'sgo_get_games_league - ConnectionError {e}')
-        return [], games_last_update
-
-    if response.status_code != 200:
-        LOG.error(f'sgo_get_games_league - Response returned code {response.status_code} {response.reason}'
-                  f'{response.request.url}')
-        return [], games_last_update
-
-    data = response.json()
-    if not data['success']:
-        LOG.error(f'sgo_get_games_league - Data["success"] == False')
-        return [], games_last_update
 
     if league_id == 'MLB':
         league_teams = SGO_MLB_TEAMS
@@ -1647,8 +1794,55 @@ def sgo_get_games_league(league_id, games_last_update):
     else:
         league_teams = []
 
+    next_cursor = None
+    event_data = []
+    while True:
+        try:
+            response = requests.get(
+                'https://api.sportsgameodds.com/v2/events',
+                headers={'X-Api-Key': os.environ['SGO_API_KEY']},
+                params={
+                    'leagueID': league_id,
+                    'teamID': ','.join(league_teams),
+                    'startsAfter': starts_after.strftime("%Y-%m-%d %H:%M:%S"),
+                    'startsBefore': starts_before.strftime("%Y-%m-%d %H:%M:%S"),
+                    'oddIDs': 'points-home-game-sp-home',
+                    'limit': 10,
+                    'cursor': next_cursor
+                })
+
+            if response.status_code == 429:
+                LOG.warning(f'sgo_get_games_league - Rate limits hit {response.status_code} {response.reason}'
+                          f' {response.request.url}')
+                setup_env()
+                return [], games_last_update
+
+            if response.status_code != 200:
+                LOG.error(f'sgo_get_games_league - Response returned code {response.status_code} {response.reason}'
+                          f' {response.request.url}')
+                return [], games_last_update
+
+            data = response.json()
+            if not data['success']:
+                LOG.error(f'sgo_get_games_league - Data["success"] == False')
+                return [], games_last_update
+
+            event_data.extend(data['data'])
+
+            next_cursor = data.get('nextCursor')
+            if not next_cursor:
+                break
+
+        except requests.exceptions.ConnectionError as e:
+            LOG.error(f'sgo_get_games_league - ConnectionError {e}')
+            return [], games_last_update
+
+        except Exception as error:
+            print(f'Error fetching events: {error}')
+            break
+
     games = []
-    for game in data['data']:
+    for game in event_data:
         if game['teams']['away']['teamID'] in league_teams or \
                 game['teams']['home']['teamID'] in league_teams:
             games_last_update[game['eventID']] = now
@@ -1660,7 +1854,9 @@ def sgo_get_games_league(league_id, games_last_update):
 
 
 def sports_get_games(type, games, timestamp, next_refresh, games_last_update, refresh_rate):
-    if timestamp is None:
+    LOG.debug(f'sports_get_games - type {type}')
+
+    if timestamp is not None:
         games, timestamp, next_refresh, games_last_update = sports_retrieve_from_cache(
             type, games, timestamp, next_refresh, games_last_update
         )
@@ -1672,6 +1868,8 @@ def sports_get_games(type, games, timestamp, next_refresh, games_last_update, re
         next_refresh = now - timedelta(days=1)
 
     if now > next_refresh:
+        LOG.debug(f'sports_get_games - refreshing feed')
+
         timestamp = datetime.now()
 
         games = []
@@ -1707,12 +1905,16 @@ def sports_get_games(type, games, timestamp, next_refresh, games_last_update, re
 
 
 def sports_retrieve_from_cache(type, games, timestamp, next_refresh, games_last_update):
+    LOG.debug(f'sports_retrieve_from_cache - type {type}')
+
     temp_dir = tempfile.gettempdir()
     cache_file = os.path.join(temp_dir, f'{type}.pickle')
     if os.path.exists(cache_file):
         with open(cache_file, 'rb') as file:
             games, timestamp, next_refresh, games_last_update = pickle.load(file)
         LOG.info(f'sports_retrieve_from_cache - Retrieved {type} with {len(games)} games')
+    else:
+        LOG.debug(f'sports_retrieve_from_cache - cache hit failed')
 
     return games, timestamp, next_refresh, games_last_update
 
@@ -1727,6 +1929,8 @@ def sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update
 
 
 def sports_update_games(games: [Game], games_last_update, refresh_rate):
+    LOG.debug(f'sports_update_games - updating in progress games')
+
     now = datetime.now()
     for game_ind, game in enumerate(games):
         has_ended = game.has_ended()
@@ -1738,8 +1942,10 @@ def sports_update_games(games: [Game], games_last_update, refresh_rate):
 
         # if we're in progress, update as soon as possible
         if in_progress:
+            LOG.debug(f'sports_update_games - {games[game_ind]} in progress')
             next_refresh = games_last_update[game.id()] + timedelta(seconds=refresh_rate)
             if now > next_refresh:
+                LOG.debug(f'sports_update_games - {games[game_ind]} updating')
                 games[game_ind], games_last_update = game.update(games_last_update)
 
     return games, games_last_update
@@ -1763,6 +1969,8 @@ def main():
     args = parse_args()
     logger_setup(args)
 
+    setup_env()
+
     led_display_trains = RunMatrix(
         stop_ids=['F23N', 'F23S', 'R33N', 'R33S'],
         uptown_stop_ids=['F23N', 'R33N'],
@@ -1774,11 +1982,11 @@ def main():
 
 
 if __name__ == '__main__':
-    # A query for SGO rate limiting (costs one object)
+    # # A query for SGO rate limiting (costs one object)
     # response = requests.get(
-    #     f'https://api.sportsgameodds.com/v1/account/usage',
+    #     f'https://api.sportsgameodds.com/v2/account/usage',
     #     headers={'X-Api-Key': os.environ['SGO_API_KEY']}
     # )
     # data = response.json()
-
+    # pass
     main()
