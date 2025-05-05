@@ -59,7 +59,7 @@ RAPI_RUGBY_GAMES_LAST_UPDATE = {}
 RAPI_RUGBY_TIMESTAMP = None
 RAPI_RUGBY_NEXT_REFRESH = None
 RAPI_RUGBY_REFRESH_RATE = 360
-RAPI_RUGBY_TEAMS = ['WGW', 'LEL']
+RAPI_RUGBY_TEAMS = ['WGW', ]
 
 Seasonal = namedtuple(
     'Seasonal',
@@ -1271,8 +1271,8 @@ class RunMatrix(SampleBase):
         LOG.debug(f'RunMatrix.display_sports')
 
         games = []
-        # games.extend(sgo_get_games())
-        # games.extend(rapi_football_get_games())
+        games.extend(sgo_get_games())
+        games.extend(rapi_football_get_games())
         games.extend(rapi_rugby_get_games())
         if not len(games):
             return canvas
