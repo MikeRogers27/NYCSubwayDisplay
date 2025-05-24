@@ -552,18 +552,30 @@ class GameRAPIRugby(Game):
         return datetime.fromtimestamp(self.game['startTimestamp'], tz=LOCAL_TZ)
 
     def update(self, games_last_update):
-        querystring = {
-            'id': self.id(),
-        }
-        headers = {
-            'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
-            'x-rapidapi-host': 'rugbyapi2.p.rapidapi.com',
-        }
-        url = f"https://rugbyapi2.p.rapidapi.com/api/rugby/match/{querystring['id']}"
-        response = requests.request("GET", url, headers=headers)
+        try:
+            querystring = {
+                'id': self.id(),
+            }
+            headers = {
+                'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+                'x-rapidapi-host': 'rugbyapi2.p.rapidapi.com',
+            }
+            url = f"https://rugbyapi2.p.rapidapi.com/api/rugby/match/{querystring['id']}"
+            response = requests.request("GET", url, headers=headers)
+        except requests.exceptions.ConnectionError as e:
+            LOG.error(f'GameRAPIRugby::update - ConnectionError {e}')
+            return self, games_last_update
+
         try:
             data = response.json()
         except requests.exceptions.JSONDecodeError:
+            LOG.warning(f'GameRAPIRugby::update - response.json() failed to decode'
+                        f' {response.request.url}')
+            return self, games_last_update
+
+        if 'response' not in data:
+            LOG.warning(f'GameRAPIRugby::update - response not in json data'
+                        f' {response.request.url}')
             return self, games_last_update
 
         game = GameRAPIRugby(data['response'])
