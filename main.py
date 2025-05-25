@@ -464,7 +464,7 @@ class GameRAPIFootball(Game):
         except requests.exceptions.ConnectionError as e:
             LOG.error(f'GameRAPIFootball::update - ConnectionError {e}')
             return self, games_last_update
-        
+
         try:
             data = response.json()
         except requests.exceptions.JSONDecodeError:
