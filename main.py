@@ -1900,6 +1900,9 @@ def rapi_rugby_get_games_league(league_id, games_last_update):
         except requests.exceptions.ConnectionError as e:
             LOG.error(f'rapi_rugby_get_games_league - ConnectionError {e}')
             return [], games_last_update
+        except requests.exceptions.JSONDecodeError as e:
+            LOG.error(f'rapi_rugby_get_games_league - JSONDecodeError {e}')
+            return [], games_last_update
 
         if response.status_code != 200:
             LOG.error(f'rapi_rugby_get_games_league - Response returned code {response.status_code} {response.reason}')
