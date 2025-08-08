@@ -152,10 +152,11 @@ SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_D
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
 SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
-HIDE_SCORES = dict(
-    LOS_ANGELES_KINGS_NHL=[relativedelta(months=3, weeks=2), relativedelta(months=6)],
-    WGW=[relativedelta(), relativedelta(months=12)],
-)
+HIDE_SCORES = {
+    'LOS_ANGELES_KINGS_NHL': [relativedelta(months=3, weeks=2), relativedelta(months=6)],
+    'WGW': [relativedelta(), relativedelta(months=12)],
+    RAPI_FOOTBALL_TEAMS[0]: [relativedelta(), relativedelta(months=12)],
+}
 
 
 class Game(ABC):
