@@ -308,9 +308,24 @@ class Game(ABC):
 
 class GameRAPIFootball(Game):
     RAPI_TEAM_CODES = {
+        33: 'MUN',  # Manchester United
+        34: 'NEW',  # Newcastle
+        35: 'BOU',  # Bournemouth
+        36: 'FUL',  # Fulham
         38: 'WAT',  # Watford
+        39: 'WOL',  # Wolves
+        40: 'LIV',  # Liverpool
+        42: 'ARS',  # Arsenal
         43: 'CAR',  # Cardiff City
         44: 'BUR',  # Burnley
+        45: 'EVE',  # Everton
+        47: 'TOT',  # Tottenham
+        48: 'WHU',  # West Ham
+        49: 'CHE',  # Chelsea
+        50: 'MNC',  # Man City
+        51: 'BRI',  # Brighton
+        52: 'CRY',  # Crystal Palace
+        55: 'BRE',  # Brentford
         56: 'BRC',  # Bristol City
         58: 'MIL',  # Millwall
         59: 'PNE',  # Preston North End
@@ -318,6 +333,8 @@ class GameRAPIFootball(Game):
         62: 'SHU',  # Sheffield United
         63: 'LEE',  # Leeds
         64: 'HUL',  # Hull City
+        65: 'NOT',  # Nottingham Forest
+        66: 'AST',  # Aston Villa
         67: 'BBR',  # Blackburn Rovers
         69: 'DER',  # Derby
         70: 'MID',  # Middlesbrough
@@ -334,9 +351,24 @@ class GameRAPIFootball(Game):
         1359: 'LUT',  # Luton Town
     }
     RAPI_TEAM_COLOURS = {
+        33: (218, 2, 14),  # Manchester United
+        34: (255, 255, 255),  # Newcastle
+        35: (181, 14, 18),  # Bournemouth
+        36: (255, 255, 255),  # Fulham
         38: (237, 33, 39),  # Watford
+        39: (253, 185, 19),  # Wolves
+        40: (208, 0, 39),  # Liverpool
+        42: (239, 1, 7),  # Arsenal
         43: (0, 112, 181),  # Cardiff City
         44: (128, 0, 0),  # Burnley
+        45: (39, 68, 136),  # Everton
+        47: (255, 255, 255),  # Tottenham
+        48: (122, 38, 58),  # West Ham
+        49: (3, 70, 148),  # Chelsea
+        50: (108, 171, 221),  # Man City
+        51: (0, 87, 184),  # Brighton
+        52: (27, 69, 143),  # Crystal Palace
+        55: (210, 0, 0),  # Brentford
         56: (226, 26, 35),  # Bristol City
         58: (0, 25, 74),  # Millwall
         59: (0, 33, 86),  # Preston North End
@@ -344,6 +376,8 @@ class GameRAPIFootball(Game):
         62: (236, 34, 39),  # Sheffield United
         63: (255, 255, 255),  # Leeds
         64: (241, 138, 1),  # Hull City
+        65: (229, 50, 51),  # Nottingham Forest
+        66: (128, 0, 0),  # Aston Villa
         67: (0, 158, 224),  # Blackburn Rovers
         69: (255, 255, 255),  # Derby
         70: (222, 27, 34),  # Middlesbrough
