@@ -53,6 +53,12 @@ RAPI_FOOTBALL_TIMESTAMP = None
 RAPI_FOOTBALL_NEXT_REFRESH = None
 RAPI_FOOTBALL_REFRESH_RATE = 360
 RAPI_FOOTBALL_TEAMS = [746, ]
+RAPI_FOOTBALL_PREMIER_LEAGUE_ID = 39
+RAPI_FOOTBALL_CHAMPIONSHIP_ID = 40
+RAPI_FOOTBALL_FA_CUP_ID = 45
+RAPI_FOOTBALL_LEAGUE_CUP_ID = 48
+RAPI_FOOTBALL_FRIENDLIES_ID = 667
+RAPI_FOOTBALL_SEASON_ID = 2025  # TODO: Must be updated every year
 
 RAPI_RUGBY_GAMES = None
 RAPI_RUGBY_GAMES_LAST_UPDATE = {}
@@ -60,6 +66,7 @@ RAPI_RUGBY_TIMESTAMP = None
 RAPI_RUGBY_NEXT_REFRESH = None
 RAPI_RUGBY_REFRESH_RATE = 360
 RAPI_RUGBY_TEAMS = ['WGW', ]
+RAPI_RUGBY_SUPER_LEAGUE_ID = 345
 
 Seasonal = namedtuple(
     'Seasonal',
@@ -1822,9 +1829,8 @@ def rapi_football_get_games_league(league_id, games_last_update):
     # Championship league id = 40
     # sunderland team id = 746
     querystring = {
-        # 'league': '40',
-        'season': '2024',
-        'team': '746',
+        'season': RAPI_FOOTBALL_SEASON_ID,
+        'team': RAPI_FOOTBALL_TEAMS[0],  # TODO: support multiple teams
         'from': starts_after.strftime('%Y-%m-%d'),
         'to': starts_before.strftime('%Y-%m-%d'),
     }
@@ -2083,10 +2089,12 @@ def sports_get_games(type, games, timestamp, next_refresh, games_last_update, re
 
         games = []
         if type == 'RAPI_FOOTBALL':
-            games_league, games_last_update = rapi_football_get_games_league(40, games_last_update)
+            # league_id is ignored, just gets all sunderland games for the RAPI_FOOTBALL_SEASON_ID season
+            games_league, games_last_update = rapi_football_get_games_league(RAPI_FOOTBALL_PREMIER_LEAGUE_ID, games_last_update)
             games.extend(games_league)
         elif type == 'RAPI_RUGBY':
-            games_league, games_last_update = rapi_rugby_get_games_league(345, games_last_update)
+            # league_id is ignored just gets all wigan games between the required dates
+            games_league, games_last_update = rapi_rugby_get_games_league(RAPI_RUGBY_SUPER_LEAGUE_ID, games_last_update)
             games.extend(games_league)
         elif type == 'SGO':
             games_league, games_last_update = sgo_get_games_league('MLB', games_last_update)
