@@ -403,7 +403,7 @@ class GameRAPIFootball(Game):
         if self.away_team_id() in self.RAPI_TEAM_COLOURS:
             team_colour = graphics.Color(*self.RAPI_TEAM_COLOURS[self.away_team_id()])
         else:
-            team_colour = graphics.Color(self.text_colour)
+            team_colour = graphics.Color(*self.text_colour)
         return team_colour
 
     def away_team_id(self):
@@ -457,7 +457,7 @@ class GameRAPIFootball(Game):
         if self.home_team_id() in self.RAPI_TEAM_COLOURS:
             team_colour = graphics.Color(*self.RAPI_TEAM_COLOURS[self.home_team_id()])
         else:
-            team_colour = graphics.Color(self.text_colour)
+            team_colour = graphics.Color(*self.text_colour)
         return team_colour
 
     def home_team_id(self):
