@@ -4,6 +4,7 @@ from collections import namedtuple
 from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
+import glob
 import importlib
 import json
 import logging
@@ -309,10 +310,13 @@ class Game(ABC):
         return None
 
 class GameRAPIFootball(Game):
+    RAPI_TEAM_INFO = None
+
     def __init__(self, *args):
         super().__init__(*args)
         self.text_colour = (74, 214, 9)
-        self.RAPI_TEAM_INFO = self._load_team_info()
+        if GameRAPIFootball.RAPI_TEAM_INFO is None:
+            GameRAPIFootball.RAPI_TEAM_INFO = self._load_team_info()
 
     def away_team_colour(self):
         team_info = self._get_team_info(self.away_team_id(), self.game['teams']['away'])
@@ -327,7 +331,7 @@ class GameRAPIFootball(Game):
 
     def away_team_short_name(self):
         team_info = self._get_team_info(self.away_team_id(), self.game['teams']['away'])
-        short_name = graphics.Color(*team_info['short_name'])
+        short_name = team_info['short_name']
         return short_name
 
     def away_team_title_symbol(self):
@@ -377,7 +381,7 @@ class GameRAPIFootball(Game):
 
     def home_team_short_name(self):
         team_info = self._get_team_info(self.home_team_id(), self.game['teams']['home'])
-        short_name = graphics.Color(*team_info['short_name'])
+        short_name = team_info['short_name']
         return short_name
 
     def home_team_title_symbol(self):
@@ -431,11 +435,11 @@ class GameRAPIFootball(Game):
         return game, games_last_update
 
     def _get_team_info(self, team_id, game_team):
-        if team_id not in self.RAPI_TEAM_INFO:
+        if str(team_id) not in GameRAPIFootball.RAPI_TEAM_INFO:
             self._update_team_info_from_api(team_id, game_team)
-            if team_id not in self.RAPI_TEAM_INFO:
+            if team_id not in GameRAPIFootball.RAPI_TEAM_INFO:
                 LOG.error(f'GameRAPIFootball._get_team_info: Team {team_id} returns no info - unexpected')
-        return self.RAPI_TEAM_INFO[team_id]
+        return GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)]
 
     def _load_team_info(self) -> dict:
         team_info_json_file = self._team_info_file_path()
@@ -444,17 +448,32 @@ class GameRAPIFootball(Game):
         return json_data
 
     def _save_team_info(self, json_data):
-        team_info_json_file = self._team_info_file_path()
+        time_stamp = datetime.now().strftime('%Y%m%d%H%M%S')
+
+        current_file_path = os.path.abspath(__file__)
+        team_info_json_file = os.path.join(
+            os.path.dirname(current_file_path), 'cache', f'{time_stamp}-rapi-football-team-info.json'
+        )
+        os.makedirs(os.path.dirname(team_info_json_file), exist_ok=True)
         with open(team_info_json_file, 'w') as file:
             json.dump(json_data, file, indent=4)
 
     @staticmethod
     def _team_info_file_path() -> str:
         current_file_path = os.path.abspath(__file__)
-        team_info_json_file = os.path.join(
-            os.path.dirname(current_file_path),
-            'data', 'rapi-football-team-info.json'
+        cached_team_file_dir = os.path.join(
+            os.path.dirname(current_file_path), 'cache'
         )
+        team_info_json_file = None
+        if os.path.exists(cached_team_file_dir):
+            team_info_json_files = sorted(glob.glob(os.path.join(cached_team_file_dir, '*-rapi-football-team-info.json')))
+            if len(team_info_json_files):
+                team_info_json_file = team_info_json_files[-1]
+        if team_info_json_file is None:
+            team_info_json_file = os.path.join(
+                os.path.dirname(current_file_path),
+                'data', 'rapi-football-team-info.json'
+            )
         return team_info_json_file
 
     def _update_team_info_from_api(self, team_id: int, game_team: dict):
@@ -477,16 +496,16 @@ class GameRAPIFootball(Game):
             data = response.json()
         except requests.exceptions.ConnectionError as e:
             LOG.error(f'GameRAPIFootball._update_team_info_from_api - ConnectionError {e}')
-            self.RAPI_TEAM_INFO[team_id] = default_team_info
-            self._save_team_info(self.RAPI_TEAM_INFO)
+            GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = default_team_info
+            self._save_team_info(GameRAPIFootball.RAPI_TEAM_INFO)
             LOG.error(f'GameRAPIFootball._update_team_info_from_api - Team stored with default info {team_id}')
             return
 
         if response.status_code != 200:
             LOG.error(
                 f'GameRAPIFootball._update_team_info_from_api - Response returned code {response.status_code} {response.reason}')
-            self.RAPI_TEAM_INFO[team_id] = default_team_info
-            self._save_team_info(self.RAPI_TEAM_INFO)
+            GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = default_team_info
+            self._save_team_info(GameRAPIFootball.RAPI_TEAM_INFO)
             LOG.error(f'GameRAPIFootball._update_team_info_from_api - Team stored with default info {team_id}')
             return
 
@@ -506,18 +525,18 @@ class GameRAPIFootball(Game):
                 'short_name': api_info['team']['code'],
                 'team_colour': team_colour,
             }
-            self.RAPI_TEAM_INFO[team_id] = team_info
+            GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = team_info
             updated = True
             break
 
         # save this for later
         if updated:
-            self._save_team_info(self.RAPI_TEAM_INFO)
+            self._save_team_info(GameRAPIFootball.RAPI_TEAM_INFO)
             LOG.info(f'GameRAPIFootball._update_team_info_from_api - Updated RAPI_TEAM_INFO with {team_id}')
         else:
             LOG.info(f'GameRAPIFootball._update_team_info_from_api - update failed for {team_id}')
-            self.RAPI_TEAM_INFO[team_id] = default_team_info
-            self._save_team_info(self.RAPI_TEAM_INFO)
+            GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = default_team_info
+            self._save_team_info(GameRAPIFootball.RAPI_TEAM_INFO)
             LOG.error(f'GameRAPIFootball._update_team_info_from_api - Team stored with default info {team_id}')
 
 
