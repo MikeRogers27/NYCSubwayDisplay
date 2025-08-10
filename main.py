@@ -47,12 +47,26 @@ OWM_REFRESH_RATE = 3600 * 0.5
 OWN_TIMESTAMP = None
 OWM_WEATHER = None
 
-RAPI_GAMES = None
-RAPI_GAMES_LAST_UPDATE = {}
-RAPI_TIMESTAMP = None
-RAPI_NEXT_REFRESH = None
-RAPI_REFRESH_RATE = 360
-RAPI_TEAMS = [746, ]
+RAPI_FOOTBALL_GAMES = None
+RAPI_FOOTBALL_GAMES_LAST_UPDATE = {}
+RAPI_FOOTBALL_TIMESTAMP = None
+RAPI_FOOTBALL_NEXT_REFRESH = None
+RAPI_FOOTBALL_REFRESH_RATE = 360
+RAPI_FOOTBALL_TEAMS = [746, ]
+RAPI_FOOTBALL_PREMIER_LEAGUE_ID = 39
+RAPI_FOOTBALL_CHAMPIONSHIP_ID = 40
+RAPI_FOOTBALL_FA_CUP_ID = 45
+RAPI_FOOTBALL_LEAGUE_CUP_ID = 48
+RAPI_FOOTBALL_FRIENDLIES_ID = 667
+RAPI_FOOTBALL_SEASON_ID = 2025  # TODO: Must be updated every year
+
+RAPI_RUGBY_GAMES = None
+RAPI_RUGBY_GAMES_LAST_UPDATE = {}
+RAPI_RUGBY_TIMESTAMP = None
+RAPI_RUGBY_NEXT_REFRESH = None
+RAPI_RUGBY_REFRESH_RATE = 360
+RAPI_RUGBY_TEAMS = ['WGW', ]
+RAPI_RUGBY_SUPER_LEAGUE_ID = 345
 
 Seasonal = namedtuple(
     'Seasonal',
@@ -138,10 +152,11 @@ SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_D
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
 SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
-HIDE_SCORES = dict(
-    LOS_ANGELES_KINGS_NHL=[relativedelta(months=3, weeks=2), relativedelta(months=6)],
-    WIGAN_WARRIORS_SL=[relativedelta(), relativedelta(months=12)],
-)
+HIDE_SCORES = {
+    'LOS_ANGELES_KINGS_NHL': [relativedelta(months=3, weeks=2), relativedelta(months=6)],
+    'WGW': [relativedelta(), relativedelta(months=12)],
+    RAPI_FOOTBALL_TEAMS[0]: [relativedelta(), relativedelta(months=12)],
+}
 
 
 class Game(ABC):
@@ -292,11 +307,26 @@ class Game(ABC):
                 return score_str
         return None
 
-class GameRAPI(Game):
+class GameRAPIFootball(Game):
     RAPI_TEAM_CODES = {
+        33: 'MUN',  # Manchester United
+        34: 'NEW',  # Newcastle
+        35: 'BOU',  # Bournemouth
+        36: 'FUL',  # Fulham
         38: 'WAT',  # Watford
+        39: 'WOL',  # Wolves
+        40: 'LIV',  # Liverpool
+        42: 'ARS',  # Arsenal
         43: 'CAR',  # Cardiff City
         44: 'BUR',  # Burnley
+        45: 'EVE',  # Everton
+        47: 'TOT',  # Tottenham
+        48: 'WHU',  # West Ham
+        49: 'CHE',  # Chelsea
+        50: 'MNC',  # Man City
+        51: 'BRI',  # Brighton
+        52: 'CRY',  # Crystal Palace
+        55: 'BRE',  # Brentford
         56: 'BRC',  # Bristol City
         58: 'MIL',  # Millwall
         59: 'PNE',  # Preston North End
@@ -304,6 +334,8 @@ class GameRAPI(Game):
         62: 'SHU',  # Sheffield United
         63: 'LEE',  # Leeds
         64: 'HUL',  # Hull City
+        65: 'NOT',  # Nottingham Forest
+        66: 'AST',  # Aston Villa
         67: 'BBR',  # Blackburn Rovers
         69: 'DER',  # Derby
         70: 'MID',  # Middlesbrough
@@ -320,9 +352,24 @@ class GameRAPI(Game):
         1359: 'LUT',  # Luton Town
     }
     RAPI_TEAM_COLOURS = {
+        33: (218, 2, 14),  # Manchester United
+        34: (255, 255, 255),  # Newcastle
+        35: (181, 14, 18),  # Bournemouth
+        36: (255, 255, 255),  # Fulham
         38: (237, 33, 39),  # Watford
+        39: (253, 185, 19),  # Wolves
+        40: (208, 0, 39),  # Liverpool
+        42: (239, 1, 7),  # Arsenal
         43: (0, 112, 181),  # Cardiff City
         44: (128, 0, 0),  # Burnley
+        45: (39, 68, 136),  # Everton
+        47: (255, 255, 255),  # Tottenham
+        48: (122, 38, 58),  # West Ham
+        49: (3, 70, 148),  # Chelsea
+        50: (108, 171, 221),  # Man City
+        51: (0, 87, 184),  # Brighton
+        52: (27, 69, 143),  # Crystal Palace
+        55: (210, 0, 0),  # Brentford
         56: (226, 26, 35),  # Bristol City
         58: (0, 25, 74),  # Millwall
         59: (0, 33, 86),  # Preston North End
@@ -330,6 +377,8 @@ class GameRAPI(Game):
         62: (236, 34, 39),  # Sheffield United
         63: (255, 255, 255),  # Leeds
         64: (241, 138, 1),  # Hull City
+        65: (229, 50, 51),  # Nottingham Forest
+        66: (128, 0, 0),  # Aston Villa
         67: (0, 158, 224),  # Blackburn Rovers
         69: (255, 255, 255),  # Derby
         70: (222, 27, 34),  # Middlesbrough
@@ -354,7 +403,7 @@ class GameRAPI(Game):
         if self.away_team_id() in self.RAPI_TEAM_COLOURS:
             team_colour = graphics.Color(*self.RAPI_TEAM_COLOURS[self.away_team_id()])
         else:
-            team_colour = graphics.Color(self.text_colour)
+            team_colour = graphics.Color(*self.text_colour)
         return team_colour
 
     def away_team_id(self):
@@ -408,7 +457,7 @@ class GameRAPI(Game):
         if self.home_team_id() in self.RAPI_TEAM_COLOURS:
             team_colour = graphics.Color(*self.RAPI_TEAM_COLOURS[self.home_team_id()])
         else:
-            team_colour = graphics.Color(self.text_colour)
+            team_colour = graphics.Color(*self.text_colour)
         return team_colour
 
     def home_team_id(self):
@@ -444,21 +493,146 @@ class GameRAPI(Game):
         return datetime.fromtimestamp(self.game['fixture']['timestamp'], tz=LOCAL_TZ)
 
     def update(self, games_last_update):
-        querystring = {
-            'id': self.id(),
-        }
-        headers = {
-            'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
-            'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
-        }
-        url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-        response = requests.request("GET", url, headers=headers, params=querystring)
+        try:
+            querystring = {
+                'id': self.id(),
+            }
+            headers = {
+                'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+                'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
+            }
+            url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+            response = requests.request("GET", url, headers=headers, params=querystring)
+        except requests.exceptions.ConnectionError as e:
+            LOG.error(f'GameRAPIFootball::update - ConnectionError {e}')
+            return self, games_last_update
+
         try:
             data = response.json()
         except requests.exceptions.JSONDecodeError:
+            LOG.warning(f'GameRAPIFootball::update - response.json() failed to decode'
+                        f' {response.request.url}')
             return self, games_last_update
 
-        game = GameRAPI(data['response'][0])
+        if 'response' not in data:
+            LOG.warning(f'GameRAPIFootball::update - response not in json data'
+                        f' {response.request.url}')
+            return self, games_last_update
+
+        game = GameRAPIFootball(data['response'][0])
+        games_last_update[game.id()] = datetime.now()
+        return game, games_last_update
+
+
+class GameRAPIRugby(Game):
+
+    def __init__(self, *args):
+        super().__init__(*args)
+
+    def away_team_colour(self):
+        return graphics.Color(*hex_to_rgb(self.game['awayTeam']['teamColors']['primary']))
+
+    def away_team_id(self):
+        return self.game['awayTeam']['nameCode']
+
+    def away_team_score(self):
+        if 'display' in self.game['awayScore']:
+            return self.game['awayScore']['display']
+        return '-'
+
+    def away_team_short_name(self):
+        return self.game['awayTeam']['nameCode']
+
+    def away_team_title_symbol(self):
+        return 'A'
+
+    def date_str(self):
+        today = dt_date.today()
+        start_time = self.start_time()
+        has_ended = self.has_ended()
+        in_progress = self.has_started() and not has_ended
+        if in_progress:
+            date_str = str(int(self.game['time']['played'] / 60))
+        elif has_ended:
+            if start_time.date() == today:
+                # TODO: AET
+                date_str = 'FT'
+            else:
+                date_str = start_time.strftime('%a')
+        else:
+            if start_time.date() == today:
+                date_str = 'Today'
+            else:
+                date_str = start_time.strftime('%a')
+        return date_str
+
+    def has_ended(self):
+        return self.game['status']['type'] == 'finished'
+
+    def has_started(self):
+        return self.has_ended() or self.game['status']['type'] == 'inprogress'
+
+    def home_team_colour(self):
+        return graphics.Color(*hex_to_rgb(self.game['homeTeam']['teamColors']['primary']))
+
+    def home_team_id(self):
+        return self.game['homeTeam']['nameCode']
+
+    def home_team_score(self):
+        if 'display' in self.game['homeScore']:
+            return self.game['homeScore']['display']
+        return '-'
+
+    def home_team_short_name(self):
+        return self.game['homeTeam']['nameCode']
+
+    def home_team_title_symbol(self):
+        return 'H'
+
+    def icon(self):
+        icon_file = 'icons/32/WIGAN_WARRIORS_SL.png'
+        return icon_file
+
+    def id(self):
+        return self.game['id']
+
+    def league_id(self):
+        return self.game['tournament']['id']
+
+    def league_name(self):
+        return self.game['tournament']['name']
+
+    def start_time(self):
+        return datetime.fromtimestamp(self.game['startTimestamp'], tz=LOCAL_TZ)
+
+    def update(self, games_last_update):
+        try:
+            querystring = {
+                'id': self.id(),
+            }
+            headers = {
+                'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+                'x-rapidapi-host': 'rugbyapi2.p.rapidapi.com',
+            }
+            url = f"https://rugbyapi2.p.rapidapi.com/api/rugby/match/{querystring['id']}"
+            response = requests.request("GET", url, headers=headers)
+        except requests.exceptions.ConnectionError as e:
+            LOG.error(f'GameRAPIRugby::update - ConnectionError {e}')
+            return self, games_last_update
+
+        try:
+            data = response.json()
+        except requests.exceptions.JSONDecodeError:
+            LOG.warning(f'GameRAPIRugby::update - response.json() failed to decode'
+                        f' {response.request.url}')
+            return self, games_last_update
+
+        if 'response' not in data:
+            LOG.warning(f'GameRAPIRugby::update - response not in json data'
+                        f' {response.request.url}')
+            return self, games_last_update
+
+        game = GameRAPIRugby(data['response'])
         games_last_update[game.id()] = datetime.now()
         return game, games_last_update
 
@@ -470,7 +644,9 @@ class GameSGO(Game):
 
     def away_team_colour(self):
         # overrides
-        if self.away_team_id() == 'SAN_FRANCISCO_GIANTS_MLB':
+        if self.away_team_id() == 'CHICAGO_WHITE_SOX_MLB':
+            return graphics.Color(*hex_to_rgb('#FFFFFF'))
+        elif self.away_team_id() == 'SAN_FRANCISCO_GIANTS_MLB':
             return graphics.Color(*hex_to_rgb('#FD5A1E'))
         elif self.away_team_id() == 'PITTSBURGH_PIRATES_MLB':
             return graphics.Color(*hex_to_rgb('#FDB827'))
@@ -518,7 +694,9 @@ class GameSGO(Game):
 
     def home_team_colour(self):
         # overrides
-        if self.home_team_id() == 'SAN_FRANCISCO_GIANTS_MLB':
+        if self.home_team_id() == 'CHICAGO_WHITE_SOX_MLB':
+            return graphics.Color(*hex_to_rgb('#FFFFFF'))
+        elif self.home_team_id() == 'SAN_FRANCISCO_GIANTS_MLB':
             return graphics.Color(*hex_to_rgb('#FD5A1E'))
         elif self.home_team_id() == 'PITTSBURGH_PIRATES_MLB':
             return graphics.Color(*hex_to_rgb('#FDB827'))
@@ -636,17 +814,19 @@ class RunMatrix(SampleBase):
 
     def draw_game(self, canvas, game: Game):
         LOG.debug(f'RunMatrix.draw_game - drawing game {game}')
-        league_id = game.league_name()
-        if league_id == 'MLB':
+        league_name = game.league_name()
+        if league_name == 'MLB':
             league_teams = SGO_MLB_TEAMS
-        elif league_id == 'NHL':
+        elif league_name == 'NHL':
             league_teams = SGO_NHL_TEAMS
-        elif league_id == 'NFL':
+        elif league_name == 'NFL':
             league_teams = SGO_NFL_TEAMS
-        elif league_id == 'MLS':
+        elif league_name == 'MLS':
             league_teams = SGO_MLS_TEAMS
-        elif league_id == 'Championship':
-            league_teams = RAPI_TEAMS
+        elif league_name in ['Premier League', 'Championship', 'Friendlies Clubs', 'League Cup', 'FA Cup']:
+            league_teams = RAPI_FOOTBALL_TEAMS
+        elif league_name == 'Super League':
+            league_teams = RAPI_RUGBY_TEAMS
         else:
             return canvas
 
@@ -672,7 +852,7 @@ class RunMatrix(SampleBase):
 
         date_str = game.date_str()
 
-        if isinstance(game, GameRAPI):
+        if isinstance(game, (GameRAPIFootball, GameRAPIRugby)):
             graphics.DrawText(canvas, self.circle_font, 34, text_y_top, team_colour, title_str)
             graphics.DrawText(canvas, self.circle_font, 56, text_y_top, self.text_colour, title_symbol)
         else:
@@ -1162,7 +1342,8 @@ class RunMatrix(SampleBase):
 
         games = []
         games.extend(sgo_get_games())
-        games.extend(rapi_get_games())
+        games.extend(rapi_football_get_games())
+        games.extend(rapi_rugby_get_games())
         if not len(games):
             return canvas
         games = self._sort_games(games)
@@ -1664,16 +1845,16 @@ def parse_args():
     return args
 
 
-def rapi_get_games():
-    global RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP, RAPI_GAMES_LAST_UPDATE
-    RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP, RAPI_GAMES_LAST_UPDATE = \
-        sports_get_games('RAPI', RAPI_GAMES, RAPI_NEXT_REFRESH, RAPI_TIMESTAMP,
-                         RAPI_GAMES_LAST_UPDATE, RAPI_REFRESH_RATE)
-    return RAPI_GAMES
+def rapi_football_get_games():
+    global RAPI_FOOTBALL_GAMES, RAPI_FOOTBALL_NEXT_REFRESH, RAPI_FOOTBALL_TIMESTAMP, RAPI_FOOTBALL_GAMES_LAST_UPDATE
+    RAPI_FOOTBALL_GAMES, RAPI_FOOTBALL_NEXT_REFRESH, RAPI_FOOTBALL_TIMESTAMP, RAPI_FOOTBALL_GAMES_LAST_UPDATE = \
+        sports_get_games('RAPI_FOOTBALL', RAPI_FOOTBALL_GAMES, RAPI_FOOTBALL_NEXT_REFRESH, RAPI_FOOTBALL_TIMESTAMP,
+                         RAPI_FOOTBALL_GAMES_LAST_UPDATE, RAPI_FOOTBALL_REFRESH_RATE)
+    return RAPI_FOOTBALL_GAMES
 
 
-def rapi_get_games_league(league_id, games_last_update):
-    LOG.debug(f'rapi_get_games_league - league_id {league_id}')
+def rapi_football_get_games_league(league_id, games_last_update):
+    LOG.debug(f'rapi_football_get_games_league - league_id {league_id}')
 
     now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
@@ -1683,9 +1864,8 @@ def rapi_get_games_league(league_id, games_last_update):
     # Championship league id = 40
     # sunderland team id = 746
     querystring = {
-        # 'league': '40',
-        'season': '2024',
-        'team': '746',
+        'season': RAPI_FOOTBALL_SEASON_ID,
+        'team': RAPI_FOOTBALL_TEAMS[0],  # TODO: support multiple teams
         'from': starts_after.strftime('%Y-%m-%d'),
         'to': starts_before.strftime('%Y-%m-%d'),
     }
@@ -1698,23 +1878,93 @@ def rapi_get_games_league(league_id, games_last_update):
         response = requests.request("GET", url, headers=headers, params=querystring)
         data = response.json()
     except requests.exceptions.ConnectionError as e:
-        LOG.error(f'rapi_get_games_league - ConnectionError {e}')
-        return []
+        LOG.error(f'rapi_football_get_games_league - ConnectionError {e}')
+        return [], games_last_update
 
     if response.status_code != 200:
-        LOG.error(f'rapi_get_games_league - Response returned code {response.status_code} {response.reason}')
-        return []
+        LOG.error(f'rapi_football_get_games_league - Response returned code {response.status_code} {response.reason}')
+        return [], games_last_update
 
     if int(response.headers['x-ratelimit-requests-remaining']) < 25:
-        LOG.warning(f'rapi_get_games_league - Remaining requests {response.headers["x-ratelimit-requests-remaining"]}')
+        LOG.warning(f'rapi_football_get_games_league - Remaining requests {response.headers["x-ratelimit-requests-remaining"]}')
 
     games = []
     for game in data['response']:
-        game = GameRAPI(game)
+        game = GameRAPIFootball(game)
         games.append(game)
         games_last_update[game.id()] = now
 
-    LOG.info(f'rapi_get_games_league - Updated {league_id} with {len(games)} games')
+    LOG.info(f'rapi_football_get_games_league - Updated {league_id} with {len(games)} games')
+
+    return games, games_last_update
+
+
+def rapi_rugby_get_games():
+    global RAPI_RUGBY_GAMES, RAPI_RUGBY_NEXT_REFRESH, RAPI_RUGBY_TIMESTAMP, RAPI_RUGBY_GAMES_LAST_UPDATE
+    RAPI_RUGBY_GAMES, RAPI_RUGBY_NEXT_REFRESH, RAPI_RUGBY_TIMESTAMP, RAPI_RUGBY_GAMES_LAST_UPDATE = \
+        sports_get_games('RAPI_RUGBY', RAPI_RUGBY_GAMES, RAPI_RUGBY_NEXT_REFRESH, RAPI_RUGBY_TIMESTAMP,
+                         RAPI_RUGBY_GAMES_LAST_UPDATE, RAPI_RUGBY_REFRESH_RATE)
+    return RAPI_RUGBY_GAMES
+
+
+def rapi_rugby_get_games_league(league_id, games_last_update):
+    LOG.debug(f'rapi_rugby_get_games_league - league_id {league_id}')
+
+    now = datetime.now()
+    today = datetime.fromordinal(dt_date.today().toordinal())
+    starts_after = to_utc_tz(today - timedelta(days=1))
+    starts_before = to_utc_tz(today + timedelta(days=3))
+
+    def iterate_dates(start_date, end_date):
+        current_date = start_date
+        while current_date <= end_date:
+            yield current_date
+            current_date += timedelta(days=1)
+
+    # Super league id = 345
+    # wigan team id = 4233
+    events = []
+    for search_date in iterate_dates(starts_after, starts_before):
+        querystring = {
+            'year': search_date.strftime('%Y'),
+            'month': search_date.strftime('%m'),
+            'day': search_date.strftime('%d'),
+        }
+        headers = {
+            'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+            'x-rapidapi-host': 'rugbyapi2.p.rapidapi.com',
+        }
+        url = f"https://rugbyapi2.p.rapidapi.com/api/rugby/matches/{querystring['day']}/{querystring['month']}/{querystring['year']}"
+        try:
+            response = requests.request("GET", url, headers=headers)
+            data = response.json()
+        except requests.exceptions.ConnectionError as e:
+            LOG.error(f'rapi_rugby_get_games_league - ConnectionError {e}')
+            return [], games_last_update
+        except requests.exceptions.JSONDecodeError as e:
+            LOG.error(f'rapi_rugby_get_games_league - JSONDecodeError {e}')
+            return [], games_last_update
+
+        if response.status_code != 200:
+            LOG.error(f'rapi_rugby_get_games_league - Response returned code {response.status_code} {response.reason}')
+            return [], games_last_update
+
+        for game in data['events']:
+            # discard duplicates
+            if any(game['id'] == e['id'] for e in events):
+                continue
+
+            # keep only games involving our teams
+            if game['homeTeam']['nameCode'] in RAPI_RUGBY_TEAMS or game['awayTeam']['nameCode'] in RAPI_RUGBY_TEAMS:
+                events.append(game)
+
+    games = []
+    for game in events:
+        game = GameRAPIRugby(game)
+        games.append(game)
+        games_last_update[game.id()] = now
+
+    LOG.info(f'rapi_rugby_get_games_league - Updated {league_id} with {len(games)} games')
 
     return games, games_last_update
 
@@ -1873,8 +2123,13 @@ def sports_get_games(type, games, timestamp, next_refresh, games_last_update, re
         timestamp = datetime.now()
 
         games = []
-        if type == 'RAPI':
-            games_league, games_last_update = rapi_get_games_league(40, games_last_update)
+        if type == 'RAPI_FOOTBALL':
+            # league_id is ignored, just gets all sunderland games for the RAPI_FOOTBALL_SEASON_ID season
+            games_league, games_last_update = rapi_football_get_games_league(RAPI_FOOTBALL_PREMIER_LEAGUE_ID, games_last_update)
+            games.extend(games_league)
+        elif type == 'RAPI_RUGBY':
+            # league_id is ignored just gets all wigan games between the required dates
+            games_league, games_last_update = rapi_rugby_get_games_league(RAPI_RUGBY_SUPER_LEAGUE_ID, games_last_update)
             games.extend(games_league)
         elif type == 'SGO':
             games_league, games_last_update = sgo_get_games_league('MLB', games_last_update)
@@ -1982,6 +2237,7 @@ def main():
 
 
 if __name__ == '__main__':
+
     # # A query for SGO rate limiting (costs one object)
     # response = requests.get(
     #     f'https://api.sportsgameodds.com/v2/account/usage',
