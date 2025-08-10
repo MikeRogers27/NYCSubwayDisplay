@@ -1161,8 +1161,9 @@ class RunMatrix(SampleBase):
         LOG.debug(f'RunMatrix.display_sports')
 
         games = []
-        games.extend(sgo_get_games())
-        games.extend(rapi_get_games())
+        # games.extend(sgo_get_games())
+        games.extend(rapi_football_get_games())
+        # games.extend(rapi_rugby_get_games())
         if not len(games):
             return canvas
         games = self._sort_games(games)
@@ -1213,7 +1214,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        # return ['sports'], [5]
+        return ['sports'], [5]
 
         now = datetime.now()
         timestamp = now.time()
