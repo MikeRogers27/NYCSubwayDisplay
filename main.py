@@ -5,6 +5,7 @@ from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
 import importlib
+import json
 import logging
 from logging import Logger
 import os
@@ -308,100 +309,14 @@ class Game(ABC):
         return None
 
 class GameRAPIFootball(Game):
-    RAPI_TEAM_CODES = {
-        33: 'MUN',  # Manchester United
-        34: 'NEW',  # Newcastle
-        35: 'BOU',  # Bournemouth
-        36: 'FUL',  # Fulham
-        38: 'WAT',  # Watford
-        39: 'WOL',  # Wolves
-        40: 'LIV',  # Liverpool
-        42: 'ARS',  # Arsenal
-        43: 'CAR',  # Cardiff City
-        44: 'BUR',  # Burnley
-        45: 'EVE',  # Everton
-        47: 'TOT',  # Tottenham
-        48: 'WHU',  # West Ham
-        49: 'CHE',  # Chelsea
-        50: 'MNC',  # Man City
-        51: 'BRI',  # Brighton
-        52: 'CRY',  # Crystal Palace
-        55: 'BRE',  # Brentford
-        56: 'BRC',  # Bristol City
-        58: 'MIL',  # Millwall
-        59: 'PNE',  # Preston North End
-        60: 'WBA',  # West Bromwich Albion
-        62: 'SHU',  # Sheffield United
-        63: 'LEE',  # Leeds
-        64: 'HUL',  # Hull City
-        65: 'NOT',  # Nottingham Forest
-        66: 'AST',  # Aston Villa
-        67: 'BBR',  # Blackburn Rovers
-        69: 'DER',  # Derby
-        70: 'MID',  # Middlesbrough
-        71: 'NOR',  # Norwich
-        72: 'QPR',  # Queens Park Rangers
-        74: 'SHW',  # Sheffield Wednesday
-        75: 'STO',  # Stoke City
-        76: 'SWA',  # Swansea City
-        746: 'SUN',  # Sunderland
-        1338: 'OXF',  # Oxford United
-        1346: 'COV',  # Coventry City
-        1355: 'POR',  # Portsmouth
-        1357: 'PLY',  # Plymouth Argyle
-        1359: 'LUT',  # Luton Town
-    }
-    RAPI_TEAM_COLOURS = {
-        33: (218, 2, 14),  # Manchester United
-        34: (255, 255, 255),  # Newcastle
-        35: (181, 14, 18),  # Bournemouth
-        36: (255, 255, 255),  # Fulham
-        38: (237, 33, 39),  # Watford
-        39: (253, 185, 19),  # Wolves
-        40: (208, 0, 39),  # Liverpool
-        42: (239, 1, 7),  # Arsenal
-        43: (0, 112, 181),  # Cardiff City
-        44: (128, 0, 0),  # Burnley
-        45: (39, 68, 136),  # Everton
-        47: (255, 255, 255),  # Tottenham
-        48: (122, 38, 58),  # West Ham
-        49: (3, 70, 148),  # Chelsea
-        50: (108, 171, 221),  # Man City
-        51: (0, 87, 184),  # Brighton
-        52: (27, 69, 143),  # Crystal Palace
-        55: (210, 0, 0),  # Brentford
-        56: (226, 26, 35),  # Bristol City
-        58: (0, 25, 74),  # Millwall
-        59: (0, 33, 86),  # Preston North End
-        60: (6, 0, 103),  # West Bromwich Albion
-        62: (236, 34, 39),  # Sheffield United
-        63: (255, 255, 255),  # Leeds
-        64: (241, 138, 1),  # Hull City
-        65: (229, 50, 51),  # Nottingham Forest
-        66: (128, 0, 0),  # Aston Villa
-        67: (0, 158, 224),  # Blackburn Rovers
-        69: (255, 255, 255),  # Derby
-        70: (222, 27, 34),  # Middlesbrough
-        72: (29, 91, 164),  # Queens Park Rangers
-        71: (255, 242, 0),  # Norwich
-        74: (14, 0, 247),  # Sheffield Wednesday
-        75: (224, 58, 62),  # Stoke City
-        76: (255, 255, 255),  # Swansea City
-        746: (255, 0, 0),  # Sunderland
-        1338: (255, 221, 0),  # Oxford United
-        1346: (5, 157, 217),  # Coventry City
-        1355: (0, 20, 137),  # Portsmouth
-        1357: (20, 135, 62),  # Plymouth Argyle
-        1359: (255, 255, 255),  # Luton Town
-    }
-
     def __init__(self, *args):
         super().__init__(*args)
         self.text_colour = (74, 214, 9)
+        self.RAPI_TEAM_INFO = self._load_team_info()
 
     def away_team_colour(self):
-        if self.away_team_id() in self.RAPI_TEAM_COLOURS:
-            team_colour = graphics.Color(*self.RAPI_TEAM_COLOURS[self.away_team_id()])
+        if self.away_team_id() in self.RAPI_TEAM_INFO:
+            team_colour = graphics.Color(*self.RAPI_TEAM_INFO[self.away_team_id()]['team_colour'])
         else:
             team_colour = graphics.Color(*self.text_colour)
         return team_colour
@@ -413,8 +328,8 @@ class GameRAPIFootball(Game):
         return self.game['goals']['away']
 
     def away_team_short_name(self):
-        if self.away_team_id() in self.RAPI_TEAM_CODES:
-            short_name = self.RAPI_TEAM_CODES[self.away_team_id()]
+        if self.away_team_id() in self.RAPI_TEAM_INFO:
+            short_name = self.RAPI_TEAM_INFO[self.away_team_id()]['short_name']
         else:
             short_name = self.game['teams']['away']['name'][:3].upper()
         return short_name
@@ -454,8 +369,8 @@ class GameRAPIFootball(Game):
         return self.has_ended() or self.game['fixture']['status']['short'] != 'NS'
 
     def home_team_colour(self):
-        if self.home_team_id() in self.RAPI_TEAM_COLOURS:
-            team_colour = graphics.Color(*self.RAPI_TEAM_COLOURS[self.home_team_id()])
+        if self.home_team_id() in self.RAPI_TEAM_INFO:
+            team_colour = graphics.Color(*self.RAPI_TEAM_INFO[self.home_team_id()]['team_colour'])
         else:
             team_colour = graphics.Color(*self.text_colour)
         return team_colour
@@ -467,8 +382,8 @@ class GameRAPIFootball(Game):
         return self.game['goals']['home']
 
     def home_team_short_name(self):
-        if self.home_team_id() in self.RAPI_TEAM_CODES:
-            short_name = self.RAPI_TEAM_CODES[self.home_team_id()]
+        if self.home_team_id() in self.RAPI_TEAM_INFO:
+            short_name = self.RAPI_TEAM_INFO[self.home_team_id()]['short_name']
         else:
             short_name = self.game['teams']['home']['name'][:3].upper()
         return short_name
@@ -522,6 +437,26 @@ class GameRAPIFootball(Game):
         game = GameRAPIFootball(data['response'][0])
         games_last_update[game.id()] = datetime.now()
         return game, games_last_update
+
+    @staticmethod
+    def _team_info_file_path() -> str:
+        current_file_path = os.path.abspath(__file__)
+        team_info_json_file = os.path.join(
+            os.path.dirname(current_file_path),
+            'data', 'rapi-football-team-info.json'
+        )
+        return team_info_json_file
+
+    def _load_team_info(self) -> dict:
+        team_info_json_file = self._team_info_file_path()
+        with open(team_info_json_file, 'r') as file:
+            json_data = json.load(file)
+        return json_data
+
+    def _save_team_info(self, json_data):
+        team_info_json_file = self._team_info_file_path()
+        with open(team_info_json_file, 'w') as file:
+            json.dump(json_data, file, indent=4)
 
 
 class GameRAPIRugby(Game):
@@ -2246,3 +2181,5 @@ if __name__ == '__main__':
     # data = response.json()
     # pass
     main()
+
+

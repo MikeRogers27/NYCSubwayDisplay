@@ -1,0 +1,371 @@
+{
+    "33": {
+        "id": 33,
+        "short_name": "MUN",
+        "team_colour": [
+            218,
+            2,
+            14
+        ]
+    },
+    "34": {
+        "id": 34,
+        "short_name": "NEW",
+        "team_colour": [
+            255,
+            255,
+            255
+        ]
+    },
+    "35": {
+        "id": 35,
+        "short_name": "BOU",
+        "team_colour": [
+            181,
+            14,
+            18
+        ]
+    },
+    "36": {
+        "id": 36,
+        "short_name": "FUL",
+        "team_colour": [
+            255,
+            255,
+            255
+        ]
+    },
+    "38": {
+        "id": 38,
+        "short_name": "WAT",
+        "team_colour": [
+            237,
+            33,
+            39
+        ]
+    },
+    "39": {
+        "id": 39,
+        "short_name": "WOL",
+        "team_colour": [
+            253,
+            185,
+            19
+        ]
+    },
+    "40": {
+        "id": 40,
+        "short_name": "LIV",
+        "team_colour": [
+            208,
+            0,
+            39
+        ]
+    },
+    "42": {
+        "id": 42,
+        "short_name": "ARS",
+        "team_colour": [
+            239,
+            1,
+            7
+        ]
+    },
+    "43": {
+        "id": 43,
+        "short_name": "CAR",
+        "team_colour": [
+            0,
+            112,
+            181
+        ]
+    },
+    "44": {
+        "id": 44,
+        "short_name": "BUR",
+        "team_colour": [
+            128,
+            0,
+            0
+        ]
+    },
+    "45": {
+        "id": 45,
+        "short_name": "EVE",
+        "team_colour": [
+            39,
+            68,
+            136
+        ]
+    },
+    "47": {
+        "id": 47,
+        "short_name": "TOT",
+        "team_colour": [
+            255,
+            255,
+            255
+        ]
+    },
+    "48": {
+        "id": 48,
+        "short_name": "WHU",
+        "team_colour": [
+            122,
+            38,
+            58
+        ]
+    },
+    "49": {
+        "id": 49,
+        "short_name": "CHE",
+        "team_colour": [
+            3,
+            70,
+            148
+        ]
+    },
+    "50": {
+        "id": 50,
+        "short_name": "MNC",
+        "team_colour": [
+            108,
+            171,
+            221
+        ]
+    },
+    "51": {
+        "id": 51,
+        "short_name": "BRI",
+        "team_colour": [
+            0,
+            87,
+            184
+        ]
+    },
+    "52": {
+        "id": 52,
+        "short_name": "CRY",
+        "team_colour": [
+            27,
+            69,
+            143
+        ]
+    },
+    "55": {
+        "id": 55,
+        "short_name": "BRE",
+        "team_colour": [
+            210,
+            0,
+            0
+        ]
+    },
+    "56": {
+        "id": 56,
+        "short_name": "BRC",
+        "team_colour": [
+            226,
+            26,
+            35
+        ]
+    },
+    "58": {
+        "id": 58,
+        "short_name": "MIL",
+        "team_colour": [
+            0,
+            25,
+            74
+        ]
+    },
+    "59": {
+        "id": 59,
+        "short_name": "PNE",
+        "team_colour": [
+            0,
+            33,
+            86
+        ]
+    },
+    "60": {
+        "id": 60,
+        "short_name": "WBA",
+        "team_colour": [
+            6,
+            0,
+            103
+        ]
+    },
+    "62": {
+        "id": 62,
+        "short_name": "SHU",
+        "team_colour": [
+            236,
+            34,
+            39
+        ]
+    },
+    "63": {
+        "id": 63,
+        "short_name": "LEE",
+        "team_colour": [
+            255,
+            255,
+            255
+        ]
+    },
+    "64": {
+        "id": 64,
+        "short_name": "HUL",
+        "team_colour": [
+            241,
+            138,
+            1
+        ]
+    },
+    "65": {
+        "id": 65,
+        "short_name": "NOT",
+        "team_colour": [
+            229,
+            50,
+            51
+        ]
+    },
+    "66": {
+        "id": 66,
+        "short_name": "AST",
+        "team_colour": [
+            128,
+            0,
+            0
+        ]
+    },
+    "67": {
+        "id": 67,
+        "short_name": "BBR",
+        "team_colour": [
+            0,
+            158,
+            224
+        ]
+    },
+    "69": {
+        "id": 69,
+        "short_name": "DER",
+        "team_colour": [
+            255,
+            255,
+            255
+        ]
+    },
+    "70": {
+        "id": 70,
+        "short_name": "MID",
+        "team_colour": [
+            222,
+            27,
+            34
+        ]
+    },
+    "71": {
+        "id": 71,
+        "short_name": "NOR",
+        "team_colour": [
+            255,
+            242,
+            0
+        ]
+    },
+    "72": {
+        "id": 72,
+        "short_name": "QPR",
+        "team_colour": [
+            29,
+            91,
+            164
+        ]
+    },
+    "74": {
+        "id": 74,
+        "short_name": "SHW",
+        "team_colour": [
+            14,
+            0,
+            247
+        ]
+    },
+    "75": {
+        "id": 75,
+        "short_name": "STO",
+        "team_colour": [
+            224,
+            58,
+            62
+        ]
+    },
+    "76": {
+        "id": 76,
+        "short_name": "SWA",
+        "team_colour": [
+            255,
+            255,
+            255
+        ]
+    },
+    "746": {
+        "id": 746,
+        "short_name": "SUN",
+        "team_colour": [
+            255,
+            0,
+            0
+        ]
+    },
+    "1338": {
+        "id": 1338,
+        "short_name": "OXF",
+        "team_colour": [
+            255,
+            221,
+            0
+        ]
+    },
+    "1346": {
+        "id": 1346,
+        "short_name": "COV",
+        "team_colour": [
+            5,
+            157,
+            217
+        ]
+    },
+    "1355": {
+        "id": 1355,
+        "short_name": "POR",
+        "team_colour": [
+            0,
+            20,
+            137
+        ]
+    },
+    "1357": {
+        "id": 1357,
+        "short_name": "PLY",
+        "team_colour": [
+            20,
+            135,
+            62
+        ]
+    },
+    "1359": {
+        "id": 1359,
+        "short_name": "LUT",
+        "team_colour": [
+            255,
+            255,
+            255
+        ]
+    }
+}
