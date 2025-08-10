@@ -155,9 +155,9 @@ SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_N
 SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
 HIDE_SCORES = {
-    'LOS_ANGELES_KINGS_NHL': [relativedelta(months=3, weeks=2), relativedelta(months=6)],
-    'WGW': [relativedelta(), relativedelta(months=12)],
-    RAPI_FOOTBALL_TEAMS[0]: [relativedelta(), relativedelta(months=12)],
+    'LOS_ANGELES_KINGS_NHL': [relativedelta(months=3, weeks=2), relativedelta(months=6), ['NHL', ] ],
+    'WGW': [relativedelta(), relativedelta(months=12), [] ],
+    RAPI_FOOTBALL_TEAMS[0]: [relativedelta(), relativedelta(months=12), ['Premier League', ] ],
 }
 
 
@@ -283,6 +283,14 @@ class Game(ABC):
     def _hide_scores(self):
         if self.away_team_id() in HIDE_SCORES or self.home_team_id() in HIDE_SCORES:
 
+            # Only hide the specified leagues
+            if self.away_team_id() in HIDE_SCORES:
+                if self.league_name() not in HIDE_SCORES[self.away_team_id()][2]:
+                    return None
+            if self.home_team_id() in HIDE_SCORES:
+                if self.league_name() not in HIDE_SCORES[self.home_team_id()][2]:
+                    return None
+
             # Get the current year
             current_year = datetime.now().year
 
@@ -395,10 +403,10 @@ class GameRAPIFootball(Game):
         return self.game['fixture']['id']
 
     def league_id(self):
-        return 40
+        return self.game['league']['id']
 
     def league_name(self):
-        return 'Championship'
+        return self.game['league']['name']
 
     def start_time(self):
         return datetime.fromtimestamp(self.game['fixture']['timestamp'], tz=LOCAL_TZ)
