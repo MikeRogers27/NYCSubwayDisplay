@@ -315,11 +315,8 @@ class GameRAPIFootball(Game):
         self.RAPI_TEAM_INFO = self._load_team_info()
 
     def away_team_colour(self):
-        team_info = self._get_team_info(self.away_team_id())
-        if team_info is not None:
-            team_colour = graphics.Color(*team_info['team_colour'])
-        else:
-            team_colour = graphics.Color(*self.text_colour)
+        team_info = self._get_team_info(self.away_team_id(), self.game['teams']['away'])
+        team_colour = graphics.Color(*team_info['team_colour'])
         return team_colour
 
     def away_team_id(self):
@@ -329,11 +326,8 @@ class GameRAPIFootball(Game):
         return self.game['goals']['away']
 
     def away_team_short_name(self):
-        team_info = self._get_team_info(self.away_team_id())
-        if team_info is not None:
-            short_name = graphics.Color(*team_info['short_name'])
-        else:
-            short_name = self.game['teams']['away']['name'][:3].upper()
+        team_info = self._get_team_info(self.away_team_id(), self.game['teams']['away'])
+        short_name = graphics.Color(*team_info['short_name'])
         return short_name
 
     def away_team_title_symbol(self):
@@ -371,11 +365,8 @@ class GameRAPIFootball(Game):
         return self.has_ended() or self.game['fixture']['status']['short'] != 'NS'
 
     def home_team_colour(self):
-        team_info = self._get_team_info(self.home_team_id())
-        if team_info is not None:
-            team_colour = graphics.Color(*team_info['team_colour'])
-        else:
-            team_colour = graphics.Color(*self.text_colour)
+        team_info = self._get_team_info(self.home_team_id(), self.game['teams']['home'])
+        team_colour = graphics.Color(*team_info['team_colour'])
         return team_colour
 
     def home_team_id(self):
@@ -385,11 +376,8 @@ class GameRAPIFootball(Game):
         return self.game['goals']['home']
 
     def home_team_short_name(self):
-        team_info = self._get_team_info(self.home_team_id())
-        if team_info is not None:
-            short_name = graphics.Color(*team_info['short_name'])
-        else:
-            short_name = self.game['teams']['home']['name'][:3].upper()
+        team_info = self._get_team_info(self.home_team_id(), self.game['teams']['home'])
+        short_name = graphics.Color(*team_info['short_name'])
         return short_name
 
     def home_team_title_symbol(self):
@@ -442,11 +430,11 @@ class GameRAPIFootball(Game):
         games_last_update[game.id()] = datetime.now()
         return game, games_last_update
 
-    def _get_team_info(self, team_id):
+    def _get_team_info(self, team_id, game_team):
         if team_id not in self.RAPI_TEAM_INFO:
-            self._update_team_info_from_api(team_id)
+            self._update_team_info_from_api(team_id, game_team)
             if team_id not in self.RAPI_TEAM_INFO:
-                return None
+                LOG.error(f'GameRAPIFootball._get_team_info: Team {team_id} returns no info - unexpected')
         return self.RAPI_TEAM_INFO[team_id]
 
     def _load_team_info(self) -> dict:
@@ -469,7 +457,13 @@ class GameRAPIFootball(Game):
         )
         return team_info_json_file
 
-    def _update_team_info_from_api(self, team_id: int):
+    def _update_team_info_from_api(self, team_id: int, game_team: dict):
+        default_team_info = {
+            'id': team_id,
+            'short_name': game_team['name'][:3].upper(),
+            'team_colour': self.text_colour,
+        }
+
         querystring = {
             'id': team_id,
         }
@@ -483,11 +477,17 @@ class GameRAPIFootball(Game):
             data = response.json()
         except requests.exceptions.ConnectionError as e:
             LOG.error(f'GameRAPIFootball._update_team_info_from_api - ConnectionError {e}')
+            self.RAPI_TEAM_INFO[team_id] = default_team_info
+            self._save_team_info(self.RAPI_TEAM_INFO)
+            LOG.error(f'GameRAPIFootball._update_team_info_from_api - Team stored with default info {team_id}')
             return
 
         if response.status_code != 200:
             LOG.error(
                 f'GameRAPIFootball._update_team_info_from_api - Response returned code {response.status_code} {response.reason}')
+            self.RAPI_TEAM_INFO[team_id] = default_team_info
+            self._save_team_info(self.RAPI_TEAM_INFO)
+            LOG.error(f'GameRAPIFootball._update_team_info_from_api - Team stored with default info {team_id}')
             return
 
         from utils.colors import extract_dominant_color_from_url
@@ -512,11 +512,13 @@ class GameRAPIFootball(Game):
 
         # save this for later
         if updated:
-            self._save_team_info()
+            self._save_team_info(self.RAPI_TEAM_INFO)
             LOG.info(f'GameRAPIFootball._update_team_info_from_api - Updated RAPI_TEAM_INFO with {team_id}')
         else:
             LOG.info(f'GameRAPIFootball._update_team_info_from_api - update failed for {team_id}')
-
+            self.RAPI_TEAM_INFO[team_id] = default_team_info
+            self._save_team_info(self.RAPI_TEAM_INFO)
+            LOG.error(f'GameRAPIFootball._update_team_info_from_api - Team stored with default info {team_id}')
 
 
 class GameRAPIRugby(Game):
