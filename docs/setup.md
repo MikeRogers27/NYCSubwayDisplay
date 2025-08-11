@@ -173,3 +173,11 @@ Commands use disable, start, stop etc
 
     sudo systemctl start matrix.service
 
+For convenience, you can also add these lines to your .bashrc file to start 
+the ssh-agent and add your key:
+
+    # add ssh credentials
+    eval "$(ssh-agent -s)"
+    ssh-add ${HOME}/.ssh/id_github
+
+

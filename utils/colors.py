@@ -1,9 +1,7 @@
 import requests
 from PIL import Image
-import numpy as np
 from collections import Counter
 from io import BytesIO
-import colorsys
 
 
 def download_image(url):
