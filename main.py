@@ -154,9 +154,11 @@ SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_D
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
 SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
+# Format:
+# team_id, [relative start of hiding, relative end of hiding, if not None only hide these competitions None is hide all]
 HIDE_SCORES = {
-    'LOS_ANGELES_KINGS_NHL': [relativedelta(months=3, weeks=2), relativedelta(months=6), ['NHL', ] ],
-    'WGW': [relativedelta(), relativedelta(months=12), [] ],
+    'LOS_ANGELES_KINGS_NHL': [relativedelta(months=3, weeks=2), relativedelta(months=6), None ],
+    'WGW': [relativedelta(), relativedelta(months=12), None ],
     RAPI_FOOTBALL_TEAMS[0]: [relativedelta(), relativedelta(months=12), ['Premier League', ] ],
 }
 
@@ -285,10 +287,12 @@ class Game(ABC):
 
             # Only hide the specified leagues
             if self.away_team_id() in HIDE_SCORES:
-                if self.league_name() not in HIDE_SCORES[self.away_team_id()][2]:
+                if HIDE_SCORES[self.away_team_id()][2] is not None and \
+                        self.league_name() not in HIDE_SCORES[self.away_team_id()][2]:
                     return None
             if self.home_team_id() in HIDE_SCORES:
-                if self.league_name() not in HIDE_SCORES[self.home_team_id()][2]:
+                if HIDE_SCORES[self.home_team_id()][2] is not None and \
+                        self.league_name() not in HIDE_SCORES[self.home_team_id()][2]:
                     return None
 
             # Get the current year
