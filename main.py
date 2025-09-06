@@ -1977,6 +1977,10 @@ def rapi_rugby_get_games_league(league_id, games_last_update):
             LOG.error(f'rapi_rugby_get_games_league - Response returned code {response.status_code} {response.reason}')
             return [], games_last_update
 
+        if 'events' not in data:
+            LOG.error(f'rapi_rugby_get_games_league - No events in returned data')
+            return [], games_last_update
+
         for game in data['events']:
             # discard duplicates
             if any(game['id'] == e['id'] for e in events):
