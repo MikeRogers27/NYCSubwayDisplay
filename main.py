@@ -853,9 +853,10 @@ class RunMatrix(SampleBase):
             league_teams = SGO_MLS_TEAMS
         elif league_name in ['Premier League', 'Championship', 'Friendlies Clubs', 'League Cup', 'FA Cup']:
             league_teams = RAPI_FOOTBALL_TEAMS
-        elif league_name == 'Super League':
+        elif league_name in ['Super League', 'Super League, Playoffs']:
             league_teams = RAPI_RUGBY_TEAMS
         else:
+            LOG.warning(f'RunMatrix.draw_game - Unknown league_name: {league_name}')
             return canvas
 
         text_y_top = 10
