@@ -10,7 +10,7 @@ Commands:
     sudo apt full-upgrade
     sudo apt install git
     sudo apt-get install libopenjp2-7-dev
-    sudo apt-get remove bluez bluez-firmware pi-bluetooth triggerhappy pigpio
+    sudo apt-get remove bluez bluez-firmware
 
 ### Disable sound
 
@@ -76,8 +76,7 @@ Setup a new virtual python env
 Setup pre-requisites for rpi-rgb-led-matrix
 
     sudo apt install libgraphicsmagick++-dev
-    sudo apt install libwebp-dev
-    sudo apt install python3-dev cython3
+    sudo apt install python3-dev python3-setuptools cython3 
 
 Download
 
@@ -148,7 +147,7 @@ with this contents
 [Unit]
 Description=LED Matrix Runner
 Wants=network.service
-Requires=rpcbind.service network-online.target
+Requires=network-online.target
 After=multi-user.target network.target network-online.target
 
 [Service]
