@@ -82,6 +82,7 @@ Download
 
     cd ~/src
     git clone https://github.com/hzeller/rpi-rgb-led-matrix
+    git checkout eaa168445ffdf454f35eeb796af272b262df8753
     
 Build the project using the standard hardware profile
 
