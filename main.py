@@ -15,7 +15,7 @@ import random
 import requests
 import tempfile
 import time
-from typing import Optional
+from typing import List, Tuple
 import signal
 import warnings
 
@@ -35,7 +35,7 @@ from samplebase import SampleBase
 LOCAL_TZ = pytz.timezone("America/New_York")
 NOW = datetime.now()
 
-LOG = Optional[Logger]
+LOG : Logger
 MIN_DISPLAY_TIME = 3
 
 MTA_FEEDS = None
@@ -74,7 +74,7 @@ Seasonal = namedtuple(
     'Seasonal',
     ('name', 'date', 'display_days_before', 'display_days_after', 'images', 'image_behaviour')
 )
-_us_holidays = holidays.US(years=NOW.year)
+_us_holidays = holidays.US(years=NOW.year) # type: ignore
 SEASONAL_DATA = [
     Seasonal(
         name='4thjuly',
@@ -310,7 +310,7 @@ class Game(ABC):
         pass
 
     @abstractmethod
-    def icon(self):
+    def icon(self) -> str:
         pass
 
     @abstractmethod
@@ -327,6 +327,18 @@ class Game(ABC):
 
     @abstractmethod
     def start_time(self) -> datetime:
+        pass
+
+    @abstractmethod
+    def update(self, games_last_update: dict) -> Tuple['Game', dict]:
+        """Update game data from external API.
+        
+        Args:
+            games_last_update (dict): Dictionary tracking last update times for games
+            
+        Returns:
+            Tuple[Game, dict]: Updated game instance and updated games_last_update dict
+        """
         pass
 
     def _hide_scores(self):
@@ -376,7 +388,7 @@ class GameRAPIFootball(Game):
         super().__init__(*args)
         self.text_colour = (74, 214, 9)
         if GameRAPIFootball.RAPI_TEAM_INFO is None:
-            GameRAPIFootball.RAPI_TEAM_INFO = self._load_team_info()
+            GameRAPIFootball.RAPI_TEAM_INFO = GameRAPIFootball._load_team_info()
 
     def away_team_colour(self):
         team_info = self._get_team_info(self.away_team_id(), self.game['teams']['away'])
@@ -521,14 +533,16 @@ class GameRAPIFootball(Game):
         return game, games_last_update
 
     def _get_team_info(self, team_id, game_team):
+        assert GameRAPIFootball.RAPI_TEAM_INFO is not None
         if str(team_id) not in GameRAPIFootball.RAPI_TEAM_INFO:
             self._update_team_info_from_api(team_id, game_team)
             if team_id not in GameRAPIFootball.RAPI_TEAM_INFO:
                 LOG.error(f'GameRAPIFootball._get_team_info: Team {team_id} returns no info - unexpected')
         return GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)]
 
-    def _load_team_info(self) -> dict:
-        team_info_json_file = self._team_info_file_path()
+    @staticmethod
+    def _load_team_info() -> dict:
+        team_info_json_file = GameRAPIFootball._team_info_file_path()
         with open(team_info_json_file, 'r') as file:
             json_data = json.load(file)
         return json_data
@@ -582,6 +596,7 @@ class GameRAPIFootball(Game):
             data = response.json()
         except requests.exceptions.ConnectionError as e:
             LOG.error(f'GameRAPIFootball._update_team_info_from_api - ConnectionError {e}')
+            assert GameRAPIFootball.RAPI_TEAM_INFO is not None
             GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = default_team_info
             self._save_team_info(GameRAPIFootball.RAPI_TEAM_INFO)
             LOG.error(f'GameRAPIFootball._update_team_info_from_api - Team stored with default info {team_id}')
@@ -590,6 +605,7 @@ class GameRAPIFootball(Game):
         if response.status_code != 200:
             LOG.error(
                 f'GameRAPIFootball._update_team_info_from_api - Response returned code {response.status_code} {response.reason}')
+            assert GameRAPIFootball.RAPI_TEAM_INFO is not None
             GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = default_team_info
             self._save_team_info(GameRAPIFootball.RAPI_TEAM_INFO)
             LOG.error(f'GameRAPIFootball._update_team_info_from_api - Team stored with default info {team_id}')
@@ -603,6 +619,7 @@ class GameRAPIFootball(Game):
             team_colour = None
             if 'logo' in api_info['team']:
                 colour_info = extract_dominant_color_from_url(api_info['team']['logo'], brightness_threshold=0.25)
+                assert colour_info is not None
                 team_colour = colour_info['rgb']
             if team_colour is None:
                 team_colour = self.text_colour
@@ -611,6 +628,7 @@ class GameRAPIFootball(Game):
                 'short_name': api_info['team']['code'],
                 'team_colour': team_colour,
             }
+            assert GameRAPIFootball.RAPI_TEAM_INFO is not None
             GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = team_info
             updated = True
             break
@@ -621,6 +639,7 @@ class GameRAPIFootball(Game):
             LOG.info(f'GameRAPIFootball._update_team_info_from_api - Updated RAPI_TEAM_INFO with {team_id}')
         else:
             LOG.info(f'GameRAPIFootball._update_team_info_from_api - update failed for {team_id}')
+            assert GameRAPIFootball.RAPI_TEAM_INFO is not None
             GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = default_team_info
             self._save_team_info(GameRAPIFootball.RAPI_TEAM_INFO)
             LOG.error(f'GameRAPIFootball._update_team_info_from_api - Team stored with default info {team_id}')
@@ -1185,7 +1204,7 @@ class RunMatrix(SampleBase):
             if is_animated and (datetime.now() - fstart).total_seconds() * 1000 >= im.info['duration']:
                 im.seek(frame_ind)
                 im_disp = im.convert('RGB')
-                frame_ind = (frame_ind + 1) % im.n_frames
+                frame_ind = (frame_ind + 1) % im.n_frames # type: ignore
                 fstart = datetime.now()
 
             time.sleep(sleep_time)
@@ -1214,12 +1233,12 @@ class RunMatrix(SampleBase):
         time_to_centre = n_rows_to_centre * sleep_time
         # count back until we've reached the frame to start from
         time_total = 0
-        frame_ind = im.n_frames - 1
+        frame_ind = im.n_frames - 1 # type: ignore
         while time_total < time_to_centre:
             im.seek(frame_ind)
             time_total += im.info['duration'] / 1000
-            frame_ind = (frame_ind - 1) % im.n_frames
-        frame_ind = (frame_ind + 1) % im.n_frames
+            frame_ind = (frame_ind - 1) % im.n_frames # type: ignore
+        frame_ind = (frame_ind + 1) % im.n_frames # type: ignore
 
         offset_y = 32
         im.seek(frame_ind)
@@ -1229,7 +1248,7 @@ class RunMatrix(SampleBase):
 
             # play the animation when centered
             if offset_y == center_offset:
-                for frame_ind in range(im.n_frames):
+                for frame_ind in range(im.n_frames): # type: ignore
                     canvas.Clear()
                     im.seek(frame_ind)
                     im_disp = im.convert('RGB')
@@ -1247,7 +1266,7 @@ class RunMatrix(SampleBase):
                 if (datetime.now() - fstart).total_seconds() * 1000 >= im.info['duration']:
                     im.seek(frame_ind)
                     im_disp = im.convert('RGB')
-                    frame_ind = (frame_ind + 1) % im.n_frames
+                    frame_ind = (frame_ind + 1) % im.n_frames # type: ignore
                     fstart = datetime.now()
 
             offset_y -= 1
@@ -1580,7 +1599,7 @@ class RunMatrix(SampleBase):
         graphics.DrawLine(canvas, x - 1, y + 6, x + 1, y + 6, color)
 
     @staticmethod
-    def _sort_games(games: [Game]):
+    def _sort_games(games: List[Game]):
         games = sorted(games, key=lambda g: g.start_time())
         return games
 
@@ -1765,6 +1784,7 @@ def owm_get_weather():
         OWN_TIMESTAMP = datetime.now()
         try:
             observation = OWM_MGR.weather_at_place('New York')
+            assert observation is not None
             OWM_WEATHER = observation.weather
             OWM_FORECAST = OWM_MGR.forecast_at_place('New York', '3h')
             LOG.info(f'owm_get_weather - weather and forecast updated')
@@ -2290,7 +2310,7 @@ def sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update
     LOG.info(f'sports_save_to_cache - Saved {type} with {len(games)} games')
 
 
-def sports_update_games(games: [Game], games_last_update, refresh_rate):
+def sports_update_games(games: List[Game], games_last_update, refresh_rate):
     LOG.debug(f'sports_update_games - updating in progress games')
 
     now = datetime.now()
