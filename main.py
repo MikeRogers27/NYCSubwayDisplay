@@ -159,11 +159,17 @@ SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 HIDE_SCORES = {
     'LOS_ANGELES_KINGS_NHL': [relativedelta(months=3, weeks=2), relativedelta(months=6), None ],
     'WGW': [relativedelta(), relativedelta(months=12), None ],
-    RAPI_FOOTBALL_TEAMS[0]: [relativedelta(), relativedelta(months=12), ['Premier League', ] ],
+    RAPI_FOOTBALL_TEAMS[0]: [relativedelta(), relativedelta(months=12), ['Premier League', 'FA Cup'] ],
 }
 
 
 class Game(ABC):
+    """Abstract base class for sports game data representation.
+    
+    Provides a common interface for displaying game information across different
+    sports APIs and data sources.
+    """
+    
     def __init__(self, game):
         super().__init__()
         self.game = game
@@ -176,11 +182,24 @@ class Game(ABC):
     def away_team_id(self):
         pass
 
+    def away_team_penalties_score(self) -> int:
+        """Get the away team's penalty shootout score.
+        
+        Returns:
+            int: Number of penalties scored by away team, 0 if no penalties
+        """
+        return 0
+
     @abstractmethod
-    def away_team_score(self):
+    def away_team_score(self) -> int:
         pass
 
-    def away_team_score_str(self):
+    def away_team_score_str(self) -> str:
+        """Get formatted score string for away team display.
+        
+        Returns:
+            str: Formatted score with win/loss/draw prefix or start time
+        """
         if self.has_started() or self.has_ended():
             score_str = self._hide_scores()
             if score_str is not None:
@@ -190,7 +209,13 @@ class Game(ABC):
                 if self.away_team_score() > self.home_team_score():
                     score_prefix = 'W'
                 elif self.away_team_score() == self.home_team_score():
-                    score_prefix = 'D'
+                    if self.has_penalties():
+                        if self.away_team_penalties_score() > self.home_team_penalties_score():
+                            score_prefix = 'W'
+                        else:
+                            score_prefix = 'L'
+                    else:
+                        score_prefix = 'D'
                 else:
                     score_prefix = 'L'
             else:
@@ -221,6 +246,14 @@ class Game(ABC):
     def has_started(self):
         pass
 
+    def has_penalties(self):
+        """Check if the game was decided by penalty shootout.
+        
+        Returns:
+            bool: True if game went to penalties, False otherwise
+        """
+        return False
+
     @abstractmethod
     def home_team_colour(self):
         pass
@@ -228,6 +261,14 @@ class Game(ABC):
     @abstractmethod
     def home_team_id(self):
         pass
+
+    def home_team_penalties_score(self):
+        """Get the home team's penalty shootout score.
+        
+        Returns:
+            int: Number of penalties scored by home team, 0 if no penalties
+        """
+        return 0
 
     def home_team_score_str(self):
         if self.has_started() or self.has_ended():
@@ -239,7 +280,13 @@ class Game(ABC):
                 if self.home_team_score() > self.away_team_score():
                     score_prefix = 'W'
                 elif self.home_team_score() == self.away_team_score():
-                    score_prefix = 'D'
+                    if self.has_penalties():
+                        if self.home_team_penalties_score() > self.away_team_penalties_score():
+                            score_prefix = 'W'
+                        else:
+                            score_prefix = 'L'
+                    else:
+                        score_prefix = 'D'
                 else:
                     score_prefix = 'L'
             else:
@@ -251,15 +298,15 @@ class Game(ABC):
         return score_str
 
     @abstractmethod
-    def home_team_score(self):
+    def home_team_score(self) -> int:
         pass
 
     @abstractmethod
-    def home_team_short_name(self):
+    def home_team_short_name(self) -> str:
         pass
 
     @abstractmethod
-    def home_team_title_symbol(self):
+    def home_team_title_symbol(self) -> str:
         pass
 
     @abstractmethod
@@ -279,7 +326,7 @@ class Game(ABC):
         pass
 
     @abstractmethod
-    def start_time(self):
+    def start_time(self) -> datetime:
         pass
 
     def _hide_scores(self):
@@ -321,6 +368,7 @@ class Game(ABC):
                 return score_str
         return None
 
+
 class GameRAPIFootball(Game):
     RAPI_TEAM_INFO = None
 
@@ -337,6 +385,14 @@ class GameRAPIFootball(Game):
 
     def away_team_id(self):
         return self.game['teams']['away']['id']
+
+    def away_team_penalties_score(self) -> int:
+        """Get the away team's penalty shootout score from API data.
+        
+        Returns:
+            int: Number of penalties scored by away team, 0 if None
+        """
+        return self.game['score']['penalty']['away'] if self.game['score']['penalty']['away'] is not None else 0
 
     def away_team_score(self):
         return self.game['goals']['away']
@@ -359,10 +415,10 @@ class GameRAPIFootball(Game):
                         str(self.game['fixture']['status']['elapsed']))
         elif has_ended:
             if start_time.date() == today:
-                if self.game['score']['extratime']['home'] is not None:
-                    date_str = 'AET'
-                elif self.game['score']['penalty']['home'] is not None:
+                if self.game['score']['penalty']['home'] is not None:
                     date_str = 'PEN'
+                elif self.game['score']['extratime']['home'] is not None:
+                    date_str = 'AET'
                 else:
                     date_str = 'FT'
             else:
@@ -375,7 +431,17 @@ class GameRAPIFootball(Game):
         return date_str
 
     def has_ended(self):
-        return self.game['fixture']['status']['short'] == 'FT' or self.game['fixture']['status']['short'] == 'AET'
+        return self.game['fixture']['status']['short'] == 'FT' or \
+            self.game['fixture']['status']['short'] == 'AET' or \
+            self.game['fixture']['status']['short'] == 'PEN'
+
+    def has_penalties(self):
+        """Check if the football game was decided by penalty shootout.
+        
+        Returns:
+            bool: True if game status is 'PEN', False otherwise
+        """
+        return self.game['fixture']['status']['short'] == 'PEN'
 
     def has_started(self):
         return self.has_ended() or self.game['fixture']['status']['short'] != 'NS'
@@ -388,6 +454,14 @@ class GameRAPIFootball(Game):
     def home_team_id(self):
         return self.game['teams']['home']['id']
 
+    def home_team_penalties_score(self):
+        """Get the home team's penalty shootout score from API data.
+        
+        Returns:
+            int: Number of penalties scored by home team, 0 if None
+        """
+        return self.game['score']['penalty']['home'] if self.game['score']['penalty']['home'] is not None else 0
+    
     def home_team_score(self):
         return self.game['goals']['home']
 
