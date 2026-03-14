@@ -536,7 +536,7 @@ class GameRAPIFootball(Game):
         assert GameRAPIFootball.RAPI_TEAM_INFO is not None
         if str(team_id) not in GameRAPIFootball.RAPI_TEAM_INFO:
             self._update_team_info_from_api(team_id, game_team)
-            if team_id not in GameRAPIFootball.RAPI_TEAM_INFO:
+            if str(team_id) not in GameRAPIFootball.RAPI_TEAM_INFO:
                 LOG.error(f'GameRAPIFootball._get_team_info: Team {team_id} returns no info - unexpected')
         return GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)]
 
