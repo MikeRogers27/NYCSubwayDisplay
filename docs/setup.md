@@ -10,7 +10,7 @@ Commands:
     sudo apt full-upgrade
     sudo apt install git
     sudo apt-get install libopenjp2-7-dev
-    sudo apt-get remove bluez bluez-firmware pi-bluetooth triggerhappy pigpio
+    sudo apt-get remove bluez bluez-firmware
 
 ### Disable sound
 
@@ -76,13 +76,13 @@ Setup a new virtual python env
 Setup pre-requisites for rpi-rgb-led-matrix
 
     sudo apt install libgraphicsmagick++-dev
-    sudo apt install libwebp-dev
-    sudo apt install python3-dev cython3
+    sudo apt install python3-dev python3-setuptools cython3 
 
 Download
 
     cd ~/src
     git clone https://github.com/hzeller/rpi-rgb-led-matrix
+    git checkout 2183513a067599d6c0b7339cd6c6eef24cc878b0
     
 Build the project using the standard hardware profile
 
@@ -148,7 +148,7 @@ with this contents
 [Unit]
 Description=LED Matrix Runner
 Wants=network.service
-Requires=rpcbind.service network-online.target
+Requires=network-online.target
 After=multi-user.target network.target network-online.target
 
 [Service]
@@ -172,4 +172,12 @@ Then enable the service
 Commands use disable, start, stop etc
 
     sudo systemctl start matrix.service
+
+For convenience, you can also add these lines to your .bashrc file to start 
+the ssh-agent and add your key:
+
+    # add ssh credentials
+    eval "$(ssh-agent -s)"
+    ssh-add ${HOME}/.ssh/id_github
+
 

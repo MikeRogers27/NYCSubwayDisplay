@@ -4,7 +4,9 @@ from collections import namedtuple
 from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
+import glob
 import importlib
+import json
 import logging
 from logging import Logger
 import os
@@ -13,7 +15,7 @@ import random
 import requests
 import tempfile
 import time
-from typing import Optional
+from typing import List, Tuple
 import signal
 import warnings
 
@@ -33,7 +35,7 @@ from samplebase import SampleBase
 LOCAL_TZ = pytz.timezone("America/New_York")
 NOW = datetime.now()
 
-LOG = Optional[Logger]
+LOG : Logger
 MIN_DISPLAY_TIME = 3
 
 MTA_FEEDS = None
@@ -72,7 +74,7 @@ Seasonal = namedtuple(
     'Seasonal',
     ('name', 'date', 'display_days_before', 'display_days_after', 'images', 'image_behaviour')
 )
-_us_holidays = holidays.US(years=NOW.year)
+_us_holidays = holidays.US(years=NOW.year) # type: ignore
 SEASONAL_DATA = [
     Seasonal(
         name='4thjuly',
@@ -152,14 +154,22 @@ SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_D
 SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
 SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
+# Format:
+# team_id, [relative start of hiding, relative end of hiding, if not None only hide these competitions None is hide all]
 HIDE_SCORES = {
-    'LOS_ANGELES_KINGS_NHL': [relativedelta(months=3, weeks=2), relativedelta(months=6)],
-    'WGW': [relativedelta(), relativedelta(months=12)],
-    RAPI_FOOTBALL_TEAMS[0]: [relativedelta(), relativedelta(months=12)],
+    'LOS_ANGELES_KINGS_NHL': [relativedelta(months=3, weeks=2), relativedelta(months=6), None ],
+    'WGW': [relativedelta(), relativedelta(months=12), None ],
+    RAPI_FOOTBALL_TEAMS[0]: [relativedelta(), relativedelta(months=12), ['Premier League', 'FA Cup'] ],
 }
 
 
 class Game(ABC):
+    """Abstract base class for sports game data representation.
+    
+    Provides a common interface for displaying game information across different
+    sports APIs and data sources.
+    """
+    
     def __init__(self, game):
         super().__init__()
         self.game = game
@@ -172,11 +182,24 @@ class Game(ABC):
     def away_team_id(self):
         pass
 
+    def away_team_penalties_score(self) -> int:
+        """Get the away team's penalty shootout score.
+        
+        Returns:
+            int: Number of penalties scored by away team, 0 if no penalties
+        """
+        return 0
+
     @abstractmethod
-    def away_team_score(self):
+    def away_team_score(self) -> int:
         pass
 
-    def away_team_score_str(self):
+    def away_team_score_str(self) -> str:
+        """Get formatted score string for away team display.
+        
+        Returns:
+            str: Formatted score with win/loss/draw prefix or start time
+        """
         if self.has_started() or self.has_ended():
             score_str = self._hide_scores()
             if score_str is not None:
@@ -186,7 +209,13 @@ class Game(ABC):
                 if self.away_team_score() > self.home_team_score():
                     score_prefix = 'W'
                 elif self.away_team_score() == self.home_team_score():
-                    score_prefix = 'D'
+                    if self.has_penalties():
+                        if self.away_team_penalties_score() > self.home_team_penalties_score():
+                            score_prefix = 'W'
+                        else:
+                            score_prefix = 'L'
+                    else:
+                        score_prefix = 'D'
                 else:
                     score_prefix = 'L'
             else:
@@ -217,6 +246,14 @@ class Game(ABC):
     def has_started(self):
         pass
 
+    def has_penalties(self):
+        """Check if the game was decided by penalty shootout.
+        
+        Returns:
+            bool: True if game went to penalties, False otherwise
+        """
+        return False
+
     @abstractmethod
     def home_team_colour(self):
         pass
@@ -224,6 +261,14 @@ class Game(ABC):
     @abstractmethod
     def home_team_id(self):
         pass
+
+    def home_team_penalties_score(self):
+        """Get the home team's penalty shootout score.
+        
+        Returns:
+            int: Number of penalties scored by home team, 0 if no penalties
+        """
+        return 0
 
     def home_team_score_str(self):
         if self.has_started() or self.has_ended():
@@ -235,7 +280,13 @@ class Game(ABC):
                 if self.home_team_score() > self.away_team_score():
                     score_prefix = 'W'
                 elif self.home_team_score() == self.away_team_score():
-                    score_prefix = 'D'
+                    if self.has_penalties():
+                        if self.home_team_penalties_score() > self.away_team_penalties_score():
+                            score_prefix = 'W'
+                        else:
+                            score_prefix = 'L'
+                    else:
+                        score_prefix = 'D'
                 else:
                     score_prefix = 'L'
             else:
@@ -247,19 +298,19 @@ class Game(ABC):
         return score_str
 
     @abstractmethod
-    def home_team_score(self):
+    def home_team_score(self) -> int:
         pass
 
     @abstractmethod
-    def home_team_short_name(self):
+    def home_team_short_name(self) -> str:
         pass
 
     @abstractmethod
-    def home_team_title_symbol(self):
+    def home_team_title_symbol(self) -> str:
         pass
 
     @abstractmethod
-    def icon(self):
+    def icon(self) -> str:
         pass
 
     @abstractmethod
@@ -275,11 +326,33 @@ class Game(ABC):
         pass
 
     @abstractmethod
-    def start_time(self):
+    def start_time(self) -> datetime:
+        pass
+
+    @abstractmethod
+    def update(self, games_last_update: dict) -> Tuple['Game', dict]:
+        """Update game data from external API.
+        
+        Args:
+            games_last_update (dict): Dictionary tracking last update times for games
+            
+        Returns:
+            Tuple[Game, dict]: Updated game instance and updated games_last_update dict
+        """
         pass
 
     def _hide_scores(self):
         if self.away_team_id() in HIDE_SCORES or self.home_team_id() in HIDE_SCORES:
+
+            # Only hide the specified leagues
+            if self.away_team_id() in HIDE_SCORES:
+                if HIDE_SCORES[self.away_team_id()][2] is not None and \
+                        self.league_name() not in HIDE_SCORES[self.away_team_id()][2]:
+                    return None
+            if self.home_team_id() in HIDE_SCORES:
+                if HIDE_SCORES[self.home_team_id()][2] is not None and \
+                        self.league_name() not in HIDE_SCORES[self.home_team_id()][2]:
+                    return None
 
             # Get the current year
             current_year = datetime.now().year
@@ -307,116 +380,38 @@ class Game(ABC):
                 return score_str
         return None
 
+
 class GameRAPIFootball(Game):
-    RAPI_TEAM_CODES = {
-        33: 'MUN',  # Manchester United
-        34: 'NEW',  # Newcastle
-        35: 'BOU',  # Bournemouth
-        36: 'FUL',  # Fulham
-        38: 'WAT',  # Watford
-        39: 'WOL',  # Wolves
-        40: 'LIV',  # Liverpool
-        42: 'ARS',  # Arsenal
-        43: 'CAR',  # Cardiff City
-        44: 'BUR',  # Burnley
-        45: 'EVE',  # Everton
-        47: 'TOT',  # Tottenham
-        48: 'WHU',  # West Ham
-        49: 'CHE',  # Chelsea
-        50: 'MNC',  # Man City
-        51: 'BRI',  # Brighton
-        52: 'CRY',  # Crystal Palace
-        55: 'BRE',  # Brentford
-        56: 'BRC',  # Bristol City
-        58: 'MIL',  # Millwall
-        59: 'PNE',  # Preston North End
-        60: 'WBA',  # West Bromwich Albion
-        62: 'SHU',  # Sheffield United
-        63: 'LEE',  # Leeds
-        64: 'HUL',  # Hull City
-        65: 'NOT',  # Nottingham Forest
-        66: 'AST',  # Aston Villa
-        67: 'BBR',  # Blackburn Rovers
-        69: 'DER',  # Derby
-        70: 'MID',  # Middlesbrough
-        71: 'NOR',  # Norwich
-        72: 'QPR',  # Queens Park Rangers
-        74: 'SHW',  # Sheffield Wednesday
-        75: 'STO',  # Stoke City
-        76: 'SWA',  # Swansea City
-        746: 'SUN',  # Sunderland
-        1338: 'OXF',  # Oxford United
-        1346: 'COV',  # Coventry City
-        1355: 'POR',  # Portsmouth
-        1357: 'PLY',  # Plymouth Argyle
-        1359: 'LUT',  # Luton Town
-    }
-    RAPI_TEAM_COLOURS = {
-        33: (218, 2, 14),  # Manchester United
-        34: (255, 255, 255),  # Newcastle
-        35: (181, 14, 18),  # Bournemouth
-        36: (255, 255, 255),  # Fulham
-        38: (237, 33, 39),  # Watford
-        39: (253, 185, 19),  # Wolves
-        40: (208, 0, 39),  # Liverpool
-        42: (239, 1, 7),  # Arsenal
-        43: (0, 112, 181),  # Cardiff City
-        44: (128, 0, 0),  # Burnley
-        45: (39, 68, 136),  # Everton
-        47: (255, 255, 255),  # Tottenham
-        48: (122, 38, 58),  # West Ham
-        49: (3, 70, 148),  # Chelsea
-        50: (108, 171, 221),  # Man City
-        51: (0, 87, 184),  # Brighton
-        52: (27, 69, 143),  # Crystal Palace
-        55: (210, 0, 0),  # Brentford
-        56: (226, 26, 35),  # Bristol City
-        58: (0, 25, 74),  # Millwall
-        59: (0, 33, 86),  # Preston North End
-        60: (6, 0, 103),  # West Bromwich Albion
-        62: (236, 34, 39),  # Sheffield United
-        63: (255, 255, 255),  # Leeds
-        64: (241, 138, 1),  # Hull City
-        65: (229, 50, 51),  # Nottingham Forest
-        66: (128, 0, 0),  # Aston Villa
-        67: (0, 158, 224),  # Blackburn Rovers
-        69: (255, 255, 255),  # Derby
-        70: (222, 27, 34),  # Middlesbrough
-        72: (29, 91, 164),  # Queens Park Rangers
-        71: (255, 242, 0),  # Norwich
-        74: (14, 0, 247),  # Sheffield Wednesday
-        75: (224, 58, 62),  # Stoke City
-        76: (255, 255, 255),  # Swansea City
-        746: (255, 0, 0),  # Sunderland
-        1338: (255, 221, 0),  # Oxford United
-        1346: (5, 157, 217),  # Coventry City
-        1355: (0, 20, 137),  # Portsmouth
-        1357: (20, 135, 62),  # Plymouth Argyle
-        1359: (255, 255, 255),  # Luton Town
-    }
+    RAPI_TEAM_INFO = None
 
     def __init__(self, *args):
         super().__init__(*args)
         self.text_colour = (74, 214, 9)
+        if GameRAPIFootball.RAPI_TEAM_INFO is None:
+            GameRAPIFootball.RAPI_TEAM_INFO = GameRAPIFootball._load_team_info()
 
     def away_team_colour(self):
-        if self.away_team_id() in self.RAPI_TEAM_COLOURS:
-            team_colour = graphics.Color(*self.RAPI_TEAM_COLOURS[self.away_team_id()])
-        else:
-            team_colour = graphics.Color(*self.text_colour)
+        team_info = self._get_team_info(self.away_team_id(), self.game['teams']['away'])
+        team_colour = graphics.Color(*team_info['team_colour'])
         return team_colour
 
     def away_team_id(self):
         return self.game['teams']['away']['id']
 
+    def away_team_penalties_score(self) -> int:
+        """Get the away team's penalty shootout score from API data.
+        
+        Returns:
+            int: Number of penalties scored by away team, 0 if None
+        """
+        return self.game['score']['penalty']['away'] if self.game['score']['penalty']['away'] is not None else 0
+
     def away_team_score(self):
         return self.game['goals']['away']
 
     def away_team_short_name(self):
-        if self.away_team_id() in self.RAPI_TEAM_CODES:
-            short_name = self.RAPI_TEAM_CODES[self.away_team_id()]
-        else:
-            short_name = self.game['teams']['away']['name'][:3].upper()
+        team_info = self._get_team_info(self.away_team_id(), self.game['teams']['away'])
+        short_name = team_info['short_name']
         return short_name
 
     def away_team_title_symbol(self):
@@ -432,10 +427,10 @@ class GameRAPIFootball(Game):
                         str(self.game['fixture']['status']['elapsed']))
         elif has_ended:
             if start_time.date() == today:
-                if self.game['score']['extratime']['home'] is not None:
-                    date_str = 'AET'
-                elif self.game['score']['penalty']['home'] is not None:
+                if self.game['score']['penalty']['home'] is not None:
                     date_str = 'PEN'
+                elif self.game['score']['extratime']['home'] is not None:
+                    date_str = 'AET'
                 else:
                     date_str = 'FT'
             else:
@@ -448,29 +443,43 @@ class GameRAPIFootball(Game):
         return date_str
 
     def has_ended(self):
-        return self.game['fixture']['status']['short'] == 'FT' or self.game['fixture']['status']['short'] == 'AET'
+        return self.game['fixture']['status']['short'] == 'FT' or \
+            self.game['fixture']['status']['short'] == 'AET' or \
+            self.game['fixture']['status']['short'] == 'PEN'
+
+    def has_penalties(self):
+        """Check if the football game was decided by penalty shootout.
+        
+        Returns:
+            bool: True if game status is 'PEN', False otherwise
+        """
+        return self.game['fixture']['status']['short'] == 'PEN'
 
     def has_started(self):
         return self.has_ended() or self.game['fixture']['status']['short'] != 'NS'
 
     def home_team_colour(self):
-        if self.home_team_id() in self.RAPI_TEAM_COLOURS:
-            team_colour = graphics.Color(*self.RAPI_TEAM_COLOURS[self.home_team_id()])
-        else:
-            team_colour = graphics.Color(*self.text_colour)
+        team_info = self._get_team_info(self.home_team_id(), self.game['teams']['home'])
+        team_colour = graphics.Color(*team_info['team_colour'])
         return team_colour
 
     def home_team_id(self):
         return self.game['teams']['home']['id']
 
+    def home_team_penalties_score(self):
+        """Get the home team's penalty shootout score from API data.
+        
+        Returns:
+            int: Number of penalties scored by home team, 0 if None
+        """
+        return self.game['score']['penalty']['home'] if self.game['score']['penalty']['home'] is not None else 0
+    
     def home_team_score(self):
         return self.game['goals']['home']
 
     def home_team_short_name(self):
-        if self.home_team_id() in self.RAPI_TEAM_CODES:
-            short_name = self.RAPI_TEAM_CODES[self.home_team_id()]
-        else:
-            short_name = self.game['teams']['home']['name'][:3].upper()
+        team_info = self._get_team_info(self.home_team_id(), self.game['teams']['home'])
+        short_name = team_info['short_name']
         return short_name
 
     def home_team_title_symbol(self):
@@ -484,10 +493,10 @@ class GameRAPIFootball(Game):
         return self.game['fixture']['id']
 
     def league_id(self):
-        return 40
+        return self.game['league']['id']
 
     def league_name(self):
-        return 'Championship'
+        return self.game['league']['name']
 
     def start_time(self):
         return datetime.fromtimestamp(self.game['fixture']['timestamp'], tz=LOCAL_TZ)
@@ -522,6 +531,118 @@ class GameRAPIFootball(Game):
         game = GameRAPIFootball(data['response'][0])
         games_last_update[game.id()] = datetime.now()
         return game, games_last_update
+
+    def _get_team_info(self, team_id, game_team):
+        assert GameRAPIFootball.RAPI_TEAM_INFO is not None
+        if str(team_id) not in GameRAPIFootball.RAPI_TEAM_INFO:
+            self._update_team_info_from_api(team_id, game_team)
+            if str(team_id) not in GameRAPIFootball.RAPI_TEAM_INFO:
+                LOG.error(f'GameRAPIFootball._get_team_info: Team {team_id} returns no info - unexpected')
+        return GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)]
+
+    @staticmethod
+    def _load_team_info() -> dict:
+        team_info_json_file = GameRAPIFootball._team_info_file_path()
+        with open(team_info_json_file, 'r') as file:
+            json_data = json.load(file)
+        return json_data
+
+    def _save_team_info(self, json_data):
+        time_stamp = datetime.now().strftime('%Y%m%d%H%M%S')
+
+        current_file_path = os.path.abspath(__file__)
+        team_info_json_file = os.path.join(
+            os.path.dirname(current_file_path), 'cache', f'{time_stamp}-rapi-football-team-info.json'
+        )
+        os.makedirs(os.path.dirname(team_info_json_file), exist_ok=True)
+        with open(team_info_json_file, 'w') as file:
+            json.dump(json_data, file, indent=4)
+
+    @staticmethod
+    def _team_info_file_path() -> str:
+        current_file_path = os.path.abspath(__file__)
+        cached_team_file_dir = os.path.join(
+            os.path.dirname(current_file_path), 'cache'
+        )
+        team_info_json_file = None
+        if os.path.exists(cached_team_file_dir):
+            team_info_json_files = sorted(glob.glob(os.path.join(cached_team_file_dir, '*-rapi-football-team-info.json')))
+            if len(team_info_json_files):
+                team_info_json_file = team_info_json_files[-1]
+        if team_info_json_file is None:
+            team_info_json_file = os.path.join(
+                os.path.dirname(current_file_path),
+                'data', 'rapi-football-team-info.json'
+            )
+        return team_info_json_file
+
+    def _update_team_info_from_api(self, team_id: int, game_team: dict):
+        default_team_info = {
+            'id': team_id,
+            'short_name': game_team['name'][:3].upper(),
+            'team_colour': self.text_colour,
+        }
+
+        querystring = {
+            'id': team_id,
+        }
+        headers = {
+            'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
+            'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
+        }
+        url = "https://api-football-v1.p.rapidapi.com/v3/teams"
+        try:
+            response = requests.request("GET", url, headers=headers, params=querystring)
+            data = response.json()
+        except requests.exceptions.ConnectionError as e:
+            LOG.error(f'GameRAPIFootball._update_team_info_from_api - ConnectionError {e}')
+            assert GameRAPIFootball.RAPI_TEAM_INFO is not None
+            GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = default_team_info
+            self._save_team_info(GameRAPIFootball.RAPI_TEAM_INFO)
+            LOG.error(f'GameRAPIFootball._update_team_info_from_api - Team stored with default info {team_id}')
+            return
+
+        if response.status_code != 200:
+            LOG.error(
+                f'GameRAPIFootball._update_team_info_from_api - Response returned code {response.status_code} {response.reason}')
+            assert GameRAPIFootball.RAPI_TEAM_INFO is not None
+            GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = default_team_info
+            self._save_team_info(GameRAPIFootball.RAPI_TEAM_INFO)
+            LOG.error(f'GameRAPIFootball._update_team_info_from_api - Team stored with default info {team_id}')
+            return
+
+        from utils.colors import extract_dominant_color_from_url
+        updated = False
+        for api_info in data['response']:
+            if 'team' not in api_info:
+                continue
+            team_colour = None
+            if 'logo' in api_info['team']:
+                colour_info = extract_dominant_color_from_url(api_info['team']['logo'], brightness_threshold=0.25)
+                assert colour_info is not None
+                team_colour = colour_info['rgb']
+            if team_colour is None:
+                team_colour = self.text_colour
+            team_info = {
+                'id': team_id,
+                'short_name': api_info['team']['code'],
+                'team_colour': team_colour,
+            }
+            assert GameRAPIFootball.RAPI_TEAM_INFO is not None
+            GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = team_info
+            updated = True
+            break
+
+        # save this for later
+        if updated:
+            self._save_team_info(GameRAPIFootball.RAPI_TEAM_INFO)
+            LOG.info(f'GameRAPIFootball._update_team_info_from_api - Updated RAPI_TEAM_INFO with {team_id}')
+        else:
+            LOG.info(f'GameRAPIFootball._update_team_info_from_api - update failed for {team_id}')
+            assert GameRAPIFootball.RAPI_TEAM_INFO is not None
+            GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = default_team_info
+            self._save_team_info(GameRAPIFootball.RAPI_TEAM_INFO)
+            LOG.error(f'GameRAPIFootball._update_team_info_from_api - Team stored with default info {team_id}')
 
 
 class GameRAPIRugby(Game):
@@ -825,9 +946,10 @@ class RunMatrix(SampleBase):
             league_teams = SGO_MLS_TEAMS
         elif league_name in ['Premier League', 'Championship', 'Friendlies Clubs', 'League Cup', 'FA Cup']:
             league_teams = RAPI_FOOTBALL_TEAMS
-        elif league_name == 'Super League':
+        elif league_name in ['Super League', 'Super League, Playoffs', 'RFL Challenge Cup']:
             league_teams = RAPI_RUGBY_TEAMS
         else:
+            LOG.warning(f'RunMatrix.draw_game - Unknown league_name: {league_name}')
             return canvas
 
         text_y_top = 10
@@ -1082,7 +1204,7 @@ class RunMatrix(SampleBase):
             if is_animated and (datetime.now() - fstart).total_seconds() * 1000 >= im.info['duration']:
                 im.seek(frame_ind)
                 im_disp = im.convert('RGB')
-                frame_ind = (frame_ind + 1) % im.n_frames
+                frame_ind = (frame_ind + 1) % im.n_frames # type: ignore
                 fstart = datetime.now()
 
             time.sleep(sleep_time)
@@ -1111,12 +1233,12 @@ class RunMatrix(SampleBase):
         time_to_centre = n_rows_to_centre * sleep_time
         # count back until we've reached the frame to start from
         time_total = 0
-        frame_ind = im.n_frames - 1
+        frame_ind = im.n_frames - 1 # type: ignore
         while time_total < time_to_centre:
             im.seek(frame_ind)
             time_total += im.info['duration'] / 1000
-            frame_ind = (frame_ind - 1) % im.n_frames
-        frame_ind = (frame_ind + 1) % im.n_frames
+            frame_ind = (frame_ind - 1) % im.n_frames # type: ignore
+        frame_ind = (frame_ind + 1) % im.n_frames # type: ignore
 
         offset_y = 32
         im.seek(frame_ind)
@@ -1126,7 +1248,7 @@ class RunMatrix(SampleBase):
 
             # play the animation when centered
             if offset_y == center_offset:
-                for frame_ind in range(im.n_frames):
+                for frame_ind in range(im.n_frames): # type: ignore
                     canvas.Clear()
                     im.seek(frame_ind)
                     im_disp = im.convert('RGB')
@@ -1144,7 +1266,7 @@ class RunMatrix(SampleBase):
                 if (datetime.now() - fstart).total_seconds() * 1000 >= im.info['duration']:
                     im.seek(frame_ind)
                     im_disp = im.convert('RGB')
-                    frame_ind = (frame_ind + 1) % im.n_frames
+                    frame_ind = (frame_ind + 1) % im.n_frames # type: ignore
                     fstart = datetime.now()
 
             offset_y -= 1
@@ -1477,7 +1599,7 @@ class RunMatrix(SampleBase):
         graphics.DrawLine(canvas, x - 1, y + 6, x + 1, y + 6, color)
 
     @staticmethod
-    def _sort_games(games: [Game]):
+    def _sort_games(games: List[Game]):
         games = sorted(games, key=lambda g: g.start_time())
         return games
 
@@ -1662,6 +1784,7 @@ def owm_get_weather():
         OWN_TIMESTAMP = datetime.now()
         try:
             observation = OWM_MGR.weather_at_place('New York')
+            assert observation is not None
             OWM_WEATHER = observation.weather
             OWM_FORECAST = OWM_MGR.forecast_at_place('New York', '3h')
             LOG.info(f'owm_get_weather - weather and forecast updated')
@@ -1949,6 +2072,10 @@ def rapi_rugby_get_games_league(league_id, games_last_update):
             LOG.error(f'rapi_rugby_get_games_league - Response returned code {response.status_code} {response.reason}')
             return [], games_last_update
 
+        if 'events' not in data:
+            LOG.error(f'rapi_rugby_get_games_league - No events in returned data')
+            return [], games_last_update
+
         for game in data['events']:
             # discard duplicates
             if any(game['id'] == e['id'] for e in events):
@@ -2183,7 +2310,7 @@ def sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update
     LOG.info(f'sports_save_to_cache - Saved {type} with {len(games)} games')
 
 
-def sports_update_games(games: [Game], games_last_update, refresh_rate):
+def sports_update_games(games: List[Game], games_last_update, refresh_rate):
     LOG.debug(f'sports_update_games - updating in progress games')
 
     now = datetime.now()
@@ -2246,3 +2373,5 @@ if __name__ == '__main__':
     # data = response.json()
     # pass
     main()
+
+
