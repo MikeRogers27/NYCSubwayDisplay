@@ -4,6 +4,7 @@ from collections import namedtuple
 from datetime import datetime, time as dt_time, date as dt_date, timedelta
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
+import google.protobuf.message as pb_message
 import glob
 import importlib
 import json
@@ -1727,6 +1728,8 @@ def mta_update_feeds():
                     LOG.info(f'mta_update_feeds - feed updated {feed}')
                 except requests.exceptions.ConnectionError as e:
                     LOG.error(f'mta_update_feeds - ConnectionError: {e}')
+                except pb_message.DecodeError as e:
+                    LOG.error(f'mta_update_feeds - DecodeError: {e}')
                 except RuntimeError as e:
                     LOG.error(f'mta_update_feeds - RuntimeError: {e}')
 
