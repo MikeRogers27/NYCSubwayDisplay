@@ -945,7 +945,7 @@ class RunMatrix(SampleBase):
             league_teams = SGO_NFL_TEAMS
         elif league_name == 'MLS':
             league_teams = SGO_MLS_TEAMS
-        elif league_name in ['Premier League', 'Championship', 'Friendlies Clubs', 'League Cup', 'FA Cup']:
+        elif league_name in ['Premier League', 'Championship', 'Friendlies Clubs', 'League Cup', 'FA Cup', 'Premier League - Summer Series']:
             league_teams = RAPI_FOOTBALL_TEAMS
         elif league_name in ['Super League', 'Super League, Playoffs', 'RFL Challenge Cup']:
             league_teams = RAPI_RUGBY_TEAMS
