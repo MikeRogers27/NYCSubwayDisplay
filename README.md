@@ -86,14 +86,16 @@ See [docs/setup.md](docs/setup.md) for full step-by-step instructions covering:
 git clone git@github.com:MikeRogers27/NYCSubwayDisplay.git
 cd NYCSubwayDisplay
 
-# Create virtual environment
-python -m venv .venv
+# Create and sync the uv environment
+uv sync --group dev
+
+# Activate the environment (optional, but useful for local shells)
 source .venv/bin/activate  # Linux/Mac
 # or: .venv\Scripts\activate  # Windows
 
-# Install dependencies
-pip install -r requirements.txt          # Raspberry Pi
-pip install -r requirements_win.txt      # Windows (includes RGBMatrixEmulator)
+# Install platform-specific dependencies
+uv pip install -r requirements.txt          # Raspberry Pi
+uv pip install -r requirements_win.txt      # Windows (includes RGBMatrixEmulator)
 
 # Set environment variables
 export OWM_API_KEY=your_key
