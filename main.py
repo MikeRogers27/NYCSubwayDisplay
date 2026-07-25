@@ -69,7 +69,7 @@ RAPI_RUGBY_TIMESTAMP = None
 RAPI_RUGBY_NEXT_REFRESH = None
 RAPI_RUGBY_REFRESH_RATE = 360
 RAPI_RUGBY_TEAMS = ['WGW', ]
-RAPI_RUGBY_SUPER_LEAGUE_ID = 345
+RAPI_RUGBY_LEAGUE_NAMES = ['Super League', 'Super League, Playoffs', 'RFL Challenge Cup', 'World Club Challenge']
 
 Seasonal = namedtuple(
     'Seasonal',
@@ -947,7 +947,7 @@ class RunMatrix(SampleBase):
             league_teams = SGO_MLS_TEAMS
         elif league_name in ['Premier League', 'Championship', 'Friendlies Clubs', 'League Cup', 'FA Cup', 'Premier League - Summer Series']:
             league_teams = RAPI_FOOTBALL_TEAMS
-        elif league_name in ['Super League', 'Super League, Playoffs', 'RFL Challenge Cup']:
+        elif league_name in RAPI_RUGBY_LEAGUES:
             league_teams = RAPI_RUGBY_TEAMS
         else:
             LOG.warning(f'RunMatrix.draw_game - Unknown league_name: {league_name}')
@@ -1517,7 +1517,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display():
-        # return ['sports'], [5]
+        return ['sports'], [5]
 
         now = datetime.now()
         timestamp = now.time()
@@ -2033,8 +2033,8 @@ def rapi_rugby_get_games():
     return RAPI_RUGBY_GAMES
 
 
-def rapi_rugby_get_games_league(league_id, games_last_update):
-    LOG.debug(f'rapi_rugby_get_games_league - league_id {league_id}')
+def rapi_rugby_get_games_league(league_ids, games_last_update):
+    LOG.debug(f'rapi_rugby_get_games_league - league_ids {league_ids}')
 
     now = datetime.now()
     today = datetime.fromordinal(dt_date.today().toordinal())
@@ -2048,6 +2048,7 @@ def rapi_rugby_get_games_league(league_id, games_last_update):
             current_date += timedelta(days=1)
 
     # Super league id = 345
+    # Super League unique tournament id = 302
     # wigan team id = 4233
     events = []
     for search_date in iterate_dates(starts_after, starts_before):
@@ -2060,33 +2061,81 @@ def rapi_rugby_get_games_league(league_id, games_last_update):
             'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
             'x-rapidapi-host': 'rugbyapi2.p.rapidapi.com',
         }
-        url = f"https://rugbyapi2.p.rapidapi.com/api/rugby/matches/{querystring['day']}/{querystring['month']}/{querystring['year']}"
+
+        # get all competitions for the day
+        url = f"https://rugbyapi2.p.rapidapi.com/api/rugby/scheduled-tournaments/{querystring['day']}/{querystring['month']}/{querystring['year']}/page/1"
         try:
             response = requests.request("GET", url, headers=headers)
-            data = response.json()
         except requests.exceptions.ConnectionError as e:
             LOG.error(f'rapi_rugby_get_games_league - ConnectionError {e}')
             return [], games_last_update
-        except requests.exceptions.JSONDecodeError as e:
-            LOG.error(f'rapi_rugby_get_games_league - JSONDecodeError {e}')
-            return [], games_last_update
+
+        if response.status_code == 204:
+            continue # No content for this date, skip to the next date
 
         if response.status_code != 200:
             LOG.error(f'rapi_rugby_get_games_league - Response returned code {response.status_code} {response.reason}')
             return [], games_last_update
 
-        if 'events' not in data:
-            LOG.error(f'rapi_rugby_get_games_league - No events in returned data')
+        try:
+            data = response.json()
+        except requests.exceptions.JSONDecodeError as e:
+            LOG.error(f'rapi_rugby_get_games_league - JSONDecodeError {e}')
             return [], games_last_update
 
-        for game in data['events']:
-            # discard duplicates
-            if any(game['id'] == e['id'] for e in events):
-                continue
+        if 'scheduled' not in data:
+            continue # No scheduled tournaments for this date, skip to the next date
 
-            # keep only games involving our teams
-            if game['homeTeam']['nameCode'] in RAPI_RUGBY_TEAMS or game['awayTeam']['nameCode'] in RAPI_RUGBY_TEAMS:
-                events.append(game)
+        for tournament_data in data['scheduled']:
+
+            if 'tournament' not in tournament_data:
+                LOG.error(f'rapi_rugby_get_games_league - BadTournament data - missing tournament')
+            tournament = tournament_data['tournament']
+
+            if 'name' not in tournament:
+                LOG.error(f'rapi_rugby_get_games_league - BadTournament data - missing name')
+
+            if tournament['name'] not in league_ids:
+                continue # Not a tournament we're interested in
+
+            if 'uniqueTournament' not in tournament or 'id' not in tournament['uniqueTournament']:
+                LOG.error(f'rapi_rugby_get_games_league - BadTournament data - missing uniqueTournament')
+
+            tournament_id = tournament['uniqueTournament']['id']
+
+            # now get the schedule for this tournament on this date
+            url = f"https://rugbyapi2.p.rapidapi.com/api/rugby/tournament/{tournament_id}/schedules/{querystring['day']}/{querystring['month']}/{querystring['year']}"
+            try:
+                response = requests.request("GET", url, headers=headers)
+            except requests.exceptions.ConnectionError as e:
+                LOG.error(f'rapi_rugby_get_games_league - ConnectionError {e}')
+                return [], games_last_update
+
+            if response.status_code == 204:
+                continue # No content for this date, skip to the next date
+
+            if response.status_code != 200:
+                LOG.error(f'rapi_rugby_get_games_league - Response returned code {response.status_code} {response.reason}')
+                return [], games_last_update
+
+            try:
+                data = response.json()
+            except requests.exceptions.JSONDecodeError as e:
+                LOG.error(f'rapi_rugby_get_games_league - JSONDecodeError {e}')
+                return [], games_last_update
+
+            if 'events' not in data:
+                LOG.error(f'rapi_rugby_get_games_league - No events in returned data')
+                return [], games_last_update
+
+            for game in data['events']:
+                # discard duplicates
+                if any(game['id'] == e['id'] for e in events):
+                    continue
+
+                # keep only games involving our teams
+                if game['homeTeam']['nameCode'] in RAPI_RUGBY_TEAMS or game['awayTeam']['nameCode'] in RAPI_RUGBY_TEAMS:
+                    events.append(game)
 
     games = []
     for game in events:
@@ -2094,7 +2143,7 @@ def rapi_rugby_get_games_league(league_id, games_last_update):
         games.append(game)
         games_last_update[game.id()] = now
 
-    LOG.info(f'rapi_rugby_get_games_league - Updated {league_id} with {len(games)} games')
+    LOG.info(f'rapi_rugby_get_games_league - Updated {league_ids} with {len(games)} games')
 
     return games, games_last_update
 
@@ -2259,7 +2308,7 @@ def sports_get_games(type, games, timestamp, next_refresh, games_last_update, re
             games.extend(games_league)
         elif type == 'RAPI_RUGBY':
             # league_id is ignored just gets all wigan games between the required dates
-            games_league, games_last_update = rapi_rugby_get_games_league(RAPI_RUGBY_SUPER_LEAGUE_ID, games_last_update)
+            games_league, games_last_update = rapi_rugby_get_games_league(RAPI_RUGBY_LEAGUE_NAMES, games_last_update)
             games.extend(games_league)
         elif type == 'SGO':
             games_league, games_last_update = sgo_get_games_league('MLB', games_last_update)
