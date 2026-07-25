@@ -1,7 +1,9 @@
+from _io import TextIOWrapper
 from abc import ABC, abstractmethod
 import argparse
-from collections import namedtuple
 from datetime import datetime, time as dt_time, date as dt_date, timedelta
+from io import BufferedReader, BufferedWriter, TextIOWrapper
+from PIL.ImageFile import ImageFile
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
 import google.protobuf.message as pb_message
@@ -13,12 +15,16 @@ from logging import Logger
 import os
 import pickle
 import random
+from pyowm.weatherapi25.forecaster import Forecaster
+from pyowm.weatherapi25.observation import Observation
+from pyowm.weatherapi25.weather_manager import WeatherManager
 import requests
 import tempfile
 import time
-from typing import List, Tuple
+from typing import Any, Dict, List, Literal, NamedTuple, Optional, Tuple
 import signal
 import warnings
+from types import ModuleType
 
 import holidays
 from nyct_gtfs import NYCTFeed
@@ -27,56 +33,63 @@ from pyowm import OWM
 import pytz
 
 if os.name == 'nt':
-    graphics = importlib.import_module('RGBMatrixEmulator', 'graphics')
+    graphics: ModuleType = importlib.import_module('RGBMatrixEmulator', 'graphics')
 else:
-    from rgbmatrix import graphics
+    from rgbmatrix import graphics as graphics_module
+    graphics: Any = graphics_module
 
 from samplebase import SampleBase
 
-LOCAL_TZ = pytz.timezone("America/New_York")
-NOW = datetime.now()
+LOCAL_TZ: pytz.tz.BaseTzInfo = pytz.timezone("America/New_York")
+NOW: datetime = datetime.now()
 
-LOG : Logger
-MIN_DISPLAY_TIME = 3
+LOG: Logger = logging.getLogger("NYCSubwayDisplay")
+MIN_DISPLAY_TIME: int = 3
 
-MTA_FEEDS = None
-MTA_TIMESTAMP = None
-MTA_TRAINS = None
-MTA_REFRESH_RATE = 60
+MTA_FEEDS: Optional[List[Any]] = None
+MTA_TIMESTAMP: Optional[datetime] = None
+MTA_TRAINS: Optional[List[Any]] = None
+MTA_REFRESH_RATE: int = 60
 
-OWM_FORECAST = None
-OWM_MGR = None
-OWM_REFRESH_RATE = 3600 * 0.5
-OWN_TIMESTAMP = None
-OWM_WEATHER = None
+OWM_FORECAST: Optional[Any] = None
+OWM_MGR: Optional[Any] = None
+OWM_REFRESH_RATE: float = 3600 * 0.5
+OWN_TIMESTAMP: Optional[datetime] = None
+OWM_WEATHER: Optional[Any] = None
 
-RAPI_FOOTBALL_GAMES = None
-RAPI_FOOTBALL_GAMES_LAST_UPDATE = {}
-RAPI_FOOTBALL_TIMESTAMP = None
-RAPI_FOOTBALL_NEXT_REFRESH = None
-RAPI_FOOTBALL_REFRESH_RATE = 360
-RAPI_FOOTBALL_TEAMS = [746, ]
-RAPI_FOOTBALL_PREMIER_LEAGUE_ID = 39
-RAPI_FOOTBALL_CHAMPIONSHIP_ID = 40
-RAPI_FOOTBALL_FA_CUP_ID = 45
-RAPI_FOOTBALL_LEAGUE_CUP_ID = 48
-RAPI_FOOTBALL_FRIENDLIES_ID = 667
-RAPI_FOOTBALL_SEASON_ID = 2025  # TODO: Must be updated every year
+RAPI_FOOTBALL_GAMES: Optional[List["Game"]] = None
+RAPI_FOOTBALL_GAMES_LAST_UPDATE: Dict[Any, datetime] = {}
+RAPI_FOOTBALL_TIMESTAMP: Optional[datetime] = None
+RAPI_FOOTBALL_NEXT_REFRESH: Optional[datetime] = None
+RAPI_FOOTBALL_REFRESH_RATE: int = 360
+RAPI_FOOTBALL_TEAMS: List[int] = [746, ]
+RAPI_FOOTBALL_PREMIER_LEAGUE_ID: int = 39
+RAPI_FOOTBALL_CHAMPIONSHIP_ID: int = 40
+RAPI_FOOTBALL_FA_CUP_ID: int = 45
+RAPI_FOOTBALL_LEAGUE_CUP_ID: int = 48
+RAPI_FOOTBALL_FRIENDLIES_ID: int = 667
+RAPI_FOOTBALL_SEASON_ID: int = 2025  # TODO: Must be updated every year
 
-RAPI_RUGBY_GAMES = None
-RAPI_RUGBY_GAMES_LAST_UPDATE = {}
-RAPI_RUGBY_TIMESTAMP = None
-RAPI_RUGBY_NEXT_REFRESH = None
-RAPI_RUGBY_REFRESH_RATE = 360
-RAPI_RUGBY_TEAMS = ['WGW', ]
-RAPI_RUGBY_LEAGUE_NAMES = ['Super League', 'Super League, Playoffs', 'RFL Challenge Cup', 'World Club Challenge']
+RAPI_RUGBY_GAMES: Optional[List["Game"]] = None
+RAPI_RUGBY_GAMES_LAST_UPDATE: Dict[Any, datetime] = {}
+RAPI_RUGBY_TIMESTAMP: Optional[datetime] = None
+RAPI_RUGBY_NEXT_REFRESH: Optional[datetime] = None
+RAPI_RUGBY_REFRESH_RATE: int = 360
+RAPI_RUGBY_TEAMS: List[str] = ['WGW', ]
+RAPI_RUGBY_LEAGUE_NAMES: List[str] = ['Super League', 'Super League, Playoffs', 'RFL Challenge Cup', 'World Club Challenge']
 
-Seasonal = namedtuple(
-    'Seasonal',
-    ('name', 'date', 'display_days_before', 'display_days_after', 'images', 'image_behaviour')
-)
-_us_holidays = holidays.US(years=NOW.year) # type: ignore
-SEASONAL_DATA = [
+
+class Seasonal(NamedTuple):
+    name: str
+    date: datetime
+    display_days_before: int
+    display_days_after: int
+    images: List[str]
+    image_behaviour: List[str]
+
+
+_us_holidays: Any = holidays.US(years=NOW.year)  # type: ignore
+SEASONAL_DATA: List[Seasonal] = [
     Seasonal(
         name='4thjuly',
         date=datetime(year=NOW.year, month=7, day=4),
@@ -145,19 +158,19 @@ SEASONAL_DATA = [
     ),
 ]
 
-SGO_GAMES = None
-SGO_TIMESTAMP = None
-SGO_GAMES_LAST_UPDATE = {}
-SGO_NEXT_REFRESH = None
-SGO_REFRESH_RATE = 1800  # 30 mins
-SGO_MLB_TEAMS = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
-SGO_NHL_TEAMS = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
-SGO_NFL_TEAMS = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
-SGO_MLS_TEAMS = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
+SGO_GAMES: Optional[List["Game"]] = None
+SGO_TIMESTAMP: Optional[datetime] = None
+SGO_GAMES_LAST_UPDATE: Dict[Any, datetime] = {}
+SGO_NEXT_REFRESH: Optional[datetime] = None
+SGO_REFRESH_RATE: int = 1800  # 30 mins
+SGO_MLB_TEAMS: List[str] = ['NEW_YORK_METS_MLB', 'NEW_YORK_YANKEES_MLB', 'LOS_ANGELES_DODGERS_MLB']
+SGO_NHL_TEAMS: List[str] = ['NEW_YORK_RANGERS_NHL', 'NEW_YORK_ISLANDERS_NHL', 'NEW_JERSEY_DEVILS_NHL', 'LOS_ANGELES_KINGS_NHL']
+SGO_NFL_TEAMS: List[str] = ['NEW_YORK_GIANTS_NFL', 'NEW_YORK_JETS_NFL', 'SEATTLE_SEAHAWKS_NFL']
+SGO_MLS_TEAMS: List[str] = ['LOS_ANGELES_GALAXY_MLS', 'AUSTIN_MLS']
 
 # Format:
 # team_id, [relative start of hiding, relative end of hiding, if not None only hide these competitions None is hide all]
-HIDE_SCORES = {
+HIDE_SCORES: Dict[str, List[Any]] = {
     'LOS_ANGELES_KINGS_NHL': [relativedelta(months=3, weeks=2), relativedelta(months=6), None ],
     'WGW': [relativedelta(), relativedelta(months=12), None ],
     RAPI_FOOTBALL_TEAMS[0]: [relativedelta(), relativedelta(months=12), ['Premier League', 'FA Cup'] ],
@@ -171,16 +184,16 @@ class Game(ABC):
     sports APIs and data sources.
     """
     
-    def __init__(self, game):
+    def __init__(self, game) -> None:
         super().__init__()
-        self.game = game
+        self.game: Any = game
 
     @abstractmethod
-    def away_team_colour(self):
+    def away_team_colour(self) -> None:
         pass
 
     @abstractmethod
-    def away_team_id(self):
+    def away_team_id(self) -> None:
         pass
 
     def away_team_penalties_score(self) -> int:
@@ -202,7 +215,7 @@ class Game(ABC):
             str: Formatted score with win/loss/draw prefix or start time
         """
         if self.has_started() or self.has_ended():
-            score_str = self._hide_scores()
+            score_str: None | str = self._hide_scores()
             if score_str is not None:
                 return score_str
 
@@ -220,34 +233,34 @@ class Game(ABC):
                 else:
                     score_prefix = 'L'
             else:
-                score_prefix = ''
+                score_prefix: str = ''
 
-            score_str = f"{score_prefix}{self.away_team_score()}-{self.home_team_score()}"
+            score_str: str = f"{score_prefix}{self.away_team_score()}-{self.home_team_score()}"
         else:
-            score_str = self.start_time().strftime('%H:%M')
+            score_str: str = self.start_time().strftime('%H:%M')
         return score_str
 
     @abstractmethod
-    def away_team_short_name(self):
+    def away_team_short_name(self) -> None:
         pass
 
     @abstractmethod
-    def away_team_title_symbol(self):
+    def away_team_title_symbol(self) -> None:
         pass
 
     @abstractmethod
-    def has_ended(self):
+    def has_ended(self) -> None:
         pass
 
     @abstractmethod
-    def date_str(self):
+    def date_str(self) -> None:
         pass
 
     @abstractmethod
-    def has_started(self):
+    def has_started(self) -> None:
         pass
 
-    def has_penalties(self):
+    def has_penalties(self) -> bool:
         """Check if the game was decided by penalty shootout.
         
         Returns:
@@ -256,14 +269,14 @@ class Game(ABC):
         return False
 
     @abstractmethod
-    def home_team_colour(self):
+    def home_team_colour(self) -> None:
         pass
 
     @abstractmethod
-    def home_team_id(self):
+    def home_team_id(self) -> None:
         pass
 
-    def home_team_penalties_score(self):
+    def home_team_penalties_score(self) -> int:
         """Get the home team's penalty shootout score.
         
         Returns:
@@ -271,9 +284,9 @@ class Game(ABC):
         """
         return 0
 
-    def home_team_score_str(self):
+    def home_team_score_str(self) -> str:
         if self.has_started() or self.has_ended():
-            score_str = self._hide_scores()
+            score_str: None | str = self._hide_scores()
             if score_str is not None:
                 return score_str
 
@@ -291,11 +304,11 @@ class Game(ABC):
                 else:
                     score_prefix = 'L'
             else:
-                score_prefix = ''
+                score_prefix: str = ''
 
-            score_str = f"{score_prefix}{self.home_team_score()}-{self.away_team_score()}"
+            score_str: str = f"{score_prefix}{self.home_team_score()}-{self.away_team_score()}"
         else:
-            score_str = self.start_time().strftime('%H:%M')
+            score_str: str = self.start_time().strftime('%H:%M')
         return score_str
 
     @abstractmethod
@@ -315,15 +328,15 @@ class Game(ABC):
         pass
 
     @abstractmethod
-    def id(self):
+    def id(self) -> None:
         pass
 
     @abstractmethod
-    def league_id(self):
+    def league_id(self) -> None:
         pass
 
     @abstractmethod
-    def league_name(self):
+    def league_name(self) -> None:
         pass
 
     @abstractmethod
@@ -342,7 +355,7 @@ class Game(ABC):
         """
         pass
 
-    def _hide_scores(self):
+    def _hide_scores(self) -> None | str:
         if self.away_team_id() in HIDE_SCORES or self.home_team_id() in HIDE_SCORES:
 
             # Only hide the specified leagues
@@ -356,7 +369,7 @@ class Game(ABC):
                     return None
 
             # Get the current year
-            current_year = datetime.now().year
+            current_year: int = datetime.now().year
 
             # Define the start of the year
             start_of_year = datetime(current_year, 1, 1)
@@ -364,17 +377,17 @@ class Game(ABC):
             # Calculate relative dates
             # start date to hide scores
             hide_scores_start = datetime(current_year, 12, 31)
-            hide_scores_end = start_of_year
+            hide_scores_end: datetime = start_of_year
 
             if self.away_team_id() in HIDE_SCORES:
-                hide_scores_start = min(hide_scores_start, start_of_year + HIDE_SCORES[self.away_team_id()][0])
-                hide_scores_end = max(hide_scores_start, start_of_year + HIDE_SCORES[self.away_team_id()][1])
+                hide_scores_start: datetime = min(hide_scores_start, start_of_year + HIDE_SCORES[self.away_team_id()][0])
+                hide_scores_end: datetime = max(hide_scores_start, start_of_year + HIDE_SCORES[self.away_team_id()][1])
             if self.home_team_id() in HIDE_SCORES:
-                hide_scores_start = min(hide_scores_start, start_of_year + HIDE_SCORES[self.home_team_id()][0])
-                hide_scores_end = max(hide_scores_start, start_of_year + HIDE_SCORES[self.home_team_id()][1])
+                hide_scores_start: datetime = min(hide_scores_start, start_of_year + HIDE_SCORES[self.home_team_id()][0])
+                hide_scores_end: datetime = max(hide_scores_start, start_of_year + HIDE_SCORES[self.home_team_id()][1])
 
-            hide_scores_start = to_local_tz(hide_scores_start)
-            hide_scores_end = to_local_tz(hide_scores_end)
+            hide_scores_start: datetime = to_local_tz(hide_scores_start)
+            hide_scores_end: datetime = to_local_tz(hide_scores_end)
 
             if hide_scores_start <= self.start_time() < hide_scores_end:
                 score_str = '-'
@@ -385,7 +398,7 @@ class Game(ABC):
 class GameRAPIFootball(Game):
     RAPI_TEAM_INFO = None
 
-    def __init__(self, *args):
+    def __init__(self, *args) -> None:
         super().__init__(*args)
         self.text_colour = (74, 214, 9)
         if GameRAPIFootball.RAPI_TEAM_INFO is None:
@@ -415,12 +428,12 @@ class GameRAPIFootball(Game):
         short_name = team_info['short_name']
         return short_name
 
-    def away_team_title_symbol(self):
+    def away_team_title_symbol(self) -> str:
         return 'A'
 
     def date_str(self):
-        today = dt_date.today()
-        start_time = self.start_time()
+        today: dt_date = dt_date.today()
+        start_time: datetime = self.start_time()
         has_ended = self.has_ended()
         in_progress = self.has_started() and not has_ended
         if in_progress:
@@ -435,12 +448,12 @@ class GameRAPIFootball(Game):
                 else:
                     date_str = 'FT'
             else:
-                date_str = start_time.strftime('%a')
+                date_str: str = start_time.strftime('%a')
         else:
             if start_time.date() == today:
                 date_str = 'Today'
             else:
-                date_str = start_time.strftime('%a')
+                date_str: str = start_time.strftime('%a')
         return date_str
 
     def has_ended(self):
@@ -483,10 +496,10 @@ class GameRAPIFootball(Game):
         short_name = team_info['short_name']
         return short_name
 
-    def home_team_title_symbol(self):
+    def home_team_title_symbol(self) -> str:
         return 'H'
 
-    def icon(self):
+    def icon(self) -> str:
         icon_file = 'icons/32/SUNDERLAND.png'
         return icon_file
 
@@ -499,7 +512,7 @@ class GameRAPIFootball(Game):
     def league_name(self):
         return self.game['league']['name']
 
-    def start_time(self):
+    def start_time(self) -> datetime:
         return datetime.fromtimestamp(self.game['fixture']['timestamp'], tz=LOCAL_TZ)
 
     def update(self, games_last_update):
@@ -507,12 +520,12 @@ class GameRAPIFootball(Game):
             querystring = {
                 'id': self.id(),
             }
-            headers = {
+            headers: dict[str, str] = {
                 'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
                 'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
             }
             url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-            response = requests.request("GET", url, headers=headers, params=querystring)
+            response: requests.Response = requests.request("GET", url, headers=headers, params=querystring)
         except requests.exceptions.ConnectionError as e:
             LOG.error(f'GameRAPIFootball::update - ConnectionError {e}')
             return self, games_last_update
@@ -543,16 +556,16 @@ class GameRAPIFootball(Game):
 
     @staticmethod
     def _load_team_info() -> dict:
-        team_info_json_file = GameRAPIFootball._team_info_file_path()
+        team_info_json_file: str = GameRAPIFootball._team_info_file_path()
         with open(team_info_json_file, 'r') as file:
             json_data = json.load(file)
         return json_data
 
-    def _save_team_info(self, json_data):
-        time_stamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    def _save_team_info(self, json_data) -> None:
+        time_stamp: str = datetime.now().strftime('%Y%m%d%H%M%S')
 
-        current_file_path = os.path.abspath(__file__)
-        team_info_json_file = os.path.join(
+        current_file_path: str = os.path.abspath(__file__)
+        team_info_json_file: str = os.path.join(
             os.path.dirname(current_file_path), 'cache', f'{time_stamp}-rapi-football-team-info.json'
         )
         os.makedirs(os.path.dirname(team_info_json_file), exist_ok=True)
@@ -561,39 +574,39 @@ class GameRAPIFootball(Game):
 
     @staticmethod
     def _team_info_file_path() -> str:
-        current_file_path = os.path.abspath(__file__)
-        cached_team_file_dir = os.path.join(
+        current_file_path: str = os.path.abspath(__file__)
+        cached_team_file_dir: str = os.path.join(
             os.path.dirname(current_file_path), 'cache'
         )
         team_info_json_file = None
         if os.path.exists(cached_team_file_dir):
-            team_info_json_files = sorted(glob.glob(os.path.join(cached_team_file_dir, '*-rapi-football-team-info.json')))
+            team_info_json_files: List[str] = sorted(glob.glob(os.path.join(cached_team_file_dir, '*-rapi-football-team-info.json')))
             if len(team_info_json_files):
-                team_info_json_file = team_info_json_files[-1]
+                team_info_json_file: str = team_info_json_files[-1]
         if team_info_json_file is None:
-            team_info_json_file = os.path.join(
+            team_info_json_file: str = os.path.join(
                 os.path.dirname(current_file_path),
                 'data', 'rapi-football-team-info.json'
             )
         return team_info_json_file
 
-    def _update_team_info_from_api(self, team_id: int, game_team: dict):
+    def _update_team_info_from_api(self, team_id: int, game_team: dict) -> None:
         default_team_info = {
             'id': team_id,
             'short_name': game_team['name'][:3].upper(),
             'team_colour': self.text_colour,
         }
 
-        querystring = {
+        querystring: dict[str, int] = {
             'id': team_id,
         }
-        headers = {
+        headers: dict[str, str] = {
             'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
             'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
         }
         url = "https://api-football-v1.p.rapidapi.com/v3/teams"
         try:
-            response = requests.request("GET", url, headers=headers, params=querystring)
+            response: requests.Response = requests.request("GET", url, headers=headers, params=querystring)
             data = response.json()
         except requests.exceptions.ConnectionError as e:
             LOG.error(f'GameRAPIFootball._update_team_info_from_api - ConnectionError {e}')
@@ -623,7 +636,7 @@ class GameRAPIFootball(Game):
                 assert colour_info is not None
                 team_colour = colour_info['rgb']
             if team_colour is None:
-                team_colour = self.text_colour
+                team_colour: Tuple[Literal[74], Literal[214], Literal[9]] = self.text_colour
             team_info = {
                 'id': team_id,
                 'short_name': api_info['team']['code'],
@@ -648,7 +661,7 @@ class GameRAPIFootball(Game):
 
 class GameRAPIRugby(Game):
 
-    def __init__(self, *args):
+    def __init__(self, *args) -> None:
         super().__init__(*args)
 
     def away_team_colour(self):
@@ -665,12 +678,12 @@ class GameRAPIRugby(Game):
     def away_team_short_name(self):
         return self.game['awayTeam']['nameCode']
 
-    def away_team_title_symbol(self):
+    def away_team_title_symbol(self) -> str:
         return 'A'
 
-    def date_str(self):
-        today = dt_date.today()
-        start_time = self.start_time()
+    def date_str(self) -> str:
+        today: dt_date = dt_date.today()
+        start_time: datetime = self.start_time()
         has_ended = self.has_ended()
         in_progress = self.has_started() and not has_ended
         if in_progress:
@@ -680,12 +693,12 @@ class GameRAPIRugby(Game):
                 # TODO: AET
                 date_str = 'FT'
             else:
-                date_str = start_time.strftime('%a')
+                date_str: str = start_time.strftime('%a')
         else:
             if start_time.date() == today:
                 date_str = 'Today'
             else:
-                date_str = start_time.strftime('%a')
+                date_str: str = start_time.strftime('%a')
         return date_str
 
     def has_ended(self):
@@ -708,10 +721,10 @@ class GameRAPIRugby(Game):
     def home_team_short_name(self):
         return self.game['homeTeam']['nameCode']
 
-    def home_team_title_symbol(self):
+    def home_team_title_symbol(self) -> str:
         return 'H'
 
-    def icon(self):
+    def icon(self) -> str:
         icon_file = 'icons/32/WIGAN_WARRIORS_SL.png'
         return icon_file
 
@@ -724,7 +737,7 @@ class GameRAPIRugby(Game):
     def league_name(self):
         return self.game['tournament']['name']
 
-    def start_time(self):
+    def start_time(self) -> datetime:
         return datetime.fromtimestamp(self.game['startTimestamp'], tz=LOCAL_TZ)
 
     def update(self, games_last_update):
@@ -732,12 +745,12 @@ class GameRAPIRugby(Game):
             querystring = {
                 'id': self.id(),
             }
-            headers = {
+            headers: dict[str, str] = {
                 'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
                 'x-rapidapi-host': 'rugbyapi2.p.rapidapi.com',
             }
-            url = f"https://rugbyapi2.p.rapidapi.com/api/rugby/match/{querystring['id']}"
-            response = requests.request("GET", url, headers=headers)
+            url: str = f"https://rugbyapi2.p.rapidapi.com/api/rugby/match/{querystring['id']}"
+            response: requests.Response = requests.request("GET", url, headers=headers)
         except requests.exceptions.ConnectionError as e:
             LOG.error(f'GameRAPIRugby::update - ConnectionError {e}')
             return self, games_last_update
@@ -761,7 +774,7 @@ class GameRAPIRugby(Game):
 
 class GameSGO(Game):
 
-    def __init__(self, *args):
+    def __init__(self, *args) -> None:
         super().__init__(*args)
 
     def away_team_colour(self):
@@ -778,7 +791,7 @@ class GameSGO(Game):
     def away_team_id(self):
         return self.game['teams']['away']['teamID']
 
-    def away_team_score(self):
+    def away_team_score(self) -> Any | str:
         if 'score' in self.game['teams']['away']:
             return self.game['teams']['away']['score']
         return '-'
@@ -786,26 +799,26 @@ class GameSGO(Game):
     def away_team_short_name(self):
         return self.game['teams']['away']['names']['short']
 
-    def away_team_title_symbol(self):
+    def away_team_title_symbol(self) -> str:
         return '@'
 
-    def date_str(self):
-        today = dt_date.today()
-        start_time = self.start_time()
+    def date_str(self) -> Any | str:
+        today: dt_date = dt_date.today()
+        start_time: datetime = self.start_time()
         has_ended = self.has_ended()
-        in_progress = self.has_started() and not has_ended
+        in_progress: Any | bool = self.has_started() and not has_ended
         if in_progress or has_ended:
             if start_time.date() == today and 'displayShort' in self.game['status']:
                 date_str = self.game['status']['displayShort']
                 if date_str == 'F':
                     date_str = 'Final'
             else:
-                date_str = start_time.strftime('%a')
+                date_str: str = start_time.strftime('%a')
         else:
             if start_time.date() == today:
                 date_str = 'Today'
             else:
-                date_str = start_time.strftime('%a')
+                date_str: str = start_time.strftime('%a')
         return date_str
 
     def has_ended(self):
@@ -828,7 +841,7 @@ class GameSGO(Game):
     def home_team_id(self):
         return self.game['teams']['home']['teamID']
 
-    def home_team_score(self):
+    def home_team_score(self) -> Any | str:
         if 'score' in self.game['teams']['home']:
             return self.game['teams']['home']['score']
         return '-'
@@ -836,7 +849,7 @@ class GameSGO(Game):
     def home_team_short_name(self):
         return self.game['teams']['home']['names']['short']
 
-    def home_team_title_symbol(self):
+    def home_team_title_symbol(self) -> str:
         return 'v'
 
     def icon(self):
@@ -857,12 +870,12 @@ class GameSGO(Game):
     def league_name(self):
         return self.game['leagueID']
 
-    def start_time(self):
+    def start_time(self) -> datetime:
         return to_local_tz(parse(self.game['status']['startsAt']))
 
     def update(self, games_last_update):
         try:
-            response = requests.get(
+            response: requests.Response = requests.get(
                 'https://api.sportsgameodds.com/v2/events',
                 headers={'X-Api-Key': os.environ['SGO_API_KEY']},
                 params={
@@ -905,21 +918,21 @@ class GameSGO(Game):
 
 
 class GracefulKiller:
-    def __init__(self):
+    def __init__(self) -> None:
         self.kill_now = False
         signal.signal(signal.SIGINT, self.exit_gracefully)
         signal.signal(signal.SIGTERM, self.exit_gracefully)
 
-    def exit_gracefully(self, signum, frame):
+    def exit_gracefully(self, signum, frame) -> None:
         self.kill_now = True
 
 
 class RunMatrix(SampleBase):
-    def __init__(self, stop_ids, uptown_stop_ids, args):
+    def __init__(self, stop_ids, uptown_stop_ids, args) -> None:
         super(RunMatrix, self).__init__(args)
 
-        self.stop_ids = stop_ids
-        self.uptown_stop_ids = uptown_stop_ids
+        self.stop_ids: Any = stop_ids
+        self.uptown_stop_ids: Any = uptown_stop_ids
         self.font = graphics.Font()
         self.font.LoadFont("./fonts/helvR12.bdf")
         self.circle_font = graphics.Font()
@@ -936,44 +949,44 @@ class RunMatrix(SampleBase):
 
     def draw_game(self, canvas, game: Game):
         LOG.debug(f'RunMatrix.draw_game - drawing game {game}')
-        league_name = game.league_name()
+        league_name: str = game.league_name()
         if league_name == 'MLB':
-            league_teams = SGO_MLB_TEAMS
+            league_teams: List[str] = SGO_MLB_TEAMS
         elif league_name == 'NHL':
-            league_teams = SGO_NHL_TEAMS
+            league_teams: List[str] = SGO_NHL_TEAMS
         elif league_name == 'NFL':
-            league_teams = SGO_NFL_TEAMS
+            league_teams: List[str] = SGO_NFL_TEAMS
         elif league_name == 'MLS':
-            league_teams = SGO_MLS_TEAMS
+            league_teams: List[str] = SGO_MLS_TEAMS
         elif league_name in ['Premier League', 'Championship', 'Friendlies Clubs', 'League Cup', 'FA Cup', 'Premier League - Summer Series']:
-            league_teams = RAPI_FOOTBALL_TEAMS
-        elif league_name in RAPI_RUGBY_LEAGUES:
-            league_teams = RAPI_RUGBY_TEAMS
+            league_teams: List[str] = [str(team_id) for team_id in RAPI_FOOTBALL_TEAMS]
+        elif league_name in RAPI_RUGBY_LEAGUE_NAMES:
+            league_teams: List[str] = RAPI_RUGBY_TEAMS
         else:
             LOG.warning(f'RunMatrix.draw_game - Unknown league_name: {league_name}')
             return canvas
 
-        text_y_top = 10
-        text_y_middle = 20
-        text_y_bottom = 30
+        text_y_top: int = 10
+        text_y_middle: int = 20
+        text_y_bottom: int = 30
 
-        icon_file = game.icon()
-        im = Image.open(icon_file)
-        im = im.convert('RGB')
+        icon_file: str = game.icon()
+        im: ImageFile = Image.open(icon_file)
+        im: Image.Image = im.convert('RGB')
         canvas.SetImage(im)
 
         if game.away_team_id() in league_teams:
-            title_symbol = game.away_team_title_symbol()
-            title_str = game.home_team_short_name()
-            score_str = game.away_team_score_str()
-            team_colour = game.home_team_colour()
+            title_symbol: str = game.away_team_title_symbol()
+            title_str: str = game.home_team_short_name()
+            score_str: str = game.away_team_score_str()
+            team_colour: Any = game.home_team_colour()
         else:
-            title_symbol = game.home_team_title_symbol()
-            title_str = game.away_team_short_name()
-            score_str = game.home_team_score_str()
-            team_colour = game.away_team_colour()
+            title_symbol: str = game.home_team_title_symbol()
+            title_str: str = game.away_team_short_name()
+            score_str: str = game.home_team_score_str()
+            team_colour: Any = game.away_team_colour()
 
-        date_str = game.date_str()
+        date_str: str = game.date_str()
 
         if isinstance(game, (GameRAPIFootball, GameRAPIRugby)):
             graphics.DrawText(canvas, self.circle_font, 34, text_y_top, team_colour, title_str)
@@ -995,7 +1008,7 @@ class RunMatrix(SampleBase):
                        route_id,
                        headsign_text,
                        direction,
-                       arrival_mins):
+                       arrival_mins) -> None:
         # Top line
         if row_ind == 0:
             circle_y = 8
@@ -1007,7 +1020,7 @@ class RunMatrix(SampleBase):
 
         if len(route_id) == 1:
             route_id_offset_width = self.circle_font.CharacterWidth(ord(route_id))
-            route_id_offset = int(route_id_offset_width / 2) - 1
+            route_id_offset: int = int(route_id_offset_width / 2) - 1
         else:
             # this has happened once so far!
             route_id_offset = 0
@@ -1023,15 +1036,15 @@ class RunMatrix(SampleBase):
         else:
             graphics.DrawText(canvas, self.circle_font, 24, text_y - 1, text_colour, '↓')
         if isinstance(arrival_mins, int):
-            minutes_text = f'{arrival_mins:2d}'
-            minutes_width = sum(self.font.CharacterWidth(ord(letter)) for letter in minutes_text)
+            minutes_text: str = f'{arrival_mins:2d}'
+            minutes_width: int = sum(self.font.CharacterWidth(ord(letter)) for letter in minutes_text)
             graphics.DrawText(canvas, self.font, 45 - minutes_width, text_y, text_colour, minutes_text)
             graphics.DrawText(canvas, self.font, 45, text_y, text_colour, "min")
         else:
             graphics.DrawText(canvas, self.font, 32, text_y, text_colour, arrival_mins)
 
-    def draw_train(self, row_ind, arrival_order, train, stop_id, canvas):
-        arrival_mins = mta_arrival_minutes(train, stop_id)
+    def draw_train(self, row_ind, arrival_order, train, stop_id, canvas) -> None:
+        arrival_mins: int = mta_arrival_minutes(train, stop_id)
         # arrival_mins = 0
         text_colour = self.text_colour
 
@@ -1073,7 +1086,7 @@ class RunMatrix(SampleBase):
     def draw_train_no_data(self,
                            stop_id,
                            canvas,
-                           ):
+                           ) -> None:
         LOG.debug(f'RunMatrix.draw_train_no_data - stop_id {stop_id}')
 
         # Top line
@@ -1097,7 +1110,7 @@ class RunMatrix(SampleBase):
     def draw_trains_none(self,
                          stop_id,
                          canvas,
-                         ):
+                         ) -> None:
         LOG.debug(f'RunMatrix.draw_trains_none - stop_id {stop_id}')
 
         # Top line
@@ -1128,8 +1141,8 @@ class RunMatrix(SampleBase):
             time.sleep(display_time)
         elif len(trains):
             # check we don't have stale data
-            now = datetime.now()
-            last_update_time = now - timedelta(minutes=60)
+            now: datetime = datetime.now()
+            last_update_time: datetime = now - timedelta(minutes=60)
             for train in trains:
                 if train.underway and train.last_position_update > last_update_time:
                     last_update_time = train.last_position_update
@@ -1146,7 +1159,7 @@ class RunMatrix(SampleBase):
                     canvas = self.matrix.SwapOnVSync(canvas)
                     time.sleep(display_time)
                 else:
-                    swap_time = max(display_time / len(trains) - 1, MIN_DISPLAY_TIME)
+                    swap_time: int = max(display_time / len(trains) - 1, MIN_DISPLAY_TIME)
                     for i in range(1, len(trains)):
                         canvas.Clear()
                         self.draw_train(0, 1, trains[0], stop_id, canvas)
@@ -1165,7 +1178,7 @@ class RunMatrix(SampleBase):
         LOG.debug(f'RunMatrix.draw_seasonal - seasonal {seasonal}')
 
         # first pick an image
-        im_ind = random.randrange(len(seasonal.images))
+        im_ind: int = random.randrange(len(seasonal.images))
         image_file = seasonal.images[im_ind]
         image_behaviour = seasonal.image_behaviour[im_ind]
 
@@ -1182,19 +1195,19 @@ class RunMatrix(SampleBase):
 
     def draw_seasonal_scroll_up(self, canvas, image_file, display_time,
                                 pause=0.):
-        im = Image.open(image_file)
+        im: ImageFile = Image.open(image_file)
 
-        n_rows_display = 32 * 2 + im.height
+        n_rows_display: int = 32 * 2 + im.height
         sleep_time = display_time / n_rows_display
         n_center_frames = pause / sleep_time
-        center_offset = 16 - int(im.height / 2)
+        center_offset: int = 16 - int(im.height / 2)
 
         frame_ind = 0
-        is_animated = getattr(im, 'is_animated', False)
+        is_animated: Any | bool = getattr(im, 'is_animated', False)
         if is_animated:
             im.seek(frame_ind)
-        im_disp = im.convert('RGB')
-        fstart = datetime.now()
+        im_disp: Image.Image = im.convert('RGB')
+        fstart: datetime = datetime.now()
         offset_y = 32
         center_counter = 0
         while offset_y > -(im.height + 32):
@@ -1204,9 +1217,9 @@ class RunMatrix(SampleBase):
 
             if is_animated and (datetime.now() - fstart).total_seconds() * 1000 >= im.info['duration']:
                 im.seek(frame_ind)
-                im_disp = im.convert('RGB')
+                im_disp: Image.Image = im.convert('RGB')
                 frame_ind = (frame_ind + 1) % im.n_frames # type: ignore
-                fstart = datetime.now()
+                fstart: datetime = datetime.now()
 
             time.sleep(sleep_time)
             if offset_y == center_offset:
@@ -1219,18 +1232,18 @@ class RunMatrix(SampleBase):
         return canvas
 
     def draw_seasonal_scroll_up_animate_centre(self, canvas, image_file, display_time):
-        im = Image.open(image_file)
-        is_animated = getattr(im, 'is_animated', False)
+        im: ImageFile = Image.open(image_file)
+        is_animated: Any | bool = getattr(im, 'is_animated', False)
         if not is_animated:
             warnings.warn(f'{image_file} is not animated')
             return canvas
 
-        n_rows_display = 32 * 2 + im.height
+        n_rows_display: int = 32 * 2 + im.height
         start_offset = 32
-        center_offset = 16 - int(im.height / 2)
+        center_offset: int = 16 - int(im.height / 2)
         sleep_time = display_time / n_rows_display
 
-        n_rows_to_centre = start_offset - center_offset
+        n_rows_to_centre: int = start_offset - center_offset
         time_to_centre = n_rows_to_centre * sleep_time
         # count back until we've reached the frame to start from
         time_total = 0
@@ -1243,8 +1256,8 @@ class RunMatrix(SampleBase):
 
         offset_y = 32
         im.seek(frame_ind)
-        im_disp = im.convert('RGB')
-        fstart = datetime.now()
+        im_disp: Image.Image = im.convert('RGB')
+        fstart: datetime = datetime.now()
         while offset_y > -(im.height + 32):
 
             # play the animation when centered
@@ -1252,8 +1265,8 @@ class RunMatrix(SampleBase):
                 for frame_ind in range(im.n_frames): # type: ignore
                     canvas.Clear()
                     im.seek(frame_ind)
-                    im_disp = im.convert('RGB')
-                    fstart = datetime.now()
+                    im_disp: Image.Image = im.convert('RGB')
+                    fstart: datetime = datetime.now()
 
                     canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
                     canvas = self.matrix.SwapOnVSync(canvas)
@@ -1266,9 +1279,9 @@ class RunMatrix(SampleBase):
 
                 if (datetime.now() - fstart).total_seconds() * 1000 >= im.info['duration']:
                     im.seek(frame_ind)
-                    im_disp = im.convert('RGB')
+                    im_disp: Image.Image = im.convert('RGB')
                     frame_ind = (frame_ind + 1) % im.n_frames # type: ignore
-                    fstart = datetime.now()
+                    fstart: datetime = datetime.now()
 
             offset_y -= 1
 
@@ -1283,17 +1296,17 @@ class RunMatrix(SampleBase):
 
         max_temp = k_to_c(w.temp['temp_max'])
         min_temp = k_to_c(w.temp['temp_min'])
-        icon_file = owm_weather_to_icon(w)
+        icon_file: str = owm_weather_to_icon(w)
 
         if icon_file is not None:
-            im = Image.open(icon_file)
-            im = im.convert('RGB')
+            im: ImageFile = Image.open(icon_file)
+            im: Image.Image = im.convert('RGB')
             canvas.SetImage(im)
 
         # get forecast time in local (this automatically happens with from timestamp)
-        weather_time = datetime.fromtimestamp(w.ref_time)
+        weather_time: datetime = datetime.fromtimestamp(w.ref_time)
         if os.name == 'nt':
-            head_str = weather_time.strftime('%#I%p').lower()
+            head_str: str = weather_time.strftime('%#I%p').lower()
         else:
             head_str = weather_time.strftime('%-I%p').lower()
 
@@ -1318,8 +1331,8 @@ class RunMatrix(SampleBase):
         text_y_bottom = 30
 
         icon_file = 'icons/32/weather-forecast.png'
-        im = Image.open(icon_file)
-        im = im.convert('RGB')
+        im: ImageFile = Image.open(icon_file)
+        im: Image.Image = im.convert('RGB')
         canvas.SetImage(im)
 
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, '***')
@@ -1346,14 +1359,14 @@ class RunMatrix(SampleBase):
         min_temp = 100
         codes = []
         for w in w_list:
-            max_temp = max(max_temp, k_to_c(w.temp['temp_max']))
-            min_temp = min(min_temp, k_to_c(w.temp['temp_min']))
+            max_temp: int = max(max_temp, k_to_c(w.temp['temp_max']))
+            min_temp: int = min(min_temp, k_to_c(w.temp['temp_min']))
             codes.append(w.weather_code)
         best_code = max(set(codes), key=codes.count)
 
-        icon_file = owm_weather_to_icon(next(w for w in w_list if w.weather_code == best_code))
+        icon_file: str = owm_weather_to_icon(next(w for w in w_list if w.weather_code == best_code))
         if icon_file is not None:
-            im = Image.open(icon_file)
+            im: ImageFile = Image.open(icon_file)
             canvas.SetImage(im)
 
         graphics.DrawText(canvas, self.circle_font, 34, text_y_top, self.text_colour, title_str)
@@ -1378,12 +1391,12 @@ class RunMatrix(SampleBase):
 
         w, _ = owm_get_weather()
 
-        start_time = datetime.now()
+        start_time: datetime = datetime.now()
         show_colon = True
         while (datetime.now() - start_time).total_seconds() < display_time:
             canvas.Clear()
 
-            current_time = datetime.now()
+            current_time: datetime = datetime.now()
 
             # draw time
             graphics.DrawText(canvas, self.font, clock_pos, text_y_top, self.text_colour,
@@ -1410,8 +1423,8 @@ class RunMatrix(SampleBase):
             else:
                 icon_file = 'icons/32/thermometer_mid.png'
 
-            im = Image.open(icon_file)
-            im = im.convert('RGB')
+            im: ImageFile = Image.open(icon_file)
+            im: Image.Image = im.convert('RGB')
             canvas.SetImage(im, offset_x=clock_pos + 35, offset_y=2)
 
             if w is not None:
@@ -1422,11 +1435,11 @@ class RunMatrix(SampleBase):
                                   '--c')
 
             # draw date
-            date_str = current_time.strftime('%a ') + f'{current_time.day} ' + current_time.strftime('%b')
+            date_str: str = current_time.strftime('%a ') + f'{current_time.day} ' + current_time.strftime('%b')
             graphics.DrawText(canvas, self.circle_font, clock_pos, text_y_bottom, self.text_colour, date_str)
 
             canvas = self.matrix.SwapOnVSync(canvas)
-            show_colon = not show_colon
+            show_colon: bool = not show_colon
             time.sleep(0.5)
 
         return canvas
@@ -1435,9 +1448,9 @@ class RunMatrix(SampleBase):
         LOG.debug(f'RunMatrix.display_trains - uptown_only {uptown_only}')
 
         mta_update_feeds()
-        stop_ids = self.stop_ids
+        stop_ids: Any = self.stop_ids
         if uptown_only:
-            stop_ids = self.uptown_stop_ids
+            stop_ids: Any = self.uptown_stop_ids
         for stop_id in stop_ids:
             trains = mta_get_next_trains(stop_id=stop_id, max_num_trains=5, max_arrival_mins=25)
             success, canvas = self.draw_trains(trains, stop_id, canvas, display_time)
@@ -1451,7 +1464,7 @@ class RunMatrix(SampleBase):
         if random.uniform(0., 1.) > 0.2:  # Only display roughly once every 5 times
             return canvas
 
-        now = datetime.now()
+        now: datetime = datetime.now()
         for seasonal in SEASONAL_DATA:
             start_date = seasonal.date - timedelta(days=seasonal.display_days_before)
             end_date = seasonal.date + timedelta(days=seasonal.display_days_after)
@@ -1469,9 +1482,9 @@ class RunMatrix(SampleBase):
         games.extend(rapi_rugby_get_games())
         if not len(games):
             return canvas
-        games = self._sort_games(games)
+        games: List[Game] = self._sort_games(games)
 
-        game_time = max(5, round(display_time / len(games)))
+        game_time: int = max(5, round(display_time / len(games)))
         for game in games:
             canvas.Clear()
             canvas = self.draw_game(canvas, game)
@@ -1482,7 +1495,7 @@ class RunMatrix(SampleBase):
     def display_weather(self, canvas, display_time=10):
         LOG.debug(f'RunMatrix.display_weather')
 
-        timestamp = datetime.now().time()
+        timestamp: dt_time = datetime.now().time()
         if timestamp < dt_time(13, 0):  # before 12 show today's forecast
             title_str = 'Day'
             forecasts = owm_forecasts_today()
@@ -1494,7 +1507,7 @@ class RunMatrix(SampleBase):
             forecasts = owm_forecasts_tomorrow()
 
         if len(forecasts):
-            weather_time = max(round(display_time / (len(forecasts) + 2)), MIN_DISPLAY_TIME)
+            weather_time: int = max(round(display_time / (len(forecasts) + 2)), MIN_DISPLAY_TIME)
 
             canvas.Clear()
             canvas = self.draw_weather_summary(canvas, forecasts, title_str)
@@ -1516,7 +1529,7 @@ class RunMatrix(SampleBase):
         return canvas
 
     @staticmethod
-    def what_should_we_display():
+    def what_should_we_display() -> Tuple[List[str], List[int]]:
         return ['sports'], [5]
 
         now = datetime.now()
@@ -1547,7 +1560,7 @@ class RunMatrix(SampleBase):
             # off after midnight
             return ['off'], [600]
 
-    def run(self):
+    def run(self) -> None:
 
         canvas = self.matrix.CreateFrameCanvas()
 
@@ -1583,7 +1596,7 @@ class RunMatrix(SampleBase):
                 raise
 
     @staticmethod
-    def _draw_filled_circle(canvas, x, y, color):
+    def _draw_filled_circle(canvas, x, y, color) -> None:
         # Draw circle with lines
         graphics.DrawLine(canvas, x - 1, y - 6, x + 1, y - 6, color)
         graphics.DrawLine(canvas, x - 3, y - 5, x + 3, y - 5, color)
@@ -1600,26 +1613,26 @@ class RunMatrix(SampleBase):
         graphics.DrawLine(canvas, x - 1, y + 6, x + 1, y + 6, color)
 
     @staticmethod
-    def _sort_games(games: List[Game]):
+    def _sort_games(games: List[Game]) -> List[Game]:
         games = sorted(games, key=lambda g: g.start_time())
         return games
 
 
-def hex_to_rgb(h):
+def hex_to_rgb(h) -> Tuple[int, ...]:
     h = h.lstrip('#')
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
 
 
-def k_to_c(k):
+def k_to_c(k: float) -> int:
     return round(k - 273.15)
 
 
-def logger_setup(args):
+def logger_setup(args) -> None:
     loglevel = args.log
 
     global LOG
     LOG = logging.getLogger('NYCSubwayDisplay')
-    numeric_level = getattr(logging, loglevel.upper(), None)
+    numeric_level: Any | None = getattr(logging, loglevel.upper(), None)
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % loglevel)
 
@@ -1631,23 +1644,23 @@ def logger_setup(args):
     )
 
 
-def mta_arrival_time(train, stop_id):
+def mta_arrival_time(train: Any, stop_id: str) -> datetime:
     if train.location_status == 'STOPPED_AT' and train.location == stop_id:
         return datetime(9999, 1, 1, 0, 0, 0)
     return next((stu.arrival for stu in train.stop_time_updates
                  if stu.stop_id == stop_id), datetime(9999, 1, 1, 0, 0, 0))
 
 
-def mta_arrival_minutes(train, stop_id):
+def mta_arrival_minutes(train, stop_id) -> int:
     t = mta_arrival_time(train, stop_id)
     tdelta = t - NOW
-    arrival_mins = round(tdelta.total_seconds() / 60)
+    arrival_mins: int = round(tdelta.total_seconds() / 60)
     return arrival_mins
 
 
-def mta_find_next_trains(trains, max_arrival_mins, max_num_trains, stop_id):
-    arrival_mins = [mta_arrival_minutes(train, stop_id) for train in trains]
-    train_order = sorted(range(len(arrival_mins)), key=lambda k: arrival_mins[k])
+def mta_find_next_trains(trains: List[Any], max_arrival_mins: int, max_num_trains: int, stop_id: str) -> List[Any]:
+    arrival_mins: List[int] = [mta_arrival_minutes(train, stop_id) for train in trains]
+    train_order: List[int] = sorted(range(len(arrival_mins)), key=lambda k: arrival_mins[k])
     next_trains = [trains[train_order[i]]
                    for i in range(len(train_order))
                    if arrival_mins[train_order[i]] <= max_arrival_mins]
@@ -1656,17 +1669,18 @@ def mta_find_next_trains(trains, max_arrival_mins, max_num_trains, stop_id):
     return next_trains
 
 
-def mta_get_feeds():
+def mta_get_feeds() -> None | List[NYCTFeed[str]]:
     import requests
     global MTA_FEEDS
 
     if MTA_FEEDS is None:
         try:
-            MTA_FEEDS = [
+            feeds_list: List[NYCTFeed[str]] = [
                 NYCTFeed("F"),
                 NYCTFeed("G"),
                 NYCTFeed("R"),
             ]
+            MTA_FEEDS = feeds_list
         except requests.exceptions.ConnectionError as e:
             LOG.error(f'mta_get_feeds - ConnectionError: {e}')
             return None
@@ -1683,7 +1697,7 @@ def mta_get_next_trains(
     global NOW
     NOW = datetime.now()
     # get all feeds
-    feeds = mta_get_feeds()
+    feeds: None | List[NYCTFeed[str]] = mta_get_feeds()
     if feeds is not None:
         all_trains = []
         for feed in feeds:
@@ -1693,7 +1707,7 @@ def mta_get_next_trains(
         return None
 
 
-def mta_get_stop_name_and_direction(stop_id):
+def mta_get_stop_name_and_direction(stop_id) -> Tuple[Literal['4 Av'] | Literal['9 St'] | Literal['?'], Literal['↑'] | Literal['↓']]:
     # stop_id reference here:
     # https://openmobilitydata-data.s3-us-west-1.amazonaws.com/public/feeds/mta/79/20240103/original/stops.txt
 
@@ -1712,7 +1726,7 @@ def mta_get_stop_name_and_direction(stop_id):
     return stop_name, direction
 
 
-def mta_update_feeds():
+def mta_update_feeds() -> None:
     global MTA_TIMESTAMP
     import requests
 
@@ -1720,7 +1734,7 @@ def mta_update_feeds():
     if MTA_TIMESTAMP is None or \
             (datetime.now() - MTA_TIMESTAMP).total_seconds() > MTA_REFRESH_RATE:
         MTA_TIMESTAMP = datetime.now()
-        feeds = mta_get_feeds()
+        feeds: None | List[NYCTFeed[str]] = mta_get_feeds()
         if feeds is not None:
             for feed in feeds:
                 try:
@@ -1736,8 +1750,8 @@ def mta_update_feeds():
 
 def owm_forecasts_evening():
     # evening forecast is between 7pm and midnight
-    start_time = datetime.today().replace(hour=19, minute=0, second=0)
-    end_time = datetime.today().replace(hour=0, minute=0, second=0) + timedelta(days=1)
+    start_time: datetime = datetime.today().replace(hour=19, minute=0, second=0)
+    end_time: datetime = datetime.today().replace(hour=0, minute=0, second=0) + timedelta(days=1)
     return owm_forecasts_get(start_time, end_time)
 
 
@@ -1758,15 +1772,15 @@ def owm_forecasts_get(time_start, time_end):
 
 def owm_forecasts_today():
     # today's forecasts are between 9am and 7pm
-    start_time = datetime.today().replace(hour=9, minute=0, second=0)
-    end_time = datetime.today().replace(hour=19, minute=0, second=0)
+    start_time: datetime = datetime.today().replace(hour=9, minute=0, second=0)
+    end_time: datetime = datetime.today().replace(hour=19, minute=0, second=0)
     return owm_forecasts_get(start_time, end_time)
 
 
 def owm_forecasts_tomorrow():
     # tomorrow's forecast is between 6am and 7pm tomorrow
-    start_time = datetime.today().replace(hour=6, minute=0, second=0) + timedelta(days=1)
-    end_time = datetime.today().replace(hour=19, minute=0, second=0) + timedelta(days=1)
+    start_time: datetime = datetime.today().replace(hour=6, minute=0, second=0) + timedelta(days=1)
+    end_time: datetime = datetime.today().replace(hour=19, minute=0, second=0) + timedelta(days=1)
     return owm_forecasts_get(start_time, end_time)
 
 
@@ -1777,7 +1791,7 @@ def owm_get_weather():
     global OWN_TIMESTAMP
 
     if OWM_MGR is None:
-        owm = OWM(os.environ['OWM_API_KEY'])
+        owm: OWM[str] = OWM(os.environ['OWM_API_KEY'])
         OWM_MGR = owm.weather_manager()
 
     # we only get the weather every 0.5 hours
@@ -1786,7 +1800,7 @@ def owm_get_weather():
         LOG.debug(f'owm_get_weather - updating weather')
         OWN_TIMESTAMP = datetime.now()
         try:
-            observation = OWM_MGR.weather_at_place('New York')
+            observation: None | Observation[int, Location[Any | None, Any | float, Any, int | None], Any] = OWM_MGR.weather_at_place('New York')
             assert observation is not None
             OWM_WEATHER = observation.weather
             OWM_FORECAST = OWM_MGR.forecast_at_place('New York', '3h')
@@ -1799,8 +1813,8 @@ def owm_get_weather():
     return OWM_WEATHER, OWM_FORECAST
 
 
-def owm_pick_worst_weather(w1, w2):
-    order_of_weather_codes = [
+def owm_pick_worst_weather(w1: Any, w2: Any) -> Any:
+    order_of_weather_codes: List[int] = [
         781,  # tornado
         200, 201, 202, 210, 211, 212, 221, 230, 231, 232,  # thunderstorms!
         615, 602, 616, 601, 600, 621, 611, 613, 620, 612, 622,  # snow
@@ -1816,7 +1830,7 @@ def owm_pick_worst_weather(w1, w2):
         return w2
 
 
-def owm_weather_to_icon(weather):
+def owm_weather_to_icon(weather) -> str:
     # see: https://openweathermap.org/weather-conditions
     # icons from: https://github.com/Dhole/weather-pixel-icons
 
@@ -1914,7 +1928,7 @@ def owm_weather_to_icon(weather):
     return icon_file
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog='NYCSubwayDisplay',
         description='Displays subway times and more!',
@@ -1967,7 +1981,7 @@ def parse_args():
                         default='ERROR')
     parser.set_defaults(drop_privileges=True)
 
-    args = parser.parse_args()
+    args: argparse.Namespace = parser.parse_args()
     return args
 
 
@@ -1982,10 +1996,10 @@ def rapi_football_get_games():
 def rapi_football_get_games_league(league_id, games_last_update):
     LOG.debug(f'rapi_football_get_games_league - league_id {league_id}')
 
-    now = datetime.now()
-    today = datetime.fromordinal(dt_date.today().toordinal())
-    starts_after = to_utc_tz(today - timedelta(days=1))
-    starts_before = to_utc_tz(today + timedelta(days=3))
+    now: datetime = datetime.now()
+    today: datetime = datetime.fromordinal(dt_date.today().toordinal())
+    starts_after: datetime = to_utc_tz(today - timedelta(days=1))
+    starts_before: datetime = to_utc_tz(today + timedelta(days=3))
 
     # Championship league id = 40
     # sunderland team id = 746
@@ -1995,13 +2009,13 @@ def rapi_football_get_games_league(league_id, games_last_update):
         'from': starts_after.strftime('%Y-%m-%d'),
         'to': starts_before.strftime('%Y-%m-%d'),
     }
-    headers = {
+    headers: dict[str, str] = {
         'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
         'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
     }
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
     try:
-        response = requests.request("GET", url, headers=headers, params=querystring)
+        response: requests.Response = requests.request("GET", url, headers=headers, params=querystring)
         data = response.json()
     except requests.exceptions.ConnectionError as e:
         LOG.error(f'rapi_football_get_games_league - ConnectionError {e}')
@@ -2036,10 +2050,10 @@ def rapi_rugby_get_games():
 def rapi_rugby_get_games_league(league_ids, games_last_update):
     LOG.debug(f'rapi_rugby_get_games_league - league_ids {league_ids}')
 
-    now = datetime.now()
-    today = datetime.fromordinal(dt_date.today().toordinal())
-    starts_after = to_utc_tz(today - timedelta(days=1))
-    starts_before = to_utc_tz(today + timedelta(days=3))
+    now: datetime = datetime.now()
+    today: datetime = datetime.fromordinal(dt_date.today().toordinal())
+    starts_after: datetime = to_utc_tz(today - timedelta(days=1))
+    starts_before: datetime = to_utc_tz(today + timedelta(days=3))
 
     def iterate_dates(start_date, end_date):
         current_date = start_date
@@ -2052,20 +2066,20 @@ def rapi_rugby_get_games_league(league_ids, games_last_update):
     # wigan team id = 4233
     events = []
     for search_date in iterate_dates(starts_after, starts_before):
-        querystring = {
+        querystring: dict[str, str] = {
             'year': search_date.strftime('%Y'),
             'month': search_date.strftime('%m'),
             'day': search_date.strftime('%d'),
         }
-        headers = {
+        headers: dict[str, str] = {
             'x-rapidapi-key': f'{os.environ["RPA_API_KEY"]}',
             'x-rapidapi-host': 'rugbyapi2.p.rapidapi.com',
         }
 
         # get all competitions for the day
-        url = f"https://rugbyapi2.p.rapidapi.com/api/rugby/scheduled-tournaments/{querystring['day']}/{querystring['month']}/{querystring['year']}/page/1"
+        url: str = f"https://rugbyapi2.p.rapidapi.com/api/rugby/scheduled-tournaments/{querystring['day']}/{querystring['month']}/{querystring['year']}/page/1"
         try:
-            response = requests.request("GET", url, headers=headers)
+            response: requests.Response = requests.request("GET", url, headers=headers)
         except requests.exceptions.ConnectionError as e:
             LOG.error(f'rapi_rugby_get_games_league - ConnectionError {e}')
             return [], games_last_update
@@ -2104,9 +2118,9 @@ def rapi_rugby_get_games_league(league_ids, games_last_update):
             tournament_id = tournament['uniqueTournament']['id']
 
             # now get the schedule for this tournament on this date
-            url = f"https://rugbyapi2.p.rapidapi.com/api/rugby/tournament/{tournament_id}/schedules/{querystring['day']}/{querystring['month']}/{querystring['year']}"
+            url: str = f"https://rugbyapi2.p.rapidapi.com/api/rugby/tournament/{tournament_id}/schedules/{querystring['day']}/{querystring['month']}/{querystring['year']}"
             try:
-                response = requests.request("GET", url, headers=headers)
+                response: requests.Response = requests.request("GET", url, headers=headers)
             except requests.exceptions.ConnectionError as e:
                 LOG.error(f'rapi_rugby_get_games_league - ConnectionError {e}')
                 return [], games_last_update
@@ -2148,7 +2162,7 @@ def rapi_rugby_get_games_league(league_ids, games_last_update):
     return games, games_last_update
 
 
-def setup_env():
+def setup_env() -> None:
     if 'SGO_API_KEY' in os.environ:
         return
 
@@ -2158,12 +2172,12 @@ def setup_env():
 
     LOG.info(f'setup_env - selecting SGO_API_KEY')
 
-    sgo_api_keys = os.environ['SGO_API_KEYS'].split(',')
+    sgo_api_keys: List[str] = os.environ['SGO_API_KEYS'].split(',')
 
     # Find the first, active, non-limited API key
     for sgo_api_key in sgo_api_keys:
         try:
-            response = requests.get(
+            response: requests.Response = requests.get(
                 f'https://api.sportsgameodds.com/v2/account/usage',
                 headers={'X-Api-Key': sgo_api_key}
             )
@@ -2203,23 +2217,23 @@ def sgo_get_games():
 def sgo_get_games_league(league_id, games_last_update):
     LOG.debug(f'sgo_get_games_league - league_id {league_id}')
 
-    now = datetime.now()
-    today = datetime.fromordinal(dt_date.today().toordinal())
+    now: datetime = datetime.now()
+    today: datetime = datetime.fromordinal(dt_date.today().toordinal())
 
-    starts_after = to_utc_tz(today - timedelta(days=1))
+    starts_after: datetime = to_utc_tz(today - timedelta(days=1))
     if league_id in ['MLB', 'NHL']:
-        starts_before = to_utc_tz(today + timedelta(days=2))
+        starts_before: datetime = to_utc_tz(today + timedelta(days=2))
     else:
-        starts_before = to_utc_tz(today + timedelta(days=2))
+        starts_before: datetime = to_utc_tz(today + timedelta(days=2))
 
     if league_id == 'MLB':
-        league_teams = SGO_MLB_TEAMS
+        league_teams: List[str] = SGO_MLB_TEAMS
     elif league_id == 'NHL':
-        league_teams = SGO_NHL_TEAMS
+        league_teams: List[str] = SGO_NHL_TEAMS
     elif league_id == 'NFL':
-        league_teams = SGO_NFL_TEAMS
+        league_teams: List[str] = SGO_NFL_TEAMS
     elif league_id == 'MLS':
-        league_teams = SGO_MLS_TEAMS
+        league_teams: List[str] = SGO_MLS_TEAMS
     else:
         league_teams = []
 
@@ -2227,7 +2241,7 @@ def sgo_get_games_league(league_id, games_last_update):
     event_data = []
     while True:
         try:
-            response = requests.get(
+            response: requests.Response = requests.get(
                 'https://api.sportsgameodds.com/v2/events',
                 headers={'X-Api-Key': os.environ['SGO_API_KEY']},
                 params={
@@ -2291,15 +2305,15 @@ def sports_get_games(type, games, timestamp, next_refresh, games_last_update, re
         )
 
     # update all feeds when requested but not faster than the refresh rate
-    now = datetime.now()
+    now: datetime = datetime.now()
     # update un-initialised data so we update on first request
     if next_refresh is None:
-        next_refresh = now - timedelta(days=1)
+        next_refresh: datetime = now - timedelta(days=1)
 
     if now > next_refresh:
         LOG.debug(f'sports_get_games - refreshing feed')
 
-        timestamp = datetime.now()
+        timestamp: datetime = datetime.now()
 
         games = []
         if type == 'RAPI_FOOTBALL':
@@ -2321,7 +2335,7 @@ def sports_get_games(type, games, timestamp, next_refresh, games_last_update, re
             games.extend(games_league)
 
         # update the leagues again tomorrow at 10:00
-        next_refresh = datetime.combine(dt_date.today() + timedelta(days=1), dt_time(10, 00))
+        next_refresh: datetime = datetime.combine(dt_date.today() + timedelta(days=1), dt_time(10, 00))
 
     # update in progress games
     games, games_last_update = sports_update_games(games, games_last_update, refresh_rate)
@@ -2341,8 +2355,8 @@ def sports_get_games(type, games, timestamp, next_refresh, games_last_update, re
 def sports_retrieve_from_cache(type, games, timestamp, next_refresh, games_last_update):
     LOG.debug(f'sports_retrieve_from_cache - type {type}')
 
-    temp_dir = tempfile.gettempdir()
-    cache_file = os.path.join(temp_dir, f'{type}.pickle')
+    temp_dir: str = tempfile.gettempdir()
+    cache_file: str = os.path.join(temp_dir, f'{type}.pickle')
     if os.path.exists(cache_file):
         with open(cache_file, 'rb') as file:
             games, timestamp, next_refresh, games_last_update = pickle.load(file)
@@ -2353,9 +2367,9 @@ def sports_retrieve_from_cache(type, games, timestamp, next_refresh, games_last_
     return games, timestamp, next_refresh, games_last_update
 
 
-def sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update):
-    temp_dir = tempfile.gettempdir()
-    cache_file = os.path.join(temp_dir, f'{type}.pickle')
+def sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update) -> None:
+    temp_dir: str = tempfile.gettempdir()
+    cache_file: str = os.path.join(temp_dir, f'{type}.pickle')
     with open(cache_file, 'wb') as file:
         pickle.dump((games, timestamp, next_refresh, games_last_update), file)
 
@@ -2365,14 +2379,14 @@ def sports_save_to_cache(type, games, timestamp, next_refresh, games_last_update
 def sports_update_games(games: List[Game], games_last_update, refresh_rate):
     LOG.debug(f'sports_update_games - updating in progress games')
 
-    now = datetime.now()
+    now: datetime = datetime.now()
     for game_ind, game in enumerate(games):
-        has_ended = game.has_ended()
-        has_started = game.has_started()
-        start_time = game.start_time()
+        has_ended: None = game.has_ended()
+        has_started: None = game.has_started()
+        start_time: datetime = game.start_time()
         if not has_started and LOCAL_TZ.localize(now) > start_time:
             has_started = True
-        in_progress = has_started and not has_ended
+        in_progress: None | bool = has_started and not has_ended
 
         # if we're in progress, update as soon as possible
         if in_progress:
@@ -2385,27 +2399,27 @@ def sports_update_games(games: List[Game], games_last_update, refresh_rate):
     return games, games_last_update
 
 
-def to_utc_tz(date_time):
+def to_utc_tz(date_time: datetime) -> datetime:
     if date_time.tzinfo is None:
-        date_time = LOCAL_TZ.localize(date_time, is_dst=None)
+        date_time: datetime = LOCAL_TZ.localize(date_time, is_dst=None)
     date_time = date_time.astimezone(pytz.utc)
     return date_time
 
 
-def to_local_tz(date_time):
+def to_local_tz(date_time: datetime) -> datetime:
     if date_time.tzinfo is None:
-        date_time = pytz.utc.localize(date_time, is_dst=None)
+        date_time: datetime = pytz.utc.localize(date_time, is_dst=None)
     date_time = date_time.astimezone(LOCAL_TZ)
     return date_time
 
 
-def main():
-    args = parse_args()
+def main() -> None:
+    args: argparse.Namespace = parse_args()
     logger_setup(args)
 
     setup_env()
 
-    led_display_trains = RunMatrix(
+    led_display_trains: RunMatrix[List[str], List[str], argparse.Namespace] = RunMatrix(
         stop_ids=['F23N', 'F23S', 'R33N', 'R33S'],
         uptown_stop_ids=['F23N', 'R33N'],
         args=args,
