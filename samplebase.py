@@ -3,6 +3,7 @@ import importlib
 import os
 import time
 import sys
+from typing import Any
 
 if os.name == 'nt':
     RGBMatrix = getattr(importlib.import_module('RGBMatrixEmulator'), 'RGBMatrix')
@@ -12,17 +13,18 @@ else:
 
 
 class SampleBase(object):
-    def __init__(self, args):
-        self.args = args
+    def __init__(self, args: argparse.Namespace) -> None:
+        self.args: argparse.Namespace = args
+        self.matrix: Any = None
 
-    def usleep(self, value):
+    def usleep(self, value: int) -> None:
         time.sleep(value / 1000000.0)
 
-    def run(self):
+    def run(self) -> None:
         print("Running")
 
-    def process(self):
-        options = RGBMatrixOptions()
+    def process(self) -> bool:
+        options: Any = RGBMatrixOptions()
 
         if self.args.led_gpio_mapping is not None:
             options.hardware_mapping = self.args.led_gpio_mapping
@@ -44,7 +46,7 @@ class SampleBase(object):
         if self.args.led_show_refresh:
             options.show_refresh_rate = 1
 
-        if self.args.led_slowdown_gpio != None:
+        if self.args.led_slowdown_gpio is not None:
             options.gpio_slowdown = self.args.led_slowdown_gpio
         if self.args.led_no_hardware_pulse:
             options.disable_hardware_pulsing = True
