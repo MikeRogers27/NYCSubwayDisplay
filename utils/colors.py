@@ -2,24 +2,25 @@ import requests
 from PIL import Image
 from collections import Counter
 from io import BytesIO
+from typing import Any, Optional, Tuple, Dict, List
 
 
-def download_image(url):
+def download_image(url: str) -> Image.Image:
     """Download image from URL and return PIL Image object"""
     try:
-        response = requests.get(url, timeout=10)
+        response: requests.Response = requests.get(url, timeout=10)
         response.raise_for_status()
         return Image.open(BytesIO(response.content))
     except Exception as e:
-        raise Exception(f"Failed to download image: {str(e)}")
+        raise Exception(f"Failed to download image: {str(e)}") from e
 
 
-def rgb_to_brightness(r, g, b):
+def rgb_to_brightness(r: int, g: int, b: int) -> float:
     """Calculate brightness using luminance formula"""
     return (0.299 * r + 0.587 * g + 0.114 * b) / 255
 
 
-def get_dominant_color(image, brightness_threshold=0.3, sample_size=1000):
+def get_dominant_color(image: Image.Image, brightness_threshold: float = 0.3, sample_size: int = 1000) -> Optional[Tuple[int, int, int]]:
     """
     Extract the most dominant color from an image that's brighter than threshold
 
@@ -36,14 +37,14 @@ def get_dominant_color(image, brightness_threshold=0.3, sample_size=1000):
         image = image.convert('RGB')
 
     # Resize image for faster processing if it's large
-    max_dimension = 300
+    max_dimension: int = 300
     if max(image.size) > max_dimension:
-        ratio = max_dimension / max(image.size)
-        new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+        ratio: float = max_dimension / max(image.size)
+        new_size: Tuple[int, int] = (int(image.size[0] * ratio), int(image.size[1] * ratio))
         image = image.resize(new_size, Image.Resampling.LANCZOS)
 
     # Get pixel data
-    pixels = list(image.getdata())
+    pixels: List[Any] = list(image.getdata())
 
     # Sample pixels if image is still large
     if len(pixels) > sample_size:
@@ -51,10 +52,10 @@ def get_dominant_color(image, brightness_threshold=0.3, sample_size=1000):
         pixels = random.sample(pixels, sample_size)
 
     # Filter pixels by brightness threshold
-    bright_pixels = []
+    bright_pixels: List[Tuple[int, int, int]] = []
     for pixel in pixels:
         r, g, b = pixel[:3]  # Handle RGBA images
-        brightness = rgb_to_brightness(r, g, b)
+        brightness: float = rgb_to_brightness(r, g, b)
         if brightness >= brightness_threshold:
             bright_pixels.append((r, g, b))
 
@@ -62,29 +63,29 @@ def get_dominant_color(image, brightness_threshold=0.3, sample_size=1000):
         return None
 
     # Count occurrences of each color
-    color_counts = Counter(bright_pixels)
+    color_counts: Counter[Tuple[int, int, int]] = Counter(bright_pixels)
 
     # Return most common color other than white
-    dominant_color = color_counts.most_common(1)[0][0]
+    dominant_color: Tuple[int, int, int] = color_counts.most_common(1)[0][0]
     # if white is the dominant color it might be the background, so check there isn't another color we
     # can use
-    if dominant_color == (255, 255, 255) and len(color_counts)>1:
-        best_two_colors = color_counts.most_common(2)
-        white_count = best_two_colors[0][1]
-        next_count = best_two_colors[1][1]
+    if dominant_color == (255, 255, 255) and len(color_counts) > 1:
+        best_two_colors: List[Tuple[Tuple[int, int, int], int]] = color_counts.most_common(2)
+        white_count: int = best_two_colors[0][1]
+        next_count: int = best_two_colors[1][1]
         if next_count > white_count * 0.1:
             dominant_color = best_two_colors[1][0]
     return dominant_color
 
 
-def color_to_hex(rgb):
+def color_to_hex(rgb: Optional[Tuple[int, int, int]]) -> Optional[str]:
     """Convert RGB tuple to hex string"""
     if rgb is None:
         return None
     return "#{:02x}{:02x}{:02x}".format(rgb[0], rgb[1], rgb[2])
 
 
-def extract_dominant_color_from_url(url, brightness_threshold=0.3):
+def extract_dominant_color_from_url(url: str, brightness_threshold: float = 0.3) -> Optional[Dict[str, Any]]:
     """
     Main function to extract dominant color from image URL
 
@@ -97,8 +98,8 @@ def extract_dominant_color_from_url(url, brightness_threshold=0.3):
     """
     try:
         # Download and process image
-        image = download_image(url)
-        dominant_rgb = get_dominant_color(image, brightness_threshold)
+        image: Image.Image = download_image(url)
+        dominant_rgb: Optional[Tuple[int, int, int]] = get_dominant_color(image, brightness_threshold)
 
         if dominant_rgb is None:
             return {
@@ -107,7 +108,7 @@ def extract_dominant_color_from_url(url, brightness_threshold=0.3):
             }
 
         # Calculate actual brightness of dominant color
-        actual_brightness = rgb_to_brightness(*dominant_rgb)
+        actual_brightness: float = rgb_to_brightness(*dominant_rgb)
 
         return {
             'success': True,
