@@ -36,11 +36,11 @@ dev = [
 
 [project.optional-dependencies]
 pi = [
-    "rgbmatrix",
+    "rgbmatrix; sys_platform == 'linux'",
 ]
 
 [tool.uv]
 package = false
 
 [tool.uv.sources]
-rgbmatrix = { path = "../rpi-rgb-led-matrix/bindings/python", editable = true }
+rgbmatrix = { path = "../rpi-rgb-led-matrix/bindings/python", editable = true, marker = "sys_platform == 'linux'" }
