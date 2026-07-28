@@ -29,7 +29,7 @@ from nyct_gtfs import NYCTFeed
 from PIL import Image
 from PIL.ImageFile import ImageFile
 from pyowm import OWM
-from pyowm.weatherapi25.observation import Observation
+from pyowm.weatherapi30.observation import Observation
 
 if os.name == "nt":
     graphics: ModuleType = importlib.import_module("RGBMatrixEmulator", "graphics")
@@ -40,7 +40,7 @@ else:
 
 from samplebase import SampleBase
 
-LOCAL_TZ: pytz.tz.BaseTzInfo = pytz.timezone("America/New_York")
+LOCAL_TZ: Any = pytz.timezone("America/New_York")
 NOW: datetime = datetime.now(tz=LOCAL_TZ)
 
 LOG: Logger = logging.getLogger("NYCSubwayDisplay")
@@ -1461,8 +1461,14 @@ class RunMatrix(SampleBase):
             now: datetime = datetime.now(tz=LOCAL_TZ)
             last_update_time: datetime = now - timedelta(minutes=60)
             for train in trains:
-                if train.underway and train.last_position_update > last_update_time:
-                    last_update_time = train.last_position_update
+                train_last_position_update = getattr(train, "last_position_update", None)
+                train_last_position_update = LOCAL_TZ.localize(train_last_position_update, is_dst=None) if train_last_position_update is not None else None
+                if (
+                    train.underway
+                    and train_last_position_update is not None
+                    and train_last_position_update > last_update_time
+                ):
+                    last_update_time = train_last_position_update
             # if the latest update was more than 15 minutes ago, the data is stale
             if last_update_time < now - timedelta(minutes=15):
                 canvas.Clear()
@@ -2064,7 +2070,7 @@ def mta_arrival_time(train: Any, stop_id: str) -> datetime:
     if train.location_status == "STOPPED_AT" and train.location == stop_id:
         return datetime(9999, 1, 1, 0, 0, 0, tzinfo=LOCAL_TZ)
     return next(
-        (stu.arrival for stu in train.stop_time_updates if stu.stop_id == stop_id),
+        (LOCAL_TZ.localize(stu.arrival, is_dst=None) for stu in train.stop_time_updates if stu.stop_id == stop_id),
         datetime(9999, 1, 1, 0, 0, 0, tzinfo=LOCAL_TZ),
     )
 
@@ -2093,14 +2099,14 @@ def mta_find_next_trains(
     return next_trains
 
 
-def mta_get_feeds() -> None | list[NYCTFeed[str]]:
+def mta_get_feeds() -> None | list[NYCTFeed]:
     import requests
 
     global MTA_FEEDS
 
     if MTA_FEEDS is None:
         try:
-            feeds_list: list[NYCTFeed[str]] = [
+            feeds_list: list[NYCTFeed] = [
                 NYCTFeed("F"),
                 NYCTFeed("G"),
                 NYCTFeed("R"),
@@ -2163,7 +2169,7 @@ def mta_update_feeds() -> None:
         or (datetime.now(tz=LOCAL_TZ) - MTA_TIMESTAMP).total_seconds() > MTA_REFRESH_RATE
     ):
         MTA_TIMESTAMP = datetime.now(tz=LOCAL_TZ)
-        feeds: None | list[NYCTFeed[str]] = mta_get_feeds()
+        feeds: None | list[NYCTFeed] = mta_get_feeds()
         if feeds is not None:
             for feed in feeds:
                 try:
@@ -3092,7 +3098,7 @@ def sports_update_games(games: list[Game], games_last_update, refresh_rate):
         has_ended: None = game.has_ended()
         has_started: None = game.has_started()
         start_time: datetime = game.start_time()
-        if not has_started and LOCAL_TZ.localize(now) > start_time:
+        if not has_started and now > to_local_tz(start_time):
             has_started = True
         in_progress: None | bool = has_started and not has_ended
 
