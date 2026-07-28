@@ -22,8 +22,6 @@ dependencies = [
     "python-dateutil==2.9.0.post0",
     "pytz==2024.2",
     "requests==2.32.3",
-    "rgbmatrix",
-    "setuptools>=83.0.0",
     "six==1.17.0",
     "sniffio==1.3.1",
     "typing_extensions==4.12.2",
@@ -34,6 +32,11 @@ dependencies = [
 dev = [
     "ruff>=0.8.0",
     "RGBMatrixEmulator==0.11.6; platform_system == 'Windows'",
+]
+
+[project.optional-dependencies]
+pi = [
+    "rgbmatrix",
 ]
 
 [tool.uv]
