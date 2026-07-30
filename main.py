@@ -2251,7 +2251,13 @@ def owm_get_weather():
             OWM_WEATHER = observation.weather
             OWM_FORECAST = OWM_MGR.forecast_at_place("New York", "3h")
             LOG.info("owm_get_weather - weather and forecast updated")
-        except (requests.exceptions.RequestException, KeyError, TypeError, ValueError) as e:
+        except (
+            requests.exceptions.InvalidSSLCertificateError, 
+            requests.exceptions.RequestException, 
+            KeyError, 
+            TypeError, 
+            ValueError
+        ) as e:
             LOG.error(f"owm_get_weather - Failed {type(e)} {e}")
             OWM_WEATHER = None
             OWM_FORECAST = None
