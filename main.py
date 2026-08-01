@@ -283,11 +283,11 @@ class Game(ABC):
         self.game: Any = game
 
     @abstractmethod
-    def away_team_colour(self) -> None:
+    def away_team_colour(self) -> graphics.Color:
         pass
 
     @abstractmethod
-    def away_team_id(self) -> None:
+    def away_team_id(self) -> str:
         pass
 
     def away_team_penalties_score(self) -> int:
@@ -302,17 +302,18 @@ class Game(ABC):
     def away_team_score(self) -> int:
         pass
 
-    def away_team_score_str(self) -> str:
+    def away_team_score_str(self) -> str | None:
         """Get formatted score string for away team display.
 
         Returns:
-            str: Formatted score with win/loss/draw prefix or start time
+            str | None: Formatted score with win/loss/draw prefix or start time
         """
         if self.has_started() or self.has_ended():
             score_str: None | str = self._hide_scores()
             if score_str is not None:
                 return score_str
 
+            score_prefix: str = ""
             if self.has_ended():
                 if self.away_team_score() > self.home_team_score():
                     score_prefix = "W"
@@ -329,34 +330,32 @@ class Game(ABC):
                         score_prefix = "D"
                 else:
                     score_prefix = "L"
-            else:
-                score_prefix: str = ""
 
-            score_str: str = (
+            score_str = (
                 f"{score_prefix}{self.away_team_score()}-{self.home_team_score()}"
             )
         else:
-            score_str: str = self.start_time().strftime("%H:%M")
+            score_str = self.start_time().strftime("%H:%M")
         return score_str
 
     @abstractmethod
-    def away_team_short_name(self) -> None:
+    def away_team_short_name(self) -> str:
         pass
 
     @abstractmethod
-    def away_team_title_symbol(self) -> None:
+    def away_team_title_symbol(self) -> str:
         pass
 
     @abstractmethod
-    def has_ended(self) -> None:
+    def date_str(self) -> str:
         pass
 
     @abstractmethod
-    def date_str(self) -> None:
+    def has_ended(self) -> bool:
         pass
 
     @abstractmethod
-    def has_started(self) -> None:
+    def has_started(self) -> bool:
         pass
 
     def has_penalties(self) -> bool:
@@ -368,11 +367,11 @@ class Game(ABC):
         return False
 
     @abstractmethod
-    def home_team_colour(self) -> None:
+    def home_team_colour(self) -> graphics.Color:
         pass
 
     @abstractmethod
-    def home_team_id(self) -> None:
+    def home_team_id(self) -> str:
         pass
 
     def home_team_penalties_score(self) -> int:
@@ -383,12 +382,13 @@ class Game(ABC):
         """
         return 0
 
-    def home_team_score_str(self) -> str:
+    def home_team_score_str(self) -> str | None:
         if self.has_started() or self.has_ended():
             score_str: None | str = self._hide_scores()
             if score_str is not None:
                 return score_str
 
+            score_prefix: str = ""
             if self.has_ended():
                 if self.home_team_score() > self.away_team_score():
                     score_prefix = "W"
@@ -405,14 +405,12 @@ class Game(ABC):
                         score_prefix = "D"
                 else:
                     score_prefix = "L"
-            else:
-                score_prefix: str = ""
 
-            score_str: str = (
+            score_str = (
                 f"{score_prefix}{self.home_team_score()}-{self.away_team_score()}"
             )
         else:
-            score_str: str = self.start_time().strftime("%H:%M")
+            score_str = self.start_time().strftime("%H:%M")
         return score_str
 
     @abstractmethod
@@ -432,15 +430,15 @@ class Game(ABC):
         pass
 
     @abstractmethod
-    def id(self) -> None:
+    def id(self) -> str:
         pass
 
     @abstractmethod
-    def league_id(self) -> None:
+    def league_id(self) -> str:
         pass
 
     @abstractmethod
-    def league_name(self) -> None:
+    def league_name(self) -> str:
         pass
 
     @abstractmethod
@@ -448,7 +446,7 @@ class Game(ABC):
         pass
 
     @abstractmethod
-    def update(self, games_last_update: dict) -> tuple["Game", dict]:
+    def update(self, games_last_update: dict[str, datetime]) -> tuple["Game", dict[str, datetime]]:
         """Update game data from external API.
 
         Args:
@@ -484,26 +482,26 @@ class Game(ABC):
             hide_scores_end: datetime = start_of_year
 
             if self.away_team_id() in HIDE_SCORES:
-                hide_scores_start: datetime = min(
+                hide_scores_start = min(
                     hide_scores_start,
                     start_of_year + HIDE_SCORES[self.away_team_id()][0],
                 )
-                hide_scores_end: datetime = max(
+                hide_scores_end = max(
                     hide_scores_start,
                     start_of_year + HIDE_SCORES[self.away_team_id()][1],
                 )
             if self.home_team_id() in HIDE_SCORES:
-                hide_scores_start: datetime = min(
+                hide_scores_start = min(
                     hide_scores_start,
                     start_of_year + HIDE_SCORES[self.home_team_id()][0],
                 )
-                hide_scores_end: datetime = max(
+                hide_scores_end = max(
                     hide_scores_start,
                     start_of_year + HIDE_SCORES[self.home_team_id()][1],
                 )
 
-            hide_scores_start: datetime = to_local_tz(hide_scores_start)
-            hide_scores_end: datetime = to_local_tz(hide_scores_end)
+            hide_scores_start = to_local_tz(hide_scores_start)
+            hide_scores_end = to_local_tz(hide_scores_end)
 
             if hide_scores_start <= self.start_time() < hide_scores_end:
                 score_str = "-"
@@ -520,13 +518,13 @@ class GameRAPIFootball(Game):
         if GameRAPIFootball.RAPI_TEAM_INFO is None:
             GameRAPIFootball.RAPI_TEAM_INFO = GameRAPIFootball._load_team_info()
 
-    def away_team_colour(self):
+    def away_team_colour(self) -> graphics.Color:
         team_info = self._get_team_info(self.away_team_id(), self.game["teams"]["away"])
         team_colour = graphics.Color(*team_info["team_colour"])
         return team_colour
 
-    def away_team_id(self):
-        return self.game["teams"]["away"]["id"]
+    def away_team_id(self) -> str:
+        return str(self.game["teams"]["away"]["id"])
 
     def away_team_penalties_score(self) -> int:
         """Get the away team's penalty shootout score from API data.
@@ -543,7 +541,7 @@ class GameRAPIFootball(Game):
     def away_team_score(self):
         return self.game["goals"]["away"]
 
-    def away_team_short_name(self):
+    def away_team_short_name(self) -> str:
         team_info = self._get_team_info(self.away_team_id(), self.game["teams"]["away"])
         short_name = team_info["short_name"]
         return short_name
@@ -551,7 +549,7 @@ class GameRAPIFootball(Game):
     def away_team_title_symbol(self) -> str:
         return "A"
 
-    def date_str(self):
+    def date_str(self) -> str:
         today: dt_date = datetime.now(tz=LOCAL_TZ).date()
         start_time: datetime = self.start_time()
         has_ended = self.has_ended()
@@ -579,14 +577,14 @@ class GameRAPIFootball(Game):
                 date_str: str = start_time.strftime("%a")
         return date_str
 
-    def has_ended(self):
+    def has_ended(self) -> bool:
         return (
             self.game["fixture"]["status"]["short"] == "FT"
             or self.game["fixture"]["status"]["short"] == "AET"
             or self.game["fixture"]["status"]["short"] == "PEN"
         )
 
-    def has_penalties(self):
+    def has_penalties(self) -> bool:
         """Check if the football game was decided by penalty shootout.
 
         Returns:
@@ -594,18 +592,18 @@ class GameRAPIFootball(Game):
         """
         return self.game["fixture"]["status"]["short"] == "PEN"
 
-    def has_started(self):
+    def has_started(self) -> bool:
         return self.has_ended() or self.game["fixture"]["status"]["short"] != "NS"
 
-    def home_team_colour(self):
+    def home_team_colour(self) -> graphics.Color:
         team_info = self._get_team_info(self.home_team_id(), self.game["teams"]["home"])
         team_colour = graphics.Color(*team_info["team_colour"])
         return team_colour
 
-    def home_team_id(self):
-        return self.game["teams"]["home"]["id"]
+    def home_team_id(self) -> str:
+        return str(self.game["teams"]["home"]["id"])
 
-    def home_team_penalties_score(self):
+    def home_team_penalties_score(self) -> int:
         """Get the home team's penalty shootout score from API data.
 
         Returns:
@@ -617,10 +615,10 @@ class GameRAPIFootball(Game):
             else 0
         )
 
-    def home_team_score(self):
+    def home_team_score(self) -> int:
         return self.game["goals"]["home"]
 
-    def home_team_short_name(self):
+    def home_team_short_name(self) -> str:
         team_info = self._get_team_info(self.home_team_id(), self.game["teams"]["home"])
         short_name = team_info["short_name"]
         return short_name
@@ -632,19 +630,19 @@ class GameRAPIFootball(Game):
         icon_file = "icons/32/SUNDERLAND.png"
         return icon_file
 
-    def id(self):
-        return self.game["fixture"]["id"]
+    def id(self) -> str:
+        return str(self.game["fixture"]["id"])
 
-    def league_id(self):
-        return self.game["league"]["id"]
+    def league_id(self) -> str:
+        return str(self.game["league"]["id"])
 
-    def league_name(self):
+    def league_name(self) -> str:
         return self.game["league"]["name"]
 
     def start_time(self) -> datetime:
         return datetime.fromtimestamp(self.game["fixture"]["timestamp"], tz=LOCAL_TZ)
 
-    def update(self, games_last_update):
+    def update(self, games_last_update: dict[str, datetime]) -> tuple["GameRAPIFootball", dict[str, datetime]]:
         try:
             querystring = {
                 "id": self.id(),
@@ -827,20 +825,20 @@ class GameRAPIRugby(Game):
     def __init__(self, *args) -> None:
         super().__init__(*args)
 
-    def away_team_colour(self):
+    def away_team_colour(self) -> graphics.Color:
         return graphics.Color(
             *hex_to_rgb(self.game["awayTeam"]["teamColors"]["primary"])
         )
 
-    def away_team_id(self):
+    def away_team_id(self) -> str:
         return self.game["awayTeam"]["nameCode"]
 
-    def away_team_score(self):
+    def away_team_score(self) -> int:
         if "display" in self.game["awayScore"]:
-            return self.game["awayScore"]["display"]
-        return "-"
+            return int(self.game["awayScore"]["display"])
+        return 0
 
-    def away_team_short_name(self):
+    def away_team_short_name(self) -> str:
         return self.game["awayTeam"]["nameCode"]
 
     def away_team_title_symbol(self) -> str:
@@ -866,26 +864,26 @@ class GameRAPIRugby(Game):
                 date_str: str = start_time.strftime("%a")
         return date_str
 
-    def has_ended(self):
+    def has_ended(self) -> bool:
         return self.game["status"]["type"] == "finished"
 
-    def has_started(self):
+    def has_started(self) -> bool:
         return self.has_ended() or self.game["status"]["type"] == "inprogress"
 
-    def home_team_colour(self):
+    def home_team_colour(self) -> graphics.Color:
         return graphics.Color(
             *hex_to_rgb(self.game["homeTeam"]["teamColors"]["primary"])
         )
 
-    def home_team_id(self):
+    def home_team_id(self) -> str:
         return self.game["homeTeam"]["nameCode"]
 
-    def home_team_score(self):
+    def home_team_score(self) -> int:
         if "display" in self.game["homeScore"]:
-            return self.game["homeScore"]["display"]
-        return "-"
+            return int(self.game["homeScore"]["display"])
+        return 0
 
-    def home_team_short_name(self):
+    def home_team_short_name(self) -> str:
         return self.game["homeTeam"]["nameCode"]
 
     def home_team_title_symbol(self) -> str:
@@ -895,19 +893,19 @@ class GameRAPIRugby(Game):
         icon_file = "icons/32/WIGAN_WARRIORS_SL.png"
         return icon_file
 
-    def id(self):
-        return self.game["id"]
+    def id(self) -> str:
+        return str(self.game["id"])
 
-    def league_id(self):
-        return self.game["tournament"]["id"]
+    def league_id(self) -> str:
+        return str(self.game["tournament"]["id"])
 
-    def league_name(self):
+    def league_name(self) -> str:
         return self.game["tournament"]["name"]
 
     def start_time(self) -> datetime:
         return datetime.fromtimestamp(self.game["startTimestamp"], tz=LOCAL_TZ)
 
-    def update(self, games_last_update):
+    def update(self, games_last_update: dict[str, datetime]) -> tuple["GameRAPIRugby", dict[str, datetime]]:
         try:
             querystring = {
                 "id": self.id(),
@@ -949,7 +947,7 @@ class GameSGO(Game):
     def __init__(self, *args) -> None:
         super().__init__(*args)
 
-    def away_team_colour(self):
+    def away_team_colour(self) -> graphics.Color:
         # overrides
         if self.away_team_id() == "CHICAGO_WHITE_SOX_MLB":
             return graphics.Color(*hex_to_rgb("#FFFFFF"))
@@ -962,21 +960,21 @@ class GameSGO(Game):
             *hex_to_rgb(self.game["teams"]["away"]["colors"]["primary"])
         )
 
-    def away_team_id(self):
-        return self.game["teams"]["away"]["teamID"]
+    def away_team_id(self) -> str:
+        return str(self.game["teams"]["away"]["teamID"])
 
-    def away_team_score(self) -> Any | str:
+    def away_team_score(self) -> int:
         if "score" in self.game["teams"]["away"]:
-            return self.game["teams"]["away"]["score"]
-        return "-"
+            return int(self.game["teams"]["away"]["score"])
+        return 0
 
-    def away_team_short_name(self):
+    def away_team_short_name(self) -> str:
         return self.game["teams"]["away"]["names"]["short"]
 
     def away_team_title_symbol(self) -> str:
         return "@"
 
-    def date_str(self) -> Any | str:
+    def date_str(self) -> str:
         today: dt_date = datetime.now(tz=LOCAL_TZ).date()
         start_time: datetime = self.start_time()
         has_ended = self.has_ended()
@@ -995,13 +993,13 @@ class GameSGO(Game):
                 date_str: str = start_time.strftime("%a")
         return date_str
 
-    def has_ended(self):
+    def has_ended(self) -> bool:
         return self.game["status"]["ended"]
 
-    def has_started(self):
+    def has_started(self) -> bool:
         return self.game["status"]["started"]
 
-    def home_team_colour(self):
+    def home_team_colour(self) -> graphics.Color:
         # overrides
         if self.home_team_id() == "CHICAGO_WHITE_SOX_MLB":
             return graphics.Color(*hex_to_rgb("#FFFFFF"))
@@ -1014,21 +1012,21 @@ class GameSGO(Game):
             *hex_to_rgb(self.game["teams"]["home"]["colors"]["primary"])
         )
 
-    def home_team_id(self):
-        return self.game["teams"]["home"]["teamID"]
+    def home_team_id(self) -> str:
+        return str(self.game["teams"]["home"]["teamID"])
 
-    def home_team_score(self) -> Any | str:
+    def home_team_score(self) -> int:
         if "score" in self.game["teams"]["home"]:
-            return self.game["teams"]["home"]["score"]
-        return "-"
+            return int(self.game["teams"]["home"]["score"])
+        return 0
 
-    def home_team_short_name(self):
+    def home_team_short_name(self) -> str:
         return self.game["teams"]["home"]["names"]["short"]
 
     def home_team_title_symbol(self) -> str:
         return "v"
 
-    def icon(self):
+    def icon(self) -> str:
         if (
             self.away_team_id()
             in SGO_MLB_TEAMS + SGO_NHL_TEAMS + SGO_NFL_TEAMS + SGO_MLS_TEAMS
@@ -1039,19 +1037,19 @@ class GameSGO(Game):
 
         return icon_file
 
-    def id(self):
-        return self.game["eventID"]
+    def id(self) -> str:
+        return str(self.game["eventID"])
 
-    def league_id(self):
-        return self.game["leagueID"]
+    def league_id(self) -> str:
+        return str(self.game["leagueID"])
 
-    def league_name(self):
-        return self.game["leagueID"]
+    def league_name(self) -> str:
+        return str(self.game["leagueID"])
 
     def start_time(self) -> datetime:
         return to_local_tz(parse(self.game["status"]["startsAt"]))
 
-    def update(self, games_last_update):
+    def update(self, games_last_update: dict[str, datetime]) -> tuple["GameSGO", dict[str, datetime]]:
         try:
             response: requests.Response = requests.get(
                 "https://api.sportsgameodds.com/v2/events",
