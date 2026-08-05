@@ -30,6 +30,7 @@ from PIL import Image
 from PIL.ImageFile import ImageFile
 from pyowm import OWM
 from pyowm.weatherapi30.observation import Observation
+from pyowm.commons.exceptions import TimeoutError
 
 if os.name == "nt":
     graphics: ModuleType = importlib.import_module("RGBMatrixEmulator", "graphics")
@@ -2253,6 +2254,7 @@ def owm_get_weather():
             requests.exceptions.SSLError, 
             requests.exceptions.RequestException, 
             KeyError, 
+            TimeoutError, 
             TypeError, 
             ValueError
         ) as e:
