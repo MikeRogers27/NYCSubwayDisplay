@@ -1936,7 +1936,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display() -> tuple[list[str], list[int]]:
-        return ["sports"], [5]
+        # return ["sports"], [5]
 
         now = datetime.now(tz=LOCAL_TZ)
         timestamp = now.time()
