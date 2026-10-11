@@ -71,7 +71,7 @@ RAPI_FOOTBALL_CHAMPIONSHIP_ID: int = 40
 RAPI_FOOTBALL_FA_CUP_ID: int = 45
 RAPI_FOOTBALL_LEAGUE_CUP_ID: int = 48
 RAPI_FOOTBALL_FRIENDLIES_ID: int = 667
-RAPI_FOOTBALL_SEASON_ID: int = 2025  # TODO: Must be updated every year
+RAPI_FOOTBALL_SEASON_ID: int = 2026  # TODO: Must be updated every year
 
 RAPI_RUGBY_GAMES: list["Game"] | None = None
 RAPI_RUGBY_GAMES_LAST_UPDATE: dict[Any, datetime] = {}
@@ -1936,7 +1936,7 @@ class RunMatrix(SampleBase):
 
     @staticmethod
     def what_should_we_display() -> tuple[list[str], list[int]]:
-        # return ["sports"], [5]
+        return ["sports"], [5]
 
         now = datetime.now(tz=LOCAL_TZ)
         timestamp = now.time()
