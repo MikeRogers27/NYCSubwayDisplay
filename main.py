@@ -264,7 +264,7 @@ HIDE_SCORES: dict[str, list[Any]] = {
         None,
     ],
     "WGW": [relativedelta(), relativedelta(months=12), None],
-    RAPI_FOOTBALL_TEAMS[0]: [
+    str(RAPI_FOOTBALL_TEAMS[0]): [
         relativedelta(),
         relativedelta(months=12),
         ["Premier League", "FA Cup"],
