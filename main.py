@@ -1147,6 +1147,7 @@ class RunMatrix(SampleBase):
             "League Cup",
             "FA Cup",
             "Premier League - Summer Series",
+            "UEFA Europa League",
         ]:
             league_teams: list[str] = [str(team_id) for team_id in RAPI_FOOTBALL_TEAMS]
         elif league_name in RAPI_RUGBY_LEAGUE_NAMES:
