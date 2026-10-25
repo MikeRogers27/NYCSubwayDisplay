@@ -1,6 +1,5 @@
 import argparse
 import glob
-import importlib
 import json
 import logging
 import os
@@ -16,7 +15,6 @@ from datetime import date as dt_date
 from datetime import datetime, timedelta
 from datetime import time as dt_time
 from logging import Logger
-from types import ModuleType
 from typing import Any, Literal, NamedTuple
 
 import google.protobuf.message as pb_message
@@ -29,16 +27,10 @@ from nyct_gtfs import NYCTFeed
 from PIL import Image
 from PIL.ImageFile import ImageFile
 from pyowm import OWM
-from pyowm.weatherapi30.observation import Observation
 from pyowm.commons.exceptions import TimeoutError
+from pyowm.weatherapi30.observation import Observation
 
-if os.name == "nt":
-    graphics: ModuleType = importlib.import_module("RGBMatrixEmulator", "graphics")
-else:
-    from rgbmatrix import graphics as graphics_module
-
-    graphics: Any = graphics_module
-
+from matrix_backend import graphics
 from samplebase import SampleBase
 
 LOCAL_TZ: Any = pytz.timezone("America/New_York")

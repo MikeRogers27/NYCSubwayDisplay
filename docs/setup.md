@@ -161,7 +161,7 @@ export SGO_API_KEYS=<Key from https://sportsgameodds.com/, comma separated>
 export RPA_API_KEY=<Key from https://rapidapi.com/>
 cd ${HOME}/src/NYCSubwayDisplay
 sudo /home/pi/.local/bin/uv sync --extra pi --no-dev --locked
-sudo --preserve-env=PYTHONPATH,OWM_API_KEY,SGO_API_KEYS,RPA_API_KEY /home/pi/.local/bin/uv run python main.py --led-gpio-mapping=adafruit-hat-pwm --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=40 --led-slowdown-gpio=1  --led-no-drop-privs
+sudo --preserve-env=PYTHONPATH,OWM_API_KEY,SGO_API_KEYS,RPA_API_KEY /home/pi/.local/bin/uv run --extra pi --no-dev --locked python main.py --led-gpio-mapping=adafruit-hat-pwm --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=40 --led-slowdown-gpio=1  --led-no-drop-privs
 ```
 
 Now change to executable permissions:

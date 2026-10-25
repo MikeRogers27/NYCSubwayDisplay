@@ -57,7 +57,7 @@ The display automatically decides what to show based on day and time:
 
 ## Software Requirements
 
-- Python 3.10+
+- Python 3.13
 - [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) library (for Raspberry Pi)
 - [RGBMatrixEmulator](https://github.com/ty-porter/RGBMatrixEmulator) (for Windows/desktop development)
 
@@ -86,8 +86,8 @@ See [docs/setup.md](docs/setup.md) for full step-by-step instructions covering:
 git clone git@github.com:MikeRogers27/NYCSubwayDisplay.git
 cd NYCSubwayDisplay
 
-# Create and sync the uv environment
-uv sync --group dev
+# Install development dependencies, including the emulator (Linux/macOS/Windows)
+uv sync --group dev --frozen
 
 # Activate the environment (optional, but useful for local shells)
 source .venv/bin/activate  # Linux/Mac
@@ -102,7 +102,24 @@ export RPA_API_KEY=your_key
 python main.py
 ```
 
-On Windows, the emulator serves a browser-based preview at `http://localhost:8888` (configurable in `emulator_config.json`).
+The emulator serves a browser-based preview at `http://localhost:8888` (configurable in `emulator_config.json`).
+
+The `dev` group installs the emulator on every platform and is included by default
+by uv. Windows always installs and uses the emulator, even with `--no-dev`.
+Use `--frozen` on development machines to install from the committed lockfile
+without needing the local Pi driver checkout to validate or resolve dependencies.
+On Linux, the application uses the emulator when it is installed; otherwise it uses
+the native `rgbmatrix` driver. For Raspberry Pi deployment, install only the Pi
+dependencies and use the same selection when running:
+
+```bash
+uv sync --extra pi --no-dev --locked
+uv run --extra pi --no-dev --locked python main.py
+```
+
+The Pi installation expects the native driver checkout at
+`../rpi-rgb-led-matrix/bindings/python`; see [docs/setup.md](docs/setup.md).
+Updating the lockfile with `uv lock` also requires this checkout.
 
 ## Usage
 
@@ -158,6 +175,7 @@ Adjust `emulator_config.json` to change pixel size, style, browser port, and FPS
 ```
 ├── main.py                 # Main application (display logic, API integrations, game classes)
 ├── samplebase.py           # Base class for RGB matrix initialization
+├── matrix_backend.py       # Shared emulator/native driver selection
 ├── weather.py              # Weather API experimentation script
 ├── utils/
 │   └── colors.py           # Image color extraction utilities
@@ -169,8 +187,8 @@ Adjust `emulator_config.json` to change pixel size, style, browser port, and FPS
 ├── docs/
 │   └── setup.md            # Raspberry Pi setup guide
 ├── emulator_config.json    # RGBMatrixEmulator settings
-├── requirements.txt        # Python dependencies (Raspberry Pi)
-└── requirements_win.txt    # Python dependencies (Windows/emulator)
+├── pyproject.toml          # Dependencies and development/Pi selections
+└── uv.lock                 # Locked dependency versions
 ```
 
 ## License
