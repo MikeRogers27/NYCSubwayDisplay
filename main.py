@@ -31,6 +31,7 @@ from pyowm.commons.exceptions import TimeoutError
 from pyowm.weatherapi30.observation import Observation
 
 from matrix_backend import graphics
+from mqtt_listener import MQTTListener, add_mqtt_arguments
 from samplebase import SampleBase
 
 LOCAL_TZ: Any = pytz.timezone("America/New_York")
@@ -2592,6 +2593,8 @@ def parse_args() -> argparse.Namespace:
         help="Log Level: DEBUG, INFO, WARNING, ERROR, CRITICAL",
         default="ERROR",
     )
+    parser.add_argument("--mqtt", action="store_true", help="Enable MQTT message queue and console reporting")
+    add_mqtt_arguments(parser)
     parser.set_defaults(drop_privileges=True)
 
     args: argparse.Namespace = parser.parse_args()
@@ -3139,7 +3142,14 @@ def main() -> None:
         uptown_stop_ids=["F23N", "R33N"],
         args=args,
     )
-    led_display_trains.process()
+    mqtt_listener = MQTTListener(args.mqtt_host, args.mqtt_port, args.mqtt_topic) if args.mqtt else None
+    try:
+        if mqtt_listener is not None:
+            mqtt_listener.start()
+        led_display_trains.process()
+    finally:
+        if mqtt_listener is not None:
+            mqtt_listener.stop()
 
 
 

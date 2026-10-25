@@ -171,6 +171,7 @@ dependencies = [
     { name = "httpx" },
     { name = "idna" },
     { name = "nyct-gtfs" },
+    { name = "paho-mqtt" },
     { name = "pillow" },
     { name = "protobuf" },
     { name = "pyowm" },
@@ -208,6 +209,7 @@ requires-dist = [
     { name = "httpx", specifier = "==0.28.1" },
     { name = "idna", specifier = "==3.10" },
     { name = "nyct-gtfs", specifier = "==2.0.0" },
+    { name = "paho-mqtt", specifier = "==2.1.0" },
     { name = "pillow", specifier = "==11.1.0" },
     { name = "protobuf", specifier = "==4.25.3" },
     { name = "pyowm", specifier = "==3.5.0" },
@@ -242,6 +244,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5f/73/1c8b490af1ba3f06a54968ca7917330bf03cb7e452f1ae40e6096431f363/nyct_gtfs-2.0.0.tar.gz", hash = "sha256:96d2a2621a3a24ca04e1e91b0156e8ba481cbf75929ddfcc07b956e2cada227b", size = 115346, upload-time = "2024-07-27T17:16:23.653Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9f/e5/f88093434dd9c97df807605daac51d9c93227836814df87383a2edcfa60c/nyct_gtfs-2.0.0-py3-none-any.whl", hash = "sha256:0a83b882f17b01529e80f026b6be0116dac9b794fb31a1489c4dac87eb4e749e", size = 115674, upload-time = "2024-07-27T17:16:21.933Z" },
+]
+
+[[package]]
+name = "paho-mqtt"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/39/15/0a6214e76d4d32e7f663b109cf71fb22561c2be0f701d67f93950cd40542/paho_mqtt-2.1.0.tar.gz", hash = "sha256:12d6e7511d4137555a3f6ea167ae846af2c7357b10bc6fa4f7c3968fc1723834", size = 148848, upload-time = "2024-04-29T19:52:55.591Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/cb/00451c3cf31790287768bb12c6bec834f5d292eaf3022afc88e14b8afc94/paho_mqtt-2.1.0-py3-none-any.whl", hash = "sha256:6db9ba9b34ed5bc6b6e3812718c7e06e2fd7444540df2455d2c51bd58808feee", size = 67219, upload-time = "2024-04-29T19:52:48.345Z" },
 ]
 
 [[package]]

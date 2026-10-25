@@ -170,12 +170,51 @@ The `HIDE_SCORES` dictionary lets you hide scores for specific teams/competition
 ### Emulator
 Adjust `emulator_config.json` to change pixel size, style, browser port, and FPS for the desktop emulator.
 
+### MQTT Listener
+
+MQTT is optional and uses `paho-mqtt` 2.x. Enable it alongside the display with:
+
+```bash
+uv run --group dev --frozen python main.py --mqtt
+```
+
+Or run just the listener, without the matrix or API keys:
+
+```bash
+uv run --group dev --frozen python mqtt_listener.py
+```
+
+An MQTT broker must be running separately. The defaults are `127.0.0.1:1883`
+and topic `matrix/display/train/set`. Both commands accept `--mqtt-host`,
+`--mqtt-port`, and `--mqtt-topic` to override these. This basic interface uses
+an unauthenticated TCP connection. If the broker is unavailable, the listener
+retries in the background.
+
+With Mosquitto's command-line clients installed, publish from another terminal:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/train/set -m ON
+```
+
+Each received message goes into a `SimpleQueue`, then a console worker consumes
+it and prints its topic and raw payload. For `ON`, the output also identifies the
+future `trains` command:
+
+```text
+MQTT topic='matrix/display/train/set' payload=b'ON' -> command='trains'
+```
+
+Other payloads are reported too. Messages do not change the display yet.
+Console reporting runs independently of display sleeps. Ctrl+C stops the listener
+and its network thread; the display also cleans up MQTT when it exits.
+
 ## Project Structure
 
 ```
 ├── main.py                 # Main application (display logic, API integrations, game classes)
 ├── samplebase.py           # Base class for RGB matrix initialization
 ├── matrix_backend.py       # Shared emulator/native driver selection
+├── mqtt_listener.py        # MQTT queue and console listener (also runnable alone)
 ├── weather.py              # Weather API experimentation script
 ├── utils/
 │   └── colors.py           # Image color extraction utilities
