@@ -93,10 +93,6 @@ uv sync --group dev
 source .venv/bin/activate  # Linux/Mac
 # or: .venv\Scripts\activate  # Windows
 
-# Install platform-specific dependencies
-uv pip install -r requirements.txt          # Raspberry Pi
-uv pip install -r requirements_win.txt      # Windows (includes RGBMatrixEmulator)
-
 # Set environment variables
 export OWM_API_KEY=your_key
 export SGO_API_KEYS=key1,key2
