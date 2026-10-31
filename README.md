@@ -205,8 +205,10 @@ MQTT topic='matrix/display/train/set' payload=b'ON' -> command='trains'
 ```
 
 In the app, `ON` interrupts the current display wait and selects trains for one
-normal train rotation using the existing display durations, then automatic
-scheduling resumes. `OFF` and other payloads are
+normal train rotation using the existing display durations, then returns to the
+interrupted rotation entry and continues with the remaining entries. The resumed
+entry starts its usual duration again; the time-based schedule is refreshed once
+that rotation finishes. `OFF` and other payloads are
 reported but do not interrupt the display. The standalone listener only reports
 messages. Pending commands are coalesced so the latest command wins.
 Console reporting runs independently of display sleeps. Ctrl+C stops the listener

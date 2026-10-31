@@ -1135,6 +1135,7 @@ class RunMatrix(SampleBase):
     def __init__(self, stop_ids, uptown_stop_ids, args) -> None:
         super().__init__(args)
         self.display_control = DisplayControl()
+        self._remaining_rotation: list[tuple[str, int]] = []
 
         self.stop_ids: Any = stop_ids
         self.uptown_stop_ids: Any = uptown_stop_ids
@@ -1996,11 +1997,20 @@ class RunMatrix(SampleBase):
         return self.display_control.wait(seconds)
 
     def what_should_we_display(self) -> tuple[list[str], list[int]]:
-        """Run the latest requested mode once, otherwise use the normal schedule."""
+        """Prepend a requested mode to the pending rotation."""
         command = self.display_control.next_command()
+        if not self._remaining_rotation:
+            items, durations = self.scheduled_display()
+            self._remaining_rotation = list(zip(items, durations))
         if command == "trains":
-            return ["trains"], [5]
-        return self.scheduled_display()
+            entry = ("trains", 5)
+            # Repeated requests restart the current entry without stacking copies.
+            if not self._remaining_rotation or self._remaining_rotation[0] != entry:
+                self._remaining_rotation.insert(0, entry)
+        return (
+            [mode for mode, _ in self._remaining_rotation],
+            [duration for _, duration in self._remaining_rotation],
+        )
 
     @staticmethod
     def scheduled_display() -> tuple[list[str], list[int]]:
@@ -2082,6 +2092,9 @@ class RunMatrix(SampleBase):
                         canvas = self.matrix.SwapOnVSync(canvas)
                         if self.wait_for_display_interrupt(display_time):
                             break
+                    if self.display_control.interrupt.is_set():
+                        break
+                    self._remaining_rotation.pop(0)
             except TypeError as err:
                 LOG.error(f"{err=}")
             except Exception as err:

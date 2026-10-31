@@ -145,7 +145,9 @@ MQTT topic='matrix/display/train/set' payload=b'ON' -> command='trains'
 ```
 
 In the display app, `ON` interrupts the current rendering wait and runs the normal
-train rotation once, then scheduling resumes. The standalone listener only prints
+train rotation once, then returns to the interrupted rotation entry and continues
+through the remaining entries. The interrupted entry restarts its usual duration.
+The standalone listener only prints
 the message. `OFF` is printed and ignored:
 
 ```bash

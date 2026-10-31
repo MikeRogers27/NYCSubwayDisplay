@@ -67,41 +67,126 @@ class RenderInterruptionTests(unittest.TestCase):
         # Avoid fonts, GPIO, and emulator initialization for dispatcher tests.
         self.display = main.RunMatrix.__new__(main.RunMatrix)
         self.display.display_control = DisplayControl()
+        self.display._remaining_rotation = []
         self.display.matrix = Mock()
         self.canvas = Mock()
         self.swapped_canvas = Mock()
         self.display.matrix.CreateFrameCanvas.return_value = self.canvas
         self.display.matrix.SwapOnVSync.return_value = self.swapped_canvas
 
-    def test_requested_mode_runs_once_then_normal_scheduling_resumes(self) -> None:
+    def test_requested_mode_is_prepended_to_the_normal_rotation(self) -> None:
         with patch.object(self.display, "scheduled_display", return_value=(["clock"], [30])):
             self.display.display_control.request("trains")
             self.display.display_control.request("trains")
-            self.assertEqual(self.display.what_should_we_display(), (["trains"], [5]))
+            self.assertEqual(self.display.what_should_we_display(), (["trains", "clock"], [5, 30]))
             self.assertFalse(self.display.display_control.interrupt.is_set())
+            self.assertEqual(self.display._remaining_rotation, [("trains", 5), ("clock", 30)])
+            self.display._remaining_rotation.pop(0)
             self.assertEqual(self.display.what_should_we_display(), (["clock"], [30]))
+
+    def test_repeated_request_does_not_stack_duplicate_entries(self) -> None:
+        self.display._remaining_rotation = [("trains", 5), ("weather", 5)]
+        self.display.display_control.request("trains")
+        self.assertEqual(self.display.what_should_we_display(), (["trains", "weather"], [5, 5]))
 
     def test_overnight_wait_switches_to_trains_then_back_to_schedule(self) -> None:
         killer = Mock(kill_now=False)
+        waits = []
 
-        def finish(canvas, display_time):
+        def wait(seconds):
+            waits.append(seconds)
+            if len(waits) == 1:
+                self.display.display_control.request("trains")
+                return True
             killer.kill_now = True
-            return canvas
+            return False
 
         with (
             patch.object(main, "GracefulKiller", return_value=killer),
-            patch.object(self.display, "scheduled_display", side_effect=[(["off"], [600]), (["clock"], [30])]),
+            patch.object(self.display, "scheduled_display", return_value=(["off"], [600])) as schedule,
             patch.object(
                 self.display,
                 "wait_for_display_interrupt",
-                side_effect=lambda seconds: self.display.display_control.request("trains") or True,
-            ) as wait,
+                side_effect=wait,
+            ),
             patch.object(self.display, "display_trains", return_value=self.swapped_canvas) as trains,
-            patch.object(self.display, "display_clock", side_effect=finish),
         ):
             self.display.run()
-        wait.assert_called_once_with(600)
+        self.assertEqual(waits, [600, 600])
+        schedule.assert_called_once()
         trains.assert_called_once_with(self.swapped_canvas, display_time=5)
+
+    def test_interrupt_resumes_current_mode_and_remaining_rotation(self) -> None:
+        killer = Mock(kill_now=False)
+        rendered = []
+
+        def render(mode, canvas, display_time):
+            rendered.append((mode, display_time))
+            if rendered == [("clock", 30), ("weather", 5)]:
+                self.display.display_control.request("trains")
+            if mode == "sports":
+                killer.kill_now = True
+            return self.swapped_canvas
+
+        with (
+            patch.object(main, "GracefulKiller", return_value=killer),
+            patch.object(
+                self.display, "scheduled_display", return_value=(["clock", "weather", "sports"], [30, 5, 3])
+            ) as schedule,
+            patch.object(self.display, "display_clock", side_effect=lambda *a, **kw: render("clock", *a, **kw)),
+            patch.object(self.display, "display_weather", side_effect=lambda *a, **kw: render("weather", *a, **kw)),
+            patch.object(self.display, "display_trains", side_effect=lambda *a, **kw: render("trains", *a, **kw)),
+            patch.object(self.display, "display_sports", side_effect=lambda *a, **kw: render("sports", *a, **kw)),
+        ):
+            self.display.run()
+        self.assertEqual(rendered, [("clock", 30), ("weather", 5), ("trains", 5), ("weather", 5), ("sports", 3)])
+        self.assertEqual(self.display._remaining_rotation, [])
+        schedule.assert_called_once()
+
+    def test_interrupting_command_does_not_replace_saved_rotation(self) -> None:
+        killer = Mock(kill_now=False)
+        rendered = []
+
+        def render(mode, canvas, display_time):
+            rendered.append(mode)
+            if len(rendered) in (1, 2):
+                self.display.display_control.request("trains")
+            if mode == "weather":
+                killer.kill_now = True
+            return self.swapped_canvas
+
+        with (
+            patch.object(main, "GracefulKiller", return_value=killer),
+            patch.object(self.display, "scheduled_display", return_value=(["clock", "weather"], [30, 5])),
+            patch.object(self.display, "display_clock", side_effect=lambda *a, **kw: render("clock", *a, **kw)),
+            patch.object(self.display, "display_weather", side_effect=lambda *a, **kw: render("weather", *a, **kw)),
+            patch.object(self.display, "display_trains", side_effect=lambda *a, **kw: render("trains", *a, **kw)),
+        ):
+            self.display.run()
+        self.assertEqual(rendered, ["clock", "trains", "trains", "clock", "weather"])
+
+    def test_completed_rotation_refreshes_the_time_based_schedule(self) -> None:
+        killer = Mock(kill_now=False)
+        rendered = []
+
+        def render(mode, canvas, display_time):
+            rendered.append(mode)
+            if mode == "sports":
+                killer.kill_now = True
+            return self.swapped_canvas
+
+        with (
+            patch.object(main, "GracefulKiller", return_value=killer),
+            patch.object(
+                self.display, "scheduled_display", side_effect=[(["clock", "weather"], [30, 5]), (["sports"], [3])]
+            ) as schedule,
+            patch.object(self.display, "display_clock", side_effect=lambda *a, **kw: render("clock", *a, **kw)),
+            patch.object(self.display, "display_weather", side_effect=lambda *a, **kw: render("weather", *a, **kw)),
+            patch.object(self.display, "display_sports", side_effect=lambda *a, **kw: render("sports", *a, **kw)),
+        ):
+            self.display.run()
+        self.assertEqual(rendered, ["clock", "weather", "sports"])
+        self.assertEqual(schedule.call_count, 2)
 
     def test_nested_train_rendering_preserves_canvas_and_skips_remaining_stations(self) -> None:
         self.display.stop_ids = ["F23N", "R33N"]

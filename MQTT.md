@@ -5,7 +5,8 @@ For a broker running on the Pi with commands sent from your laptop, follow
 
 The listener queues received messages and prints them to the app's console.
 In the app, `ON` interrupts the current display wait and shows trains for one
-normal display period, then scheduling resumes. `OFF` is reported and ignored.
+normal display period, then returns to the interrupted rotation entry and continues
+from there. The interrupted entry restarts its usual duration. `OFF` is reported and ignored.
 The standalone listener only prints messages.
 
 ## Install and start a local broker
