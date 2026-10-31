@@ -30,6 +30,7 @@ from pyowm import OWM
 from pyowm.commons.exceptions import TimeoutError
 from pyowm.weatherapi30.observation import Observation
 
+import dummy_data
 from matrix_backend import graphics
 from mqtt_listener import MQTTListener, add_mqtt_arguments
 from samplebase import SampleBase
@@ -39,6 +40,7 @@ NOW: datetime = datetime.now(tz=LOCAL_TZ)
 
 LOG: Logger = logging.getLogger("NYCSubwayDisplay")
 MIN_DISPLAY_TIME: int = 3
+DUMMY_DATA: bool = False
 
 MTA_FEEDS: list[Any] | None = None
 MTA_TIMESTAMP: datetime | None = None
@@ -509,7 +511,7 @@ class GameRAPIFootball(Game):
     def __init__(self, *args) -> None:
         super().__init__(*args)
         self.text_colour = (74, 214, 9)
-        if GameRAPIFootball.RAPI_TEAM_INFO is None:
+        if not DUMMY_DATA and GameRAPIFootball.RAPI_TEAM_INFO is None:
             GameRAPIFootball.RAPI_TEAM_INFO = GameRAPIFootball._load_team_info()
 
     def away_team_colour(self) -> graphics.Color:
@@ -637,6 +639,8 @@ class GameRAPIFootball(Game):
         return datetime.fromtimestamp(self.game["fixture"]["timestamp"], tz=LOCAL_TZ)
 
     def update(self, games_last_update: dict[str, datetime]) -> tuple["GameRAPIFootball", dict[str, datetime]]:
+        if DUMMY_DATA:
+            return self, games_last_update
         try:
             querystring = {
                 "id": self.id(),
@@ -674,6 +678,8 @@ class GameRAPIFootball(Game):
         return game, games_last_update
 
     def _get_team_info(self, team_id, game_team):
+        if DUMMY_DATA:
+            return {"short_name": game_team["name"][:3].upper(), "team_colour": self.text_colour}
         assert GameRAPIFootball.RAPI_TEAM_INFO is not None
         if str(team_id) not in GameRAPIFootball.RAPI_TEAM_INFO:
             self._update_team_info_from_api(team_id, game_team)
@@ -727,6 +733,8 @@ class GameRAPIFootball(Game):
         return team_info_json_file
 
     def _update_team_info_from_api(self, team_id: int, game_team: dict) -> None:
+        if DUMMY_DATA:
+            return
         default_team_info = {
             "id": team_id,
             "short_name": game_team["name"][:3].upper(),
@@ -900,6 +908,8 @@ class GameRAPIRugby(Game):
         return datetime.fromtimestamp(self.game["startTimestamp"], tz=LOCAL_TZ)
 
     def update(self, games_last_update: dict[str, datetime]) -> tuple["GameRAPIRugby", dict[str, datetime]]:
+        if DUMMY_DATA:
+            return self, games_last_update
         try:
             querystring = {
                 "id": self.id(),
@@ -1044,6 +1054,8 @@ class GameSGO(Game):
         return to_local_tz(parse(self.game["status"]["startsAt"]))
 
     def update(self, games_last_update: dict[str, datetime]) -> tuple["GameSGO", dict[str, datetime]]:
+        if DUMMY_DATA:
+            return self, games_last_update
         try:
             response: requests.Response = requests.get(
                 "https://api.sportsgameodds.com/v2/events",
@@ -2093,6 +2105,8 @@ def mta_find_next_trains(
 
 
 def mta_get_feeds() -> None | list[NYCTFeed]:
+    if DUMMY_DATA:
+        return [dummy_data.DummyFeed(route, LOCAL_TZ) for route in ("F", "G", "R")]
     import requests
 
     global MTA_FEEDS
@@ -2219,6 +2233,8 @@ def owm_forecasts_tomorrow():
 
 
 def owm_get_weather():
+    if DUMMY_DATA:
+        return dummy_data.weather(datetime.now(tz=LOCAL_TZ))
     global OWM_MGR
     global OWM_WEATHER
     global OWM_FORECAST
@@ -2593,6 +2609,10 @@ def parse_args() -> argparse.Namespace:
         help="Log Level: DEBUG, INFO, WARNING, ERROR, CRITICAL",
         default="ERROR",
     )
+    parser.add_argument(
+        "--dummy-data", action="store_true",
+        help="Use local sample data for MTA, OWM, RAPI, and SGO without API requests or keys",
+    )
     parser.add_argument("--mqtt", action="store_true", help="Enable MQTT message queue and console reporting")
     add_mqtt_arguments(parser)
     parser.set_defaults(drop_privileges=True)
@@ -2624,6 +2644,12 @@ def rapi_football_get_games():
 
 
 def rapi_football_get_games_league(league_id, games_last_update):
+    if DUMMY_DATA:
+        games = [GameRAPIFootball(game) for game in dummy_data.football(
+            datetime.now(tz=LOCAL_TZ), league_id, RAPI_FOOTBALL_TEAMS[0]
+        )]
+        games_last_update.update({game.id(): datetime.now(tz=LOCAL_TZ) for game in games})
+        return games, games_last_update
     LOG.debug(f"rapi_football_get_games_league - league_id {league_id}")
 
     now: datetime = datetime.now(tz=LOCAL_TZ)
@@ -2702,6 +2728,10 @@ def rapi_rugby_get_games():
 
 
 def rapi_rugby_get_games_league(league_ids, games_last_update):
+    if DUMMY_DATA:
+        games = [GameRAPIRugby(game) for game in dummy_data.rugby(datetime.now(tz=LOCAL_TZ))]
+        games_last_update.update({game.id(): datetime.now(tz=LOCAL_TZ) for game in games})
+        return games, games_last_update
     LOG.debug(f"rapi_rugby_get_games_league - league_ids {league_ids}")
 
     now: datetime = datetime.now(tz=LOCAL_TZ)
@@ -2838,6 +2868,8 @@ def rapi_rugby_get_games_league(league_ids, games_last_update):
 
 
 def setup_env() -> None:
+    if DUMMY_DATA:
+        return
     if "SGO_API_KEY" in os.environ:
         return
 
@@ -2898,6 +2930,10 @@ def sgo_get_games():
 
 
 def sgo_get_games_league(league_id, games_last_update):
+    if DUMMY_DATA:
+        games = [GameSGO(game) for game in dummy_data.sgo(datetime.now(tz=LOCAL_TZ), league_id)]
+        games_last_update.update({game.id(): datetime.now(tz=LOCAL_TZ) for game in games})
+        return games, games_last_update
     LOG.debug(f"sgo_get_games_league - league_id {league_id}")
 
     now: datetime = datetime.now(tz=LOCAL_TZ)
@@ -2991,6 +3027,20 @@ def sgo_get_games_league(league_id, games_last_update):
 def sports_get_games(
     type, games, timestamp, next_refresh, games_last_update, refresh_rate
 ):
+    if DUMMY_DATA:
+        now = datetime.now(tz=LOCAL_TZ)
+        if type == "RAPI_FOOTBALL":
+            games, updates = rapi_football_get_games_league(RAPI_FOOTBALL_PREMIER_LEAGUE_ID, {})
+        elif type == "RAPI_RUGBY":
+            games, updates = rapi_rugby_get_games_league(RAPI_RUGBY_LEAGUE_NAMES, {})
+        elif type == "SGO":
+            games, updates = [], {}
+            for league in ("MLB", "NHL", "NFL", "MLS"):
+                league_games, updates = sgo_get_games_league(league, updates)
+                games.extend(league_games)
+        else:
+            raise ValueError(f"Unknown sports service: {type}")
+        return games, now, now + timedelta(seconds=refresh_rate), updates
     LOG.debug(f"sports_get_games - type {type}")
 
     if timestamp is not None:
@@ -3132,8 +3182,13 @@ def to_local_tz(date_time: datetime) -> datetime:
 
 
 def main() -> None:
+    global DUMMY_DATA
     args: argparse.Namespace = parse_args()
+    DUMMY_DATA = args.dummy_data
     logger_setup(args)
+
+    if DUMMY_DATA:
+        print("Dummy data enabled: MTA, OWM, RAPI, and SGO API requests are disabled.", flush=True)
 
     setup_env()
 

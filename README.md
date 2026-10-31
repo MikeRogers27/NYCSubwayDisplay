@@ -208,6 +208,33 @@ Other payloads are reported too. Messages do not change the display yet.
 Console reporting runs independently of display sleeps. Ctrl+C stops the listener
 and its network thread; the display also cleans up MQTT when it exits.
 
+### Development with Dummy Data
+
+Use `--dummy-data` to conserve external API quotas while developing:
+
+```bash
+uv run --group dev --frozen python main.py --dummy-data
+# Combine with MQTT if needed:
+uv run --group dev --frozen python main.py --dummy-data --mqtt
+```
+
+This mode needs no API keys and skips the SGO account-usage check. It uses local
+fixtures for every data service, including refreshes and football team metadata:
+
+| Service | Sample data |
+|---|---|
+| MTA | F/G/R trains arriving in 3, 8, 15, and 22 minutes, in both directions |
+| OWM | 18°C current weather and five days of three-hour forecasts |
+| RAPI football | Sunderland leading Manchester United 2–1 in a live game |
+| RAPI rugby | Wigan beating St Helens 24–18 in a completed game |
+| SGO | MLB, NHL, NFL, and MLS games covering completed, live, and upcoming events |
+
+The sample values are fixed; timestamps are relative to today so arrivals and
+forecasts remain useful. The existing schedule and score-hiding rules still apply.
+Dummy sports data bypasses the live caches entirely. Edit `dummy_data.py` to adjust
+the samples. Omitting `--dummy-data` uses the normal live services. The emulator
+preview and optional MQTT connection continue to work in dummy mode.
+
 ## Project Structure
 
 ```
@@ -215,6 +242,7 @@ and its network thread; the display also cleans up MQTT when it exits.
 ├── samplebase.py           # Base class for RGB matrix initialization
 ├── matrix_backend.py       # Shared emulator/native driver selection
 ├── mqtt_listener.py        # MQTT queue and console listener (also runnable alone)
+├── dummy_data.py           # Local MTA, OWM, RAPI, and SGO fixtures
 ├── weather.py              # Weather API experimentation script
 ├── utils/
 │   └── colors.py           # Image color extraction utilities
