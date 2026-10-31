@@ -19,10 +19,16 @@ class VirtualControl:
 
 CONTROLS = {
     "train": VirtualControl("matrix-trains", "All Trains", DisplayMode("trains")),
-    "f-trains": VirtualControl("matrix-f-trains", "F Trains", DisplayMode("trains", stop_ids=("F23N",))),
-    "r-trains": VirtualControl("matrix-r-trains", "R Trains", DisplayMode("trains", stop_ids=("R33N",))),
-    "clock": VirtualControl("matrix-clock", "Matrix Clock", DisplayMode("clock")),
-    "weather": VirtualControl("matrix-weather", "Matrix Weather", DisplayMode("weather")),
+    "f-trains": VirtualControl(
+        "matrix-f-trains", "F Trains", DisplayMode("trains", stop_ids=("F23N",))
+    ),
+    "r-trains": VirtualControl(
+        "matrix-r-trains", "R Trains", DisplayMode("trains", stop_ids=("R33N",))
+    ),
+    "clock": VirtualControl("matrix-clock", "Pixie Clock", DisplayMode("clock")),
+    "weather": VirtualControl(
+        "matrix-weather", "Pixie Weather", DisplayMode("weather")
+    ),
 }
 
 
@@ -31,9 +37,19 @@ class MatterbridgeControls:
 
     def __init__(self, topic: str = "matterbridge") -> None:
         self.topic = topic.rstrip("/")
-        if not self.topic or "+" in self.topic or "#" in self.topic or "\x00" in self.topic:
-            raise ValueError("Matterbridge topic must be a nonempty prefix without MQTT wildcards")
-        self.write_topics = {self.device_topic(control, "write"): control for control in CONTROLS.values()}
+        if (
+            not self.topic
+            or "+" in self.topic
+            or "#" in self.topic
+            or "\x00" in self.topic
+        ):
+            raise ValueError(
+                "Matterbridge topic must be a nonempty prefix without MQTT wildcards"
+            )
+        self.write_topics = {
+            self.device_topic(control, "write"): control
+            for control in CONTROLS.values()
+        }
 
     def device_topic(self, control: VirtualControl, kind: str) -> str:
         """Return the plugin's topic for one endpoint and message kind."""
@@ -42,17 +58,25 @@ class MatterbridgeControls:
     def _publish(self, client: mqtt.Client, topic: str, payload: dict) -> None:
         result = client.publish(topic, json.dumps(payload), qos=1, retain=True)
         if result.rc != mqtt.MQTT_ERR_SUCCESS:
-            print(f"Matterbridge publish failed for {topic}: {mqtt.error_string(result.rc)}", flush=True)
+            print(
+                f"Matterbridge publish failed for {topic}: {mqtt.error_string(result.rc)}",
+                flush=True,
+            )
 
     def reset(self, client: mqtt.Client, control: VirtualControl) -> None:
         """Report a control as off so another on command can trigger it again."""
-        self._publish(client, self.device_topic(control, "state"), {"OnOff": {"onOff": False}})
+        self._publish(
+            client, self.device_topic(control, "state"), {"OnOff": {"onOff": False}}
+        )
 
     def register(self, client: mqtt.Client) -> None:
         """Subscribe to controls and announce them on every broker connection."""
         result, _ = client.subscribe([(topic, 1) for topic in self.write_topics])
         if result != mqtt.MQTT_ERR_SUCCESS:
-            print(f"Matterbridge subscription failed: {mqtt.error_string(result)}", flush=True)
+            print(
+                f"Matterbridge subscription failed: {mqtt.error_string(result)}",
+                flush=True,
+            )
             return
         for control in CONTROLS.values():
             config = {
@@ -68,8 +92,13 @@ class MatterbridgeControls:
             }
             self._publish(client, self.device_topic(control, "config"), config)
             self.reset(client, control)
-            self._publish(client, self.device_topic(control, "subscribe"), {"OnOff": ["onOff"]})
-        print(f"Matterbridge announced {len(CONTROLS)} display controls under {self.topic!r}", flush=True)
+            self._publish(
+                client, self.device_topic(control, "subscribe"), {"OnOff": ["onOff"]}
+            )
+        print(
+            f"Matterbridge announced {len(CONTROLS)} display controls under {self.topic!r}",
+            flush=True,
+        )
 
     def message_mode(self, message: mqtt.MQTTMessage) -> DisplayMode | None:
         """Accept only boolean on activations for our controls, never retained commands."""

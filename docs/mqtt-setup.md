@@ -249,8 +249,8 @@ publishes retained configuration, initial off state, and attribute subscriptions
 | `matrix-trains` | All Trains | Configured train stops |
 | `matrix-f-trains` | F Trains | Only `F23N` |
 | `matrix-r-trains` | R Trains | Only `R33N` |
-| `matrix-clock` | Matrix Clock | Clock |
-| `matrix-weather` | Matrix Weather | Weather |
+| `matrix-clock` | Pixie Clock | Clock |
+| `matrix-weather` | Pixie Weather | Weather |
 
 The controls are exposed as on/off plug-in units (virtual outlets). Their stable
 IDs preserve endpoint identities between application restarts. The app announces
@@ -305,7 +305,7 @@ this setup does not require Thread hardware.
 
 See [Google Home Matter pairing instructions](https://support.google.com/googlehome/answer/13127223?hl=en-CA)
 for the current app flow. Once F Trains works, test R Trains, All Trains,
-Matrix Clock, and Matrix Weather in the same way.
+Pixie Clock, and Pixie Weather in the same way.
 
 ## Troubleshooting
 

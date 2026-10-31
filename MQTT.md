@@ -104,7 +104,7 @@ With the `matterbridge-mqtt` plugin connected to the same broker:
 uv run --frozen python main.py --dummy-data --matterbridge --mqtt-host PI_IP
 ```
 
-This registers All Trains, F Trains, R Trains, Matrix Clock, and Matrix Weather
+This registers All Trains, F Trains, R Trains, Pixie Clock, and Pixie Weather
 as virtual outlets. Activating one triggers its display mode once and immediately
 resets its reported switch state to off, ready for another activation. Existing
 manual MQTT topics keep working. Use `--matterbridge-topic` if the plugin's base
