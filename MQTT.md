@@ -1,5 +1,8 @@
 # Testing MQTT
 
+For a broker running on the Pi with commands sent from your laptop, follow
+[the MQTT infrastructure setup guide](docs/mqtt-setup.md).
+
 The listener queues received messages and prints them to the app's console.
 In the app, `ON` interrupts the current display wait and shows trains for one
 normal display period, then scheduling resumes. `OFF` is reported and ignored.
