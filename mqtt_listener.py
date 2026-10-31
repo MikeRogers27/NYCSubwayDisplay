@@ -10,15 +10,10 @@ from typing import Any
 import paho.mqtt.client as mqtt
 
 from display_control import DisplayMode
+from matterbridge_controls import CONTROLS, MatterbridgeControls
 
 DEFAULT_MQTT_TOPIC = "matrix/display/+/set"
-TOPIC_MODES = {
-    "train": DisplayMode("trains"),
-    "f-trains": DisplayMode("trains", stop_ids=("F23N",)),
-    "r-trains": DisplayMode("trains", stop_ids=("R33N",)),
-    "clock": DisplayMode("clock"),
-    "weather": DisplayMode("weather"),
-}
+TOPIC_MODES = {name: control.mode for name, control in CONTROLS.items()}
 
 
 class MQTTListener:
@@ -30,11 +25,14 @@ class MQTTListener:
         port: int = 1883,
         topic: str = DEFAULT_MQTT_TOPIC,
         on_command: Callable[[DisplayMode], None] | None = None,
+        matterbridge: bool = False,
+        matterbridge_topic: str = "matterbridge",
     ) -> None:
         self.host = host
         self.port = port
         self.topic = topic
         self.on_command = on_command
+        self.matterbridge = MatterbridgeControls(matterbridge_topic) if matterbridge else None
         self.display_commands: SimpleQueue[mqtt.MQTTMessage] = SimpleQueue()
         self._stop = Event()
         self._reporter = Thread(target=self._report_messages, name="mqtt-console", daemon=True)
@@ -59,6 +57,8 @@ class MQTTListener:
             print(f"MQTT subscription request failed: {mqtt.error_string(result)}", flush=True)
             return
         print(f"MQTT connected; subscription requested: {self.topic}", flush=True)
+        if self.matterbridge is not None:
+            self.matterbridge.register(client)
 
     def _on_connect_fail(self, client: mqtt.Client, userdata: Any) -> None:
         print(f"MQTT unable to connect to {self.host}:{self.port}; retrying", flush=True)
@@ -68,8 +68,14 @@ class MQTTListener:
         mode = self._message_mode(message)
         if self.on_command is not None and mode is not None:
             self.on_command(mode)
+        if mode is not None and self.matterbridge is not None:
+            control = self.matterbridge.write_topics.get(message.topic)
+            if control is not None:
+                self.matterbridge.reset(client, control)
 
     def _message_mode(self, message: mqtt.MQTTMessage) -> DisplayMode | None:
+        if self.matterbridge is not None and message.topic in self.matterbridge.write_topics:
+            return self.matterbridge.message_mode(message)
         if message.payload != b"ON" or not mqtt.topic_matches_sub(self.topic, message.topic):
             return None
         parts = message.topic.rsplit("/", 2)
@@ -126,6 +132,16 @@ def add_mqtt_arguments(parser: argparse.ArgumentParser) -> None:
         default=DEFAULT_MQTT_TOPIC,
         help="MQTT subscription filter (default: matrix/display/+/set; + matches train, f-trains, r-trains, clock, or weather)",
     )
+    parser.add_argument(
+        "--matterbridge",
+        action="store_true",
+        help="Enable MQTT and register virtual display controls with the matterbridge-mqtt plugin",
+    )
+    parser.add_argument(
+        "--matterbridge-topic",
+        default="matterbridge",
+        help="Matterbridge MQTT plugin base topic (default: matterbridge)",
+    )
 
 
 def main() -> None:
@@ -136,7 +152,13 @@ def main() -> None:
     shutdown = Event()
     signal.signal(signal.SIGINT, lambda signum, frame: shutdown.set())
     signal.signal(signal.SIGTERM, lambda signum, frame: shutdown.set())
-    listener = MQTTListener(args.mqtt_host, args.mqtt_port, args.mqtt_topic)
+    listener = MQTTListener(
+        args.mqtt_host,
+        args.mqtt_port,
+        args.mqtt_topic,
+        matterbridge=args.matterbridge,
+        matterbridge_topic=args.matterbridge_topic,
+    )
     try:
         listener.start()
         shutdown.wait()

@@ -3330,8 +3330,10 @@ def main() -> None:
             args.mqtt_port,
             args.mqtt_topic,
             on_command=led_display_trains.display_control.request,
+            matterbridge=args.matterbridge,
+            matterbridge_topic=args.matterbridge_topic,
         )
-        if args.mqtt
+        if args.mqtt or args.matterbridge
         else None
     )
     try:

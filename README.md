@@ -221,6 +221,10 @@ multi-view timings preserved. See [MQTT.md](MQTT.md) for examples.
 The `f-trains` and `r-trains` topics show only `F23N` or `R33N`, respectively,
 without changing the stops used by later scheduled displays. Modes carry optional
 stop selections as immutable `DisplayMode` objects.
+Use `--matterbridge` to enable MQTT and automatically register these five display
+controls with the `matterbridge-mqtt` plugin. Each acts as a momentary virtual
+outlet: activation requests a display mode and resets its reported state to off.
+See [the Matterbridge setup instructions](docs/mqtt-setup.md#6-install-and-configure-matterbridge-on-the-laptop).
 Console reporting runs independently of display sleeps. Ctrl+C stops the listener
 and its network thread; the display also cleans up MQTT when it exits.
 Display sleeps and animations can be interrupted; an in-progress synchronous API
@@ -261,6 +265,7 @@ preview and optional MQTT connection continue to work in dummy mode.
 ├── samplebase.py           # Base class for RGB matrix initialization
 ├── matrix_backend.py       # Shared emulator/native driver selection
 ├── mqtt_listener.py        # MQTT queue and console listener (also runnable alone)
+├── matterbridge_controls.py # Virtual control registration and Matterbridge commands
 ├── dummy_data.py           # Local MTA, OWM, RAPI, and SGO fixtures
 ├── display_control.py      # Queued display commands and interruptible waits
 ├── weather.py              # Weather API experimentation script

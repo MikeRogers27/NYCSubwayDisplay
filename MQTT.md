@@ -43,6 +43,8 @@ doesn't use external API quotas or require API keys.
 | `--mqtt-host` | `127.0.0.1` | Broker hostname or IP address |
 | `--mqtt-port` | `1883` | Broker TCP port |
 | `--mqtt-topic` | `matrix/display/+/set` | Subscription filter; `+` matches one topic segment |
+| `--matterbridge` | Disabled | Enable MQTT and announce the five Matterbridge virtual controls |
+| `--matterbridge-topic` | `matterbridge` | Base topic configured in the Matterbridge MQTT plugin |
 
 To test without starting the matrix, run the standalone listener instead:
 
@@ -93,6 +95,23 @@ configuration. The default subscription receives all five topics.
 
 Switching interrupts display sleeps and animation waits. A synchronous API request
 already running must finish first; `--dummy-data` avoids that delay while testing.
+
+## Matterbridge virtual controls
+
+With the `matterbridge-mqtt` plugin connected to the same broker:
+
+```bash
+uv run --frozen python main.py --dummy-data --matterbridge --mqtt-host PI_IP
+```
+
+This registers All Trains, F Trains, R Trains, Matrix Clock, and Matrix Weather
+as virtual outlets. Activating one triggers its display mode once and immediately
+resets its reported switch state to off, ready for another activation. Existing
+manual MQTT topics keep working. Use `--matterbridge-topic` if the plugin's base
+topic differs from `matterbridge`.
+
+See [the infrastructure guide](docs/mqtt-setup.md#register-the-applications-virtual-controls)
+for registration topics, Google Home pairing, and troubleshooting.
 
 References: [Mosquitto installation](https://mosquitto.org/download/),
 [mosquitto_pub options](https://mosquitto.org/man/mosquitto_pub-1.html).

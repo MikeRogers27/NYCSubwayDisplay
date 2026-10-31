@@ -18,6 +18,7 @@ Pi: NYCSubwayDisplay → command queue → matrix display
 | `mosquitto` | Pi | Broker that receives and forwards MQTT messages |
 | `mosquitto-clients` | Pi and laptop | `mosquitto_pub` and `mosquitto_sub` testing tools |
 | `paho-mqtt` | Pi's project virtual environment | Python MQTT client used by the display app |
+| `matterbridge` + `matterbridge-mqtt` | Laptop | Development bridge between Google Home and the Pi's MQTT broker |
 
 The broker runs as its own system service. It is separate from the Python app.
 
@@ -162,6 +163,150 @@ the message. `OFF` is printed and ignored:
 mosquitto_pub -h 192.168.1.42 -p 1883 -t matrix/display/train/set -m OFF
 ```
 
+## 6. Install and configure Matterbridge on the laptop
+
+Matterbridge runs on the laptop during development; Mosquitto and the display app
+stay on the Pi. The intended control path is:
+
+```text
+Google Home Mini → Matterbridge + MQTT plugin on laptop
+                → Mosquitto on Pi → display app on Pi
+```
+
+### Install Node.js and Matterbridge
+
+Install **Node.js 24 LTS** using the [Node.js installation options](https://nodejs.org/en/download).
+Node.js 20 is no longer supported by current Matterbridge. Check the active
+versions, then install Matterbridge:
+
+```bash
+node --version
+npm --version
+npm install -g matterbridge --omit=dev
+matterbridge --version
+matterbridge --bridge
+```
+
+If the global npm installation requires system permissions, use
+`sudo npm install -g matterbridge --omit=dev`. Run `matterbridge` itself as your
+normal laptop user. These commands install laptop software separately from the
+project's uv environment.
+
+Leave it running and open [the local frontend](http://localhost:8283).
+Keep the laptop awake while testing. IPv6 must be enabled on the local network;
+internet-side IPv6 is not required. The phone, speaker, and laptop must be able to
+discover and communicate with each other. With multiple network interfaces, select
+the home LAN interface in the frontend's **Settings → Mdns Interface**.
+
+See [Matterbridge installation, prerequisites, and frontend configuration](https://matterbridge.io/README.html).
+
+### Install the MQTT plugin
+
+In the Matterbridge frontend, install **`matterbridge-mqtt`**, then configure its
+connection to the existing Pi broker:
+
+| Plugin setting | Value |
+|---|---|
+| `host` | `mqtt://192.168.1.42` — replace with the Pi's actual LAN IP |
+| `port` | `1883` |
+| `topic` | `matterbridge` |
+| `username`, `password` | Empty for our anonymous LAN broker |
+
+Save the settings and restart Matterbridge if prompted. Verify its logs show the
+plugin connecting to the broker. Do not use `localhost` here: on the laptop that
+would point to a laptop broker. The Pi display app should continue using
+`127.0.0.1` to reach its own broker.
+
+The plugin stores configuration in
+`~/.matterbridge/matterbridge-mqtt.config.json`. See the
+[plugin configuration and messaging protocol](https://github.com/Luligu/matterbridge-mqtt)
+for all settings and message formats.
+
+### Register the application's virtual controls
+
+Run the updated app on the Pi with `--matterbridge` added to its usual launch
+command. This flag also enables MQTT; `--mqtt` is not required separately.
+For the existing service, add `--matterbridge` to `~/run-matrix.sh` and restart
+`matrix.service`. Keep `--dummy-data` during testing to avoid API requests.
+
+Or run the emulator on the laptop, pointing it to the same Pi broker:
+
+```bash
+uv run --group dev --frozen python main.py \
+  --dummy-data --matterbridge --mqtt-host 192.168.1.42
+```
+
+Replace the example IP with the Pi's address. When running on the Pi, omit
+`--mqtt-host` to keep using localhost. `--matterbridge-topic` defaults to
+`matterbridge` and must match the plugin's `topic` setting. The manual
+`matrix/display/.../set` commands remain available.
+
+Each successful broker connection subscribes to the controls' write topics and
+publishes retained configuration, initial off state, and attribute subscriptions:
+
+| Device ID | Name shown in Matterbridge / Google Home | Display request |
+|---|---|---|
+| `matrix-trains` | All Trains | Configured train stops |
+| `matrix-f-trains` | F Trains | Only `F23N` |
+| `matrix-r-trains` | R Trains | Only `R33N` |
+| `matrix-clock` | Matrix Clock | Clock |
+| `matrix-weather` | Matrix Weather | Weather |
+
+The controls are exposed as on/off plug-in units (virtual outlets). Their stable
+IDs preserve endpoint identities between application restarts. The app announces
+all five controls automatically; no manual device registration is needed.
+
+The plugin sends commands as JSON on topics such as:
+
+```text
+matterbridge/matrix-f-trains/write/root
+{"OnOff":{"onOff":true}}
+```
+
+The app translates boolean `onOff: true` into the same interruptible `DisplayMode`
+request as a manual `ON` command, then publishes `onOff: false` to the control's
+state topic. This momentary reset allows repeated voice activations and does not
+stop the display. False, malformed, and retained write commands are ignored.
+Configuration remains retained when the app exits; leave the app running to act
+on commands. Keep one app instance responsible for this display during testing.
+
+To register and inspect commands without running a matrix:
+
+```bash
+uv run --frozen python mqtt_listener.py --matterbridge --mqtt-host 192.168.1.42
+```
+
+This standalone mode also resets virtual switches but only reports commands to
+the console. To monitor registration and state feedback from the laptop:
+
+```bash
+mosquitto_sub -h 192.168.1.42 -t 'matterbridge/#' -v
+```
+
+After the controls appear in the plugin frontend, test F Trains using this command
+while the app is running (do not add `-r` to activation messages):
+
+```bash
+mosquitto_pub -h 192.168.1.42 -t matterbridge/matrix-f-trains/write/root \
+  -m '{"OnOff":{"onOff":true}}'
+```
+
+### Pair with Google Home once the first control is registered
+
+Keep the Google Home Mini connected to the same household and LAN. Google lists
+it as a [Matter-over-Wi-Fi hub](https://support.google.com/googlehome/answer/12391458?hl=en);
+this setup does not require Thread hardware.
+
+1. Open the Google Home app on your phone and choose **Add → Device**.
+2. Scan the Matterbridge pairing QR code shown in its frontend; follow the prompts
+   to add it to the household containing the Mini.
+3. Verify the F Trains control appears and works from the phone app.
+4. Test a voice command such as “Hey Google, turn on F Trains.”
+
+See [Google Home Matter pairing instructions](https://support.google.com/googlehome/answer/13127223?hl=en-CA)
+for the current app flow. Once F Trains works, test R Trains, All Trains,
+Matrix Clock, and Matrix Weather in the same way.
+
 ## Troubleshooting
 
 - **Connection refused:** check `systemctl status mosquitto` and `ss` on the Pi.
@@ -170,6 +315,9 @@ mosquitto_pub -h 192.168.1.42 -p 1883 -t matrix/display/train/set -m OFF
 - **Publish succeeds but nothing happens:** confirm the app has `--mqtt` enabled
   and uses the same broker and topic. Start it before publishing; these test
   messages are not retained for later subscribers.
+- **Matterbridge controls appear but do not send write messages:** restart
+  Matterbridge once after initial registration so the plugin can reapply the
+  retained state and attribute subscriptions, then try the control again.
 
 Broker logs on the Pi:
 
