@@ -1,14 +1,8 @@
 import argparse
-import importlib
-import os
 import time
 from typing import Any
 
-if os.name == "nt":
-    RGBMatrix = importlib.import_module("RGBMatrixEmulator").RGBMatrix
-    RGBMatrixOptions = importlib.import_module("RGBMatrixEmulator").RGBMatrixOptions
-else:
-    from rgbmatrix import RGBMatrix, RGBMatrixOptions
+from matrix_backend import USE_EMULATOR, RGBMatrix, RGBMatrixOptions
 
 
 class SampleBase:
@@ -39,7 +33,7 @@ class SampleBase:
         options.led_rgb_sequence = self.args.led_rgb_sequence
         options.pixel_mapper_config = self.args.led_pixel_mapper
         options.panel_type = self.args.led_panel_type
-        if os.name != "nt":
+        if not USE_EMULATOR:
             options.limit_refresh_rate_hz = self.args.led_limit_refresh
 
         if self.args.led_show_refresh:
