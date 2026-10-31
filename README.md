@@ -194,6 +194,8 @@ With Mosquitto's command-line clients installed, publish from another terminal:
 
 ```bash
 mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/train/set -m ON
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/f-trains/set -m ON
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/r-trains/set -m ON
 mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/clock/set -m ON
 mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/weather/set -m ON
 ```
@@ -216,6 +218,9 @@ messages. Pending commands are coalesced so the latest command wins.
 Requested modes use their duration from the pending rotation; if absent, defaults
 are trains 5 seconds, clock 30 seconds, and weather 5 seconds, with existing
 multi-view timings preserved. See [MQTT.md](MQTT.md) for examples.
+The `f-trains` and `r-trains` topics show only `F23N` or `R33N`, respectively,
+without changing the stops used by later scheduled displays. Modes carry optional
+stop selections as immutable `DisplayMode` objects.
 Console reporting runs independently of display sleeps. Ctrl+C stops the listener
 and its network thread; the display also cleans up MQTT when it exits.
 Display sleeps and animations can be interrupted; an in-progress synchronous API

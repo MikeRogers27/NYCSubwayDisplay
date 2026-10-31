@@ -58,6 +58,8 @@ Once the app reports it is connected, run these in a second terminal:
 
 ```bash
 mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/train/set -m ON
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/f-trains/set -m ON
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/r-trains/set -m ON
 mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/clock/set -m ON
 mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/weather/set -m ON
 mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/train/set -m OFF
@@ -67,6 +69,8 @@ The app's console should show:
 
 ```text
 MQTT topic='matrix/display/train/set' payload=b'ON' -> command='trains'
+MQTT topic='matrix/display/f-trains/set' payload=b'ON' -> command='trains' stop_ids=('F23N',)
+MQTT topic='matrix/display/r-trains/set' payload=b'ON' -> command='trains' stop_ids=('R33N',)
 MQTT topic='matrix/display/clock/set' payload=b'ON' -> command='clock'
 MQTT topic='matrix/display/weather/set' payload=b'ON' -> command='weather'
 MQTT topic='matrix/display/train/set' payload=b'OFF'
@@ -79,8 +83,13 @@ the app terminal to stop it.
 Requested modes use their duration from the pending rotation. When absent from
 that rotation, defaults are trains 5 seconds, clock 30 seconds, and weather 5 seconds
 (train and weather renderers retain their normal multi-view timing). `OFF` is
-ignored for all three topics. If `--mqtt-topic` was explicitly set to the old train
+ignored for all supported topics. If `--mqtt-topic` was explicitly set to the old train
 topic, remove it or use `--mqtt-topic 'matrix/display/+/set'` to receive all modes.
+
+`train/set` uses the configured stop rotation. `f-trains/set` selects only `F23N`
+and `r-trains/set` selects only `R33N` (both northbound). These selections apply
+only to that request; scheduled all-stop and uptown displays keep their original
+configuration. The default subscription receives all five topics.
 
 Switching interrupts display sleeps and animation waits. A synchronous API request
 already running must finish first; `--dummy-data` avoids that delay while testing.

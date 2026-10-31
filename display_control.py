@@ -1,24 +1,33 @@
 """Wake the render thread when a queued display command arrives."""
 
+from dataclasses import dataclass
 from queue import Empty, SimpleQueue
 from threading import Event, Lock
+
+
+@dataclass(frozen=True)
+class DisplayMode:
+    """A display mode with an optional per-request train stop selection."""
+
+    name: str
+    stop_ids: tuple[str, ...] | None = None
 
 
 class DisplayControl:
     """Keep commands queued until the scheduler consumes them."""
 
     def __init__(self) -> None:
-        self.commands: SimpleQueue[str] = SimpleQueue()
+        self.commands: SimpleQueue[DisplayMode] = SimpleQueue()
         self.interrupt = Event()
         self._lock = Lock()
 
-    def request(self, mode: str) -> None:
+    def request(self, mode: DisplayMode) -> None:
         """Queue a mode and immediately wake an active display wait."""
         with self._lock:
             self.commands.put(mode)
             self.interrupt.set()
 
-    def next_command(self) -> str | None:
+    def next_command(self) -> DisplayMode | None:
         """Consume pending commands, keeping the latest, and reset the wake signal."""
         with self._lock:
             latest = None

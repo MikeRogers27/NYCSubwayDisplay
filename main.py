@@ -31,7 +31,7 @@ from pyowm.commons.exceptions import TimeoutError
 from pyowm.weatherapi30.observation import Observation
 
 import dummy_data
-from display_control import DisplayControl
+from display_control import DisplayControl, DisplayMode
 from matrix_backend import graphics
 from mqtt_listener import MQTTListener, add_mqtt_arguments
 from samplebase import SampleBase
@@ -1135,7 +1135,7 @@ class RunMatrix(SampleBase):
     def __init__(self, stop_ids, uptown_stop_ids, args) -> None:
         super().__init__(args)
         self.display_control = DisplayControl()
-        self._remaining_rotation: list[tuple[str, int]] = []
+        self._remaining_rotation: list[tuple[DisplayMode, int]] = []
 
         self.stop_ids: Any = stop_ids
         self.uptown_stop_ids: Any = uptown_stop_ids
@@ -1892,13 +1892,12 @@ class RunMatrix(SampleBase):
 
         return canvas
 
-    def display_trains(self, canvas, display_time=10, uptown_only=False):
+    def display_trains(self, canvas, display_time=10, uptown_only=False, stop_ids: tuple[str, ...] | None = None):
         LOG.debug(f"RunMatrix.display_trains - uptown_only {uptown_only}")
 
         mta_update_feeds()
-        stop_ids: Any = self.stop_ids
-        if uptown_only:
-            stop_ids: Any = self.uptown_stop_ids
+        if stop_ids is None:
+            stop_ids = self.uptown_stop_ids if uptown_only else self.stop_ids
         for stop_id in stop_ids:
             if self.display_control.interrupt.is_set():
                 return canvas
@@ -1996,17 +1995,17 @@ class RunMatrix(SampleBase):
         """Return True when a command or shutdown interrupts a display wait."""
         return self.display_control.wait(seconds)
 
-    def what_should_we_display(self) -> tuple[list[str], list[int]]:
+    def what_should_we_display(self) -> tuple[list[DisplayMode], list[int]]:
         """Prepend a requested mode to the pending rotation."""
         command = self.display_control.next_command()
         if not self._remaining_rotation:
             items, durations = self.scheduled_display()
             self._remaining_rotation = list(zip(items, durations))
         command_durations = {"trains": 5, "clock": 30, "weather": 5}
-        if command in command_durations:
+        if command is not None and command.name in command_durations:
             duration = next(
-                (duration for mode, duration in self._remaining_rotation if mode == command),
-                command_durations[command],
+                (duration for mode, duration in self._remaining_rotation if mode.name == command.name),
+                command_durations[command.name],
             )
             entry = (command, duration)
             # Repeated requests restart the current entry without stacking copies.
@@ -2018,8 +2017,8 @@ class RunMatrix(SampleBase):
         )
 
     @staticmethod
-    def scheduled_display() -> tuple[list[str], list[int]]:
-        # return ["sports"], [5]
+    def scheduled_display() -> tuple[list[DisplayMode], list[int]]:
+        # return [DisplayMode("sports")], [5]
 
         now = datetime.now(tz=LOCAL_TZ)
         timestamp = now.time()
@@ -2029,13 +2028,18 @@ class RunMatrix(SampleBase):
         if weekday < 5:
             # morning between 7am and 10am
             if dt_time(7, 0) <= timestamp < dt_time(10, 0):
-                return ["trains_uptown", "clock", "weather"], [5, 5, 5]
+                return [DisplayMode("trains_uptown"), DisplayMode("clock"), DisplayMode("weather")], [5, 5, 5]
             # day between 10am and 8pm
             if dt_time(10, 0) <= timestamp < dt_time(20, 0):
-                return ["trains", "clock", "weather"], [5, 10, 5]
+                return [DisplayMode("trains"), DisplayMode("clock"), DisplayMode("weather")], [5, 10, 5]
             # evening after 8pm til midnight
             if timestamp > dt_time(19, 30):
-                return ["clock", "weather", "sports", "seasonal"], [
+                return [
+                    DisplayMode("clock"),
+                    DisplayMode("weather"),
+                    DisplayMode("sports"),
+                    DisplayMode("seasonal"),
+                ], [
                     30,
                     5,
                     MIN_DISPLAY_TIME,
@@ -2043,13 +2047,19 @@ class RunMatrix(SampleBase):
                 ]
 
             # off after midnight
-            return ["off"], [600]
+            return [DisplayMode("off")], [600]
 
         # weekends
         else:
             # all day between 9am and midnight
             if timestamp > dt_time(9, 0):
-                return ["trains", "clock", "weather", "sports", "seasonal"], [
+                return [
+                    DisplayMode("trains"),
+                    DisplayMode("clock"),
+                    DisplayMode("weather"),
+                    DisplayMode("sports"),
+                    DisplayMode("seasonal"),
+                ], [
                     5,
                     30,
                     5,
@@ -2058,7 +2068,7 @@ class RunMatrix(SampleBase):
                 ]
 
             # off after midnight
-            return ["off"], [600]
+            return [DisplayMode("off")], [600]
 
     def run(self) -> None:
 
@@ -2075,19 +2085,21 @@ class RunMatrix(SampleBase):
                         or self.display_control.interrupt.is_set()
                     ):
                         break
-                    if display_item == "trains":
-                        canvas = self.display_trains(canvas, display_time=display_time)
-                    elif display_item == "trains_uptown":
+                    if display_item.name == "trains":
+                        canvas = self.display_trains(
+                            canvas, display_time=display_time, stop_ids=display_item.stop_ids
+                        )
+                    elif display_item.name == "trains_uptown":
                         canvas = self.display_trains(
                             canvas, display_time=display_time, uptown_only=True
                         )
-                    elif display_item == "clock":
+                    elif display_item.name == "clock":
                         canvas = self.display_clock(canvas, display_time=display_time)
-                    elif display_item == "weather":
+                    elif display_item.name == "weather":
                         canvas = self.display_weather(canvas, display_time=display_time)
-                    elif display_item == "sports":
+                    elif display_item.name == "sports":
                         canvas = self.display_sports(canvas, display_time=display_time)
-                    elif display_item == "seasonal":
+                    elif display_item.name == "seasonal":
                         canvas = self.display_seasonal(
                             canvas, display_time=display_time
                         )

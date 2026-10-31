@@ -9,8 +9,16 @@ from typing import Any
 
 import paho.mqtt.client as mqtt
 
+from display_control import DisplayMode
+
 DEFAULT_MQTT_TOPIC = "matrix/display/+/set"
-TOPIC_MODES = {"train": "trains", "clock": "clock", "weather": "weather"}
+TOPIC_MODES = {
+    "train": DisplayMode("trains"),
+    "f-trains": DisplayMode("trains", stop_ids=("F23N",)),
+    "r-trains": DisplayMode("trains", stop_ids=("R33N",)),
+    "clock": DisplayMode("clock"),
+    "weather": DisplayMode("weather"),
+}
 
 
 class MQTTListener:
@@ -21,7 +29,7 @@ class MQTTListener:
         host: str = "127.0.0.1",
         port: int = 1883,
         topic: str = DEFAULT_MQTT_TOPIC,
-        on_command: Callable[[str], None] | None = None,
+        on_command: Callable[[DisplayMode], None] | None = None,
     ) -> None:
         self.host = host
         self.port = port
@@ -61,14 +69,14 @@ class MQTTListener:
         if self.on_command is not None and mode is not None:
             self.on_command(mode)
 
-    def _message_mode(self, message: mqtt.MQTTMessage) -> str | None:
+    def _message_mode(self, message: mqtt.MQTTMessage) -> DisplayMode | None:
         if message.payload != b"ON" or not mqtt.topic_matches_sub(self.topic, message.topic):
             return None
         parts = message.topic.rsplit("/", 2)
         if len(parts) == 3 and parts[-1] == "set":
             return TOPIC_MODES.get(parts[-2])
         # Preserve custom exact-topic aliases previously used for trains.
-        return "trains" if message.topic == self.topic else None
+        return DisplayMode("trains") if message.topic == self.topic else None
 
     def _report_messages(self) -> None:
         while not self._stop.is_set():
@@ -80,7 +88,9 @@ class MQTTListener:
 
     def _report_message(self, message: mqtt.MQTTMessage) -> None:
         mode = self._message_mode(message)
-        command = f" -> command={mode!r}" if mode is not None else ""
+        command = f" -> command={mode.name!r}" if mode is not None else ""
+        if mode is not None and mode.stop_ids is not None:
+            command += f" stop_ids={mode.stop_ids!r}"
         print(f"MQTT topic={message.topic!r} payload={message.payload!r}{command}", flush=True)
 
     def start(self) -> None:
@@ -112,8 +122,9 @@ def add_mqtt_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--mqtt-host", default="127.0.0.1", help="MQTT broker host (default: 127.0.0.1)")
     parser.add_argument("--mqtt-port", default=1883, type=int, help="MQTT broker port (default: 1883)")
     parser.add_argument(
-        "--mqtt-topic", default=DEFAULT_MQTT_TOPIC,
-        help="MQTT subscription filter (default: matrix/display/+/set; + matches train, clock, or weather)",
+        "--mqtt-topic",
+        default=DEFAULT_MQTT_TOPIC,
+        help="MQTT subscription filter (default: matrix/display/+/set; + matches train, f-trains, r-trains, clock, or weather)",
     )
 
 

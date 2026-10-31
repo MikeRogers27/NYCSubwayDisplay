@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 import paho.mqtt.client as mqtt
 
+from display_control import DisplayMode
 from mqtt_listener import MQTTListener
 
 
@@ -26,7 +27,13 @@ class MQTTListenerTests(unittest.TestCase):
     def test_supported_topics_forward_and_report_the_matching_mode(self) -> None:
         callback = Mock()
         listener = MQTTListener(on_command=callback)
-        for topic, mode in (("train", "trains"), ("clock", "clock"), ("weather", "weather")):
+        for topic, mode in (
+            ("train", DisplayMode("trains")),
+            ("f-trains", DisplayMode("trains", stop_ids=("F23N",))),
+            ("r-trains", DisplayMode("trains", stop_ids=("R33N",))),
+            ("clock", DisplayMode("clock")),
+            ("weather", DisplayMode("weather")),
+        ):
             with self.subTest(topic=topic):
                 message = mqtt.MQTTMessage(topic=f"matrix/display/{topic}/set".encode())
                 message.payload = b"ON"
@@ -34,12 +41,19 @@ class MQTTListenerTests(unittest.TestCase):
                 callback.assert_called_with(mode)
                 with redirect_stdout(io.StringIO()) as output:
                     listener._report_message(message)
-                self.assertIn(f"command={mode!r}", output.getvalue())
+                self.assertIn(f"command={mode.name!r}", output.getvalue())
+                if mode.stop_ids is not None:
+                    self.assertIn(f"stop_ids={mode.stop_ids!r}", output.getvalue())
 
     def test_unsupported_topics_and_off_do_not_forward_commands(self) -> None:
         callback = Mock()
         listener = MQTTListener(on_command=callback)
-        for topic in ("matrix/display/clock/set", "matrix/display/weather/set", "matrix/display/sports/set", "other/display/clock/set"):
+        for topic in (
+            "matrix/display/clock/set",
+            "matrix/display/weather/set",
+            "matrix/display/sports/set",
+            "other/display/clock/set",
+        ):
             for payload in (b"OFF", b"ON"):
                 if topic in ("matrix/display/clock/set", "matrix/display/weather/set") and payload == b"ON":
                     continue
@@ -55,7 +69,16 @@ class MQTTListenerTests(unittest.TestCase):
             message = mqtt.MQTTMessage(topic=f"matrix/display/{topic}/set".encode())
             message.payload = b"ON"
             listener._on_message(listener.client, None, message)
-        callback.assert_called_once_with("clock")
+        callback.assert_called_once_with(DisplayMode("clock"))
+
+    def test_filtered_train_off_messages_are_ignored(self) -> None:
+        callback = Mock()
+        listener = MQTTListener(on_command=callback)
+        for topic in ("f-trains", "r-trains"):
+            message = mqtt.MQTTMessage(topic=f"matrix/display/{topic}/set".encode())
+            message.payload = b"OFF"
+            listener._on_message(listener.client, None, message)
+        callback.assert_not_called()
 
     def test_connection_rejection_does_not_subscribe(self) -> None:
         client = Mock()
