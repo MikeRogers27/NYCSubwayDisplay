@@ -1,7 +1,8 @@
-"""Queue MQTT messages and report them without changing the matrix display."""
+"""Report MQTT messages and optionally forward display commands to the app."""
 
 import argparse
 import signal
+from collections.abc import Callable
 from queue import Empty, SimpleQueue
 from threading import Event, Thread
 from typing import Any
@@ -17,10 +18,12 @@ class MQTTListener:
         host: str = "127.0.0.1",
         port: int = 1883,
         topic: str = "matrix/display/train/set",
+        on_command: Callable[[str], None] | None = None,
     ) -> None:
         self.host = host
         self.port = port
         self.topic = topic
+        self.on_command = on_command
         self.display_commands: SimpleQueue[mqtt.MQTTMessage] = SimpleQueue()
         self._stop = Event()
         self._reporter = Thread(target=self._report_messages, name="mqtt-console", daemon=True)
@@ -51,6 +54,8 @@ class MQTTListener:
 
     def _on_message(self, client: mqtt.Client, userdata: Any, message: mqtt.MQTTMessage) -> None:
         self.display_commands.put(message)
+        if self.on_command is not None and message.topic == self.topic and message.payload == b"ON":
+            self.on_command("trains")
 
     def _report_messages(self) -> None:
         while not self._stop.is_set():

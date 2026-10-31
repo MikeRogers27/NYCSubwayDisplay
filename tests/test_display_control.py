@@ -1,0 +1,186 @@
+"""Verify command-driven interruption without a matrix or MQTT broker."""
+
+import unittest
+from threading import Event, Thread
+from unittest.mock import Mock, patch
+
+import paho.mqtt.client as mqtt
+
+import main
+from display_control import DisplayControl
+from mqtt_listener import MQTTListener
+
+
+class DisplayControlTests(unittest.TestCase):
+    def test_command_wakes_a_long_wait_without_waiting_for_timeout(self) -> None:
+        control = DisplayControl()
+        started = Event()
+        results = []
+
+        def wait() -> None:
+            started.set()
+            results.append(control.wait(600))
+
+        worker = Thread(target=wait, daemon=True)
+        worker.start()
+        try:
+            self.assertTrue(started.wait(timeout=1))
+            control.request("trains")
+            worker.join(timeout=1)
+            self.assertFalse(worker.is_alive())
+            self.assertEqual(results, [True])
+        finally:
+            control.interrupt.set()
+            worker.join(timeout=1)
+
+    def test_timeout_and_command_consumption_reset_interrupt(self) -> None:
+        control = DisplayControl()
+        self.assertFalse(control.wait(0))
+        control.request("clock")
+        control.request("trains")
+        self.assertTrue(control.wait(0))
+        self.assertEqual(control.next_command(), "trains")
+        self.assertFalse(control.wait(0))
+        self.assertIsNone(control.next_command())
+        control.request("weather")
+        self.assertTrue(control.wait(0))
+        self.assertEqual(control.next_command(), "weather")
+
+    def test_only_on_messages_queue_a_display_command(self) -> None:
+        control = DisplayControl()
+        listener = MQTTListener(on_command=control.request)
+        for payload in (b"OFF", b"on", b"invalid", b"\xff"):
+            message = mqtt.MQTTMessage(topic=b"matrix/display/train/set")
+            message.payload = payload
+            listener._on_message(listener.client, None, message)
+        self.assertIsNone(control.next_command())
+        self.assertFalse(control.wait(0))
+        message.payload = b"ON"
+        listener._on_message(listener.client, None, message)
+        self.assertTrue(control.wait(0))
+        self.assertEqual(control.next_command(), "trains")
+        self.assertEqual(listener.display_commands.qsize(), 5)
+
+
+class RenderInterruptionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Avoid fonts, GPIO, and emulator initialization for dispatcher tests.
+        self.display = main.RunMatrix.__new__(main.RunMatrix)
+        self.display.display_control = DisplayControl()
+        self.display.matrix = Mock()
+        self.canvas = Mock()
+        self.swapped_canvas = Mock()
+        self.display.matrix.CreateFrameCanvas.return_value = self.canvas
+        self.display.matrix.SwapOnVSync.return_value = self.swapped_canvas
+
+    def test_requested_mode_runs_once_then_normal_scheduling_resumes(self) -> None:
+        with patch.object(self.display, "scheduled_display", return_value=(["clock"], [30])):
+            self.display.display_control.request("trains")
+            self.display.display_control.request("trains")
+            self.assertEqual(self.display.what_should_we_display(), (["trains"], [5]))
+            self.assertFalse(self.display.display_control.interrupt.is_set())
+            self.assertEqual(self.display.what_should_we_display(), (["clock"], [30]))
+
+    def test_overnight_wait_switches_to_trains_then_back_to_schedule(self) -> None:
+        killer = Mock(kill_now=False)
+
+        def finish(canvas, display_time):
+            killer.kill_now = True
+            return canvas
+
+        with (
+            patch.object(main, "GracefulKiller", return_value=killer),
+            patch.object(self.display, "scheduled_display", side_effect=[(["off"], [600]), (["clock"], [30])]),
+            patch.object(
+                self.display,
+                "wait_for_display_interrupt",
+                side_effect=lambda seconds: self.display.display_control.request("trains") or True,
+            ) as wait,
+            patch.object(self.display, "display_trains", return_value=self.swapped_canvas) as trains,
+            patch.object(self.display, "display_clock", side_effect=finish),
+        ):
+            self.display.run()
+        wait.assert_called_once_with(600)
+        trains.assert_called_once_with(self.swapped_canvas, display_time=5)
+
+    def test_nested_train_rendering_preserves_canvas_and_skips_remaining_stations(self) -> None:
+        self.display.stop_ids = ["F23N", "R33N"]
+
+        def draw(*args):
+            self.display.display_control.request("trains")
+            return True, self.swapped_canvas
+
+        with (
+            patch.object(main, "mta_update_feeds"),
+            patch.object(main, "mta_get_next_trains"),
+            patch.object(self.display, "draw_trains", side_effect=draw) as draw_trains,
+        ):
+            self.assertIs(self.display.display_trains(self.canvas), self.swapped_canvas)
+        draw_trains.assert_called_once()
+
+    def test_train_slides_return_after_first_interrupted_wait(self) -> None:
+        with patch.object(main, "DUMMY_DATA", True):
+            trains = main.mta_get_next_trains(stop_id="F23N")
+        with (
+            patch.object(self.display, "draw_train"),
+            patch.object(
+                self.display,
+                "wait_for_display_interrupt",
+                side_effect=lambda seconds: self.display.display_control.request("trains") or True,
+            ),
+        ):
+            _, canvas = self.display.draw_trains(trains, "F23N", self.canvas, 5)
+        self.assertIs(canvas, self.swapped_canvas)
+        self.display.matrix.SwapOnVSync.assert_called_once()
+
+    def test_weather_returns_before_forecast_slides_when_interrupted(self) -> None:
+        with (
+            patch.object(main, "DUMMY_DATA", True),
+            patch.object(self.display, "draw_weather_summary"),
+            patch.object(self.display, "draw_weather") as draw_weather,
+            patch.object(self.display, "wait_for_display_interrupt", return_value=True),
+        ):
+            canvas = self.display.display_weather(self.canvas)
+        self.assertIs(canvas, self.swapped_canvas)
+        draw_weather.assert_not_called()
+        self.display.matrix.SwapOnVSync.assert_called_once()
+
+    def test_clock_returns_after_first_interrupted_tick(self) -> None:
+        self.display.font = Mock()
+        self.display.circle_font = Mock()
+        self.display.text_colour = Mock()
+        with patch.object(main, "DUMMY_DATA", True), patch.object(main.graphics, "DrawText"), patch.object(
+            self.display, "wait_for_display_interrupt", return_value=True
+        ) as wait:
+            canvas = self.display.display_clock(self.canvas, display_time=30)
+        self.assertIs(canvas, self.swapped_canvas)
+        wait.assert_called_once_with(0.5)
+        self.display.matrix.SwapOnVSync.assert_called_once()
+
+    def test_sports_returns_before_remaining_games_when_interrupted(self) -> None:
+        with (
+            patch.object(main, "DUMMY_DATA", True),
+            patch.object(self.display, "draw_game"),
+            patch.object(self.display, "wait_for_display_interrupt", return_value=True),
+        ):
+            canvas = self.display.display_sports(self.canvas)
+        self.assertIs(canvas, self.swapped_canvas)
+        self.display.matrix.SwapOnVSync.assert_called_once()
+
+    def test_seasonal_animations_return_after_first_interrupted_frame(self) -> None:
+        for renderer in (
+            self.display.draw_seasonal_scroll_up,
+            self.display.draw_seasonal_scroll_up_animate_centre,
+        ):
+            with (
+                self.subTest(renderer=renderer.__name__),
+                patch.object(self.display, "wait_for_display_interrupt", return_value=True),
+            ):
+                self.display.matrix.SwapOnVSync.reset_mock()
+                canvas = renderer(self.canvas, "images/halloween_anim.gif", 5)
+                self.assertIs(canvas, self.swapped_canvas)
+                self.display.matrix.SwapOnVSync.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()

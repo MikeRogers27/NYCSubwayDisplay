@@ -198,15 +198,22 @@ mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/train/set -m ON
 
 Each received message goes into a `SimpleQueue`, then a console worker consumes
 it and prints its topic and raw payload. For `ON`, the output also identifies the
-future `trains` command:
+`trains` command:
 
 ```text
 MQTT topic='matrix/display/train/set' payload=b'ON' -> command='trains'
 ```
 
-Other payloads are reported too. Messages do not change the display yet.
+In the app, `ON` interrupts the current display wait and selects trains for one
+normal train rotation using the existing display durations, then automatic
+scheduling resumes. `OFF` and other payloads are
+reported but do not interrupt the display. The standalone listener only reports
+messages. Pending commands are coalesced so the latest command wins.
 Console reporting runs independently of display sleeps. Ctrl+C stops the listener
 and its network thread; the display also cleans up MQTT when it exits.
+Display sleeps and animations can be interrupted; an in-progress synchronous API
+request must finish before the renderer can switch modes. Use `--dummy-data` to
+try switching without external requests.
 
 ### Development with Dummy Data
 
@@ -243,6 +250,7 @@ preview and optional MQTT connection continue to work in dummy mode.
 ├── matrix_backend.py       # Shared emulator/native driver selection
 ├── mqtt_listener.py        # MQTT queue and console listener (also runnable alone)
 ├── dummy_data.py           # Local MTA, OWM, RAPI, and SGO fixtures
+├── display_control.py      # Queued display commands and interruptible waits
 ├── weather.py              # Weather API experimentation script
 ├── utils/
 │   └── colors.py           # Image color extraction utilities
