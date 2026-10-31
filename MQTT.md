@@ -4,7 +4,7 @@ For a broker running on the Pi with commands sent from your laptop, follow
 [the MQTT infrastructure setup guide](docs/mqtt-setup.md).
 
 The listener queues received messages and prints them to the app's console.
-In the app, `ON` interrupts the current display wait and shows trains for one
+In the app, `ON` interrupts the current display wait and shows the requested mode for one
 normal display period, then returns to the interrupted rotation entry and continues
 from there. The interrupted entry restarts its usual duration. `OFF` is reported and ignored.
 The standalone listener only prints messages.
@@ -42,7 +42,7 @@ doesn't use external API quotas or require API keys.
 | `--mqtt` | Disabled | Enable MQTT in the app |
 | `--mqtt-host` | `127.0.0.1` | Broker hostname or IP address |
 | `--mqtt-port` | `1883` | Broker TCP port |
-| `--mqtt-topic` | `matrix/display/train/set` | Topic to subscribe to |
+| `--mqtt-topic` | `matrix/display/+/set` | Subscription filter; `+` matches one topic segment |
 
 To test without starting the matrix, run the standalone listener instead:
 
@@ -58,6 +58,8 @@ Once the app reports it is connected, run these in a second terminal:
 
 ```bash
 mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/train/set -m ON
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/clock/set -m ON
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/weather/set -m ON
 mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/train/set -m OFF
 ```
 
@@ -65,12 +67,20 @@ The app's console should show:
 
 ```text
 MQTT topic='matrix/display/train/set' payload=b'ON' -> command='trains'
+MQTT topic='matrix/display/clock/set' payload=b'ON' -> command='clock'
+MQTT topic='matrix/display/weather/set' payload=b'ON' -> command='weather'
 MQTT topic='matrix/display/train/set' payload=b'OFF'
 ```
 
 Use matching host, port, and topic values in the app and publisher if you change
 the defaults. The listener retries if the broker is unavailable. Press Ctrl+C in
 the app terminal to stop it.
+
+Requested modes use their duration from the pending rotation. When absent from
+that rotation, defaults are trains 5 seconds, clock 30 seconds, and weather 5 seconds
+(train and weather renderers retain their normal multi-view timing). `OFF` is
+ignored for all three topics. If `--mqtt-topic` was explicitly set to the old train
+topic, remove it or use `--mqtt-topic 'matrix/display/+/set'` to receive all modes.
 
 Switching interrupts display sleeps and animation waits. A synchronous API request
 already running must finish first; `--dummy-data` avoids that delay while testing.

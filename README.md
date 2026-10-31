@@ -185,7 +185,7 @@ uv run --group dev --frozen python mqtt_listener.py
 ```
 
 An MQTT broker must be running separately. The defaults are `127.0.0.1:1883`
-and topic `matrix/display/train/set`. Both commands accept `--mqtt-host`,
+and subscription filter `matrix/display/+/set`. Both commands accept `--mqtt-host`,
 `--mqtt-port`, and `--mqtt-topic` to override these. This basic interface uses
 an unauthenticated TCP connection. If the broker is unavailable, the listener
 retries in the background.
@@ -194,6 +194,8 @@ With Mosquitto's command-line clients installed, publish from another terminal:
 
 ```bash
 mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/train/set -m ON
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/clock/set -m ON
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/weather/set -m ON
 ```
 
 Each received message goes into a `SimpleQueue`, then a console worker consumes
@@ -204,13 +206,16 @@ it and prints its topic and raw payload. For `ON`, the output also identifies th
 MQTT topic='matrix/display/train/set' payload=b'ON' -> command='trains'
 ```
 
-In the app, `ON` interrupts the current display wait and selects trains for one
-normal train rotation using the existing display durations, then returns to the
+In the app, `ON` interrupts the current display wait and selects trains, clock,
+or weather according to the topic, then returns to the
 interrupted rotation entry and continues with the remaining entries. The resumed
 entry starts its usual duration again; the time-based schedule is refreshed once
 that rotation finishes. `OFF` and other payloads are
 reported but do not interrupt the display. The standalone listener only reports
 messages. Pending commands are coalesced so the latest command wins.
+Requested modes use their duration from the pending rotation; if absent, defaults
+are trains 5 seconds, clock 30 seconds, and weather 5 seconds, with existing
+multi-view timings preserved. See [MQTT.md](MQTT.md) for examples.
 Console reporting runs independently of display sleeps. Ctrl+C stops the listener
 and its network thread; the display also cleans up MQTT when it exits.
 Display sleeps and animations can be interrupted; an in-progress synchronous API

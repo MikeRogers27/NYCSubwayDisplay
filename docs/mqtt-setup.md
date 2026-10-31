@@ -119,7 +119,8 @@ and API-key requirements while testing. For the existing `matrix.service`, add
 Add `--dummy-data` there too if you want the service to use sample data.
 
 The app's defaults are `--mqtt-host 127.0.0.1`, `--mqtt-port 1883`, and
-`--mqtt-topic matrix/display/train/set`. Only `--mqtt` is needed to enable it.
+`--mqtt-topic 'matrix/display/+/set'`. The `+` matches the train, clock, or weather
+topic segment. Only `--mqtt` is needed to enable it.
 The app does not need to listen on its LAN IP: the broker accepts the laptop's
 connection and forwards messages through the app's localhost connection.
 
@@ -136,6 +137,8 @@ publish from a laptop terminal, replacing the example IP with the Pi's address:
 
 ```bash
 mosquitto_pub -h 192.168.1.42 -p 1883 -t matrix/display/train/set -m ON
+mosquitto_pub -h 192.168.1.42 -p 1883 -t matrix/display/clock/set -m ON
+mosquitto_pub -h 192.168.1.42 -p 1883 -t matrix/display/weather/set -m ON
 ```
 
 The Pi console should show:
@@ -144,8 +147,8 @@ The Pi console should show:
 MQTT topic='matrix/display/train/set' payload=b'ON' -> command='trains'
 ```
 
-In the display app, `ON` interrupts the current rendering wait and runs the normal
-train rotation once, then returns to the interrupted rotation entry and continues
+In the display app, `ON` interrupts the current rendering wait and runs the
+requested mode once, then returns to the interrupted rotation entry and continues
 through the remaining entries. The interrupted entry restarts its usual duration.
 The standalone listener only prints
 the message. `OFF` is printed and ignored:
@@ -175,7 +178,7 @@ To verify laptop-to-broker delivery independently of the app, run this on the Pi
 and publish again from the laptop:
 
 ```bash
-mosquitto_sub -h 127.0.0.1 -p 1883 -t matrix/display/train/set -v
+mosquitto_sub -h 127.0.0.1 -p 1883 -t 'matrix/display/+/set' -v
 ```
 
 References: [Mosquitto listener behavior](https://mosquitto.org/man/mosquitto-8.html),

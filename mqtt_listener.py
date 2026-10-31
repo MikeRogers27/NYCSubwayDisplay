@@ -9,6 +9,9 @@ from typing import Any
 
 import paho.mqtt.client as mqtt
 
+DEFAULT_MQTT_TOPIC = "matrix/display/+/set"
+TOPIC_MODES = {"train": "trains", "clock": "clock", "weather": "weather"}
+
 
 class MQTTListener:
     """Receive messages on a network thread and consume them on a console thread."""
@@ -17,7 +20,7 @@ class MQTTListener:
         self,
         host: str = "127.0.0.1",
         port: int = 1883,
-        topic: str = "matrix/display/train/set",
+        topic: str = DEFAULT_MQTT_TOPIC,
         on_command: Callable[[str], None] | None = None,
     ) -> None:
         self.host = host
@@ -54,8 +57,18 @@ class MQTTListener:
 
     def _on_message(self, client: mqtt.Client, userdata: Any, message: mqtt.MQTTMessage) -> None:
         self.display_commands.put(message)
-        if self.on_command is not None and message.topic == self.topic and message.payload == b"ON":
-            self.on_command("trains")
+        mode = self._message_mode(message)
+        if self.on_command is not None and mode is not None:
+            self.on_command(mode)
+
+    def _message_mode(self, message: mqtt.MQTTMessage) -> str | None:
+        if message.payload != b"ON" or not mqtt.topic_matches_sub(self.topic, message.topic):
+            return None
+        parts = message.topic.rsplit("/", 2)
+        if len(parts) == 3 and parts[-1] == "set":
+            return TOPIC_MODES.get(parts[-2])
+        # Preserve custom exact-topic aliases previously used for trains.
+        return "trains" if message.topic == self.topic else None
 
     def _report_messages(self) -> None:
         while not self._stop.is_set():
@@ -66,7 +79,8 @@ class MQTTListener:
             self._report_message(message)
 
     def _report_message(self, message: mqtt.MQTTMessage) -> None:
-        command = " -> command='trains'" if message.topic == self.topic and message.payload == b"ON" else ""
+        mode = self._message_mode(message)
+        command = f" -> command={mode!r}" if mode is not None else ""
         print(f"MQTT topic={message.topic!r} payload={message.payload!r}{command}", flush=True)
 
     def start(self) -> None:
@@ -98,7 +112,8 @@ def add_mqtt_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--mqtt-host", default="127.0.0.1", help="MQTT broker host (default: 127.0.0.1)")
     parser.add_argument("--mqtt-port", default=1883, type=int, help="MQTT broker port (default: 1883)")
     parser.add_argument(
-        "--mqtt-topic", default="matrix/display/train/set", help="MQTT subscription topic (default: matrix/display/train/set)"
+        "--mqtt-topic", default=DEFAULT_MQTT_TOPIC,
+        help="MQTT subscription filter (default: matrix/display/+/set; + matches train, clock, or weather)",
     )
 
 

@@ -2002,8 +2002,13 @@ class RunMatrix(SampleBase):
         if not self._remaining_rotation:
             items, durations = self.scheduled_display()
             self._remaining_rotation = list(zip(items, durations))
-        if command == "trains":
-            entry = ("trains", 5)
+        command_durations = {"trains": 5, "clock": 30, "weather": 5}
+        if command in command_durations:
+            duration = next(
+                (duration for mode, duration in self._remaining_rotation if mode == command),
+                command_durations[command],
+            )
+            entry = (command, duration)
             # Repeated requests restart the current entry without stacking copies.
             if not self._remaining_rotation or self._remaining_rotation[0] != entry:
                 self._remaining_rotation.insert(0, entry)

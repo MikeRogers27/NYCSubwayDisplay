@@ -89,6 +89,24 @@ class RenderInterruptionTests(unittest.TestCase):
         self.display.display_control.request("trains")
         self.assertEqual(self.display.what_should_we_display(), (["trains", "weather"], [5, 5]))
 
+    def test_clock_and_weather_commands_use_rotation_durations_and_preserve_position(self) -> None:
+        for mode, duration in (("clock", 10), ("weather", 5)):
+            with self.subTest(mode=mode):
+                self.display._remaining_rotation = [("sports", 3), ("clock", 10), ("weather", 5)]
+                self.display.display_control.request(mode)
+                items, durations = self.display.what_should_we_display()
+                self.assertEqual(items, [mode, "sports", "clock", "weather"])
+                self.assertEqual(durations, [duration, 3, 10, 5])
+                self.display._remaining_rotation.pop(0)
+                self.assertEqual(self.display.what_should_we_display(), (["sports", "clock", "weather"], [3, 10, 5]))
+
+    def test_commands_have_default_durations_when_not_in_current_rotation(self) -> None:
+        for mode, duration in (("clock", 30), ("weather", 5)):
+            with self.subTest(mode=mode):
+                self.display._remaining_rotation = [("off", 600)]
+                self.display.display_control.request(mode)
+                self.assertEqual(self.display.what_should_we_display(), ([mode, "off"], [duration, 600]))
+
     def test_overnight_wait_switches_to_trains_then_back_to_schedule(self) -> None:
         killer = Mock(kill_now=False)
         waits = []

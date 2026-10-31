@@ -21,7 +21,41 @@ class MQTTListenerTests(unittest.TestCase):
             for _ in range(2):
                 self.listener._on_connect(client, None, mqtt.ConnectFlags(False), 0, None)
         self.assertEqual(client.subscribe.call_count, 2)
-        client.subscribe.assert_called_with("matrix/display/train/set")
+        client.subscribe.assert_called_with("matrix/display/+/set")
+
+    def test_supported_topics_forward_and_report_the_matching_mode(self) -> None:
+        callback = Mock()
+        listener = MQTTListener(on_command=callback)
+        for topic, mode in (("train", "trains"), ("clock", "clock"), ("weather", "weather")):
+            with self.subTest(topic=topic):
+                message = mqtt.MQTTMessage(topic=f"matrix/display/{topic}/set".encode())
+                message.payload = b"ON"
+                listener._on_message(listener.client, None, message)
+                callback.assert_called_with(mode)
+                with redirect_stdout(io.StringIO()) as output:
+                    listener._report_message(message)
+                self.assertIn(f"command={mode!r}", output.getvalue())
+
+    def test_unsupported_topics_and_off_do_not_forward_commands(self) -> None:
+        callback = Mock()
+        listener = MQTTListener(on_command=callback)
+        for topic in ("matrix/display/clock/set", "matrix/display/weather/set", "matrix/display/sports/set", "other/display/clock/set"):
+            for payload in (b"OFF", b"ON"):
+                if topic in ("matrix/display/clock/set", "matrix/display/weather/set") and payload == b"ON":
+                    continue
+                message = mqtt.MQTTMessage(topic=topic.encode())
+                message.payload = payload
+                listener._on_message(listener.client, None, message)
+        callback.assert_not_called()
+
+    def test_custom_subscription_can_restrict_commands(self) -> None:
+        callback = Mock()
+        listener = MQTTListener(topic="matrix/display/clock/set", on_command=callback)
+        for topic in ("train", "clock", "weather"):
+            message = mqtt.MQTTMessage(topic=f"matrix/display/{topic}/set".encode())
+            message.payload = b"ON"
+            listener._on_message(listener.client, None, message)
+        callback.assert_called_once_with("clock")
 
     def test_connection_rejection_does_not_subscribe(self) -> None:
         client = Mock()
