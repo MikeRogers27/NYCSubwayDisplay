@@ -7,8 +7,8 @@ from unittest.mock import Mock, patch
 
 import paho.mqtt.client as mqtt
 
-from display_control import DisplayMode
-from mqtt_listener import MQTTListener
+from utils.display_control import DisplayMode
+from utils.mqtt_listener import MQTTListener
 
 
 class MQTTListenerTests(unittest.TestCase):

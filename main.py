@@ -30,12 +30,12 @@ from pyowm import OWM
 from pyowm.commons.exceptions import TimeoutError
 from pyowm.weatherapi30.observation import Observation
 
-import dummy_data
-from console_logging import configure_console_logging
-from display_control import DisplayControl, DisplayMode
-from matrix_backend import graphics
-from mqtt_listener import MQTTListener, add_mqtt_arguments
-from samplebase import SampleBase
+from utils import dummy_data
+from utils.console_logging import configure_console_logging
+from utils.display_control import DisplayControl, DisplayMode
+from utils.matrix_backend import graphics
+from utils.mqtt_listener import MQTTListener, add_mqtt_arguments
+from utils.samplebase import SampleBase
 
 LOCAL_TZ: Any = pytz.timezone("America/New_York")
 NOW: datetime = datetime.now(tz=LOCAL_TZ)

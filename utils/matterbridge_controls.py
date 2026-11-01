@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import paho.mqtt.client as mqtt
 
-from display_control import DisplayMode
+from utils.display_control import DisplayMode
 
 
 @dataclass(frozen=True)

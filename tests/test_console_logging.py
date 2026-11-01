@@ -5,7 +5,7 @@ import subprocess
 import sys
 import unittest
 
-from console_logging import TimestampedStream
+from utils.console_logging import TimestampedStream
 
 TIMESTAMP = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} "
 
@@ -30,7 +30,7 @@ class ConsoleLoggingTests(unittest.TestCase):
                 "-c",
                 (
                     "import logging, sys\n"
-                    "from console_logging import configure_console_logging\n"
+                    "from utils.console_logging import configure_console_logging\n"
                     "configure_console_logging(logging.WARNING)\n"
                     "configure_console_logging(logging.WARNING)\n"
                     "print('status', flush=True)\n"

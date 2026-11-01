@@ -2,7 +2,7 @@ import argparse
 import time
 from typing import Any
 
-from matrix_backend import USE_EMULATOR, RGBMatrix, RGBMatrixOptions
+from utils.matrix_backend import USE_EMULATOR, RGBMatrix, RGBMatrixOptions
 
 
 class SampleBase:

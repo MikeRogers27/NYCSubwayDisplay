@@ -254,7 +254,7 @@ fixtures for every data service, including refreshes and football team metadata:
 
 The sample values are fixed; timestamps are relative to today so arrivals and
 forecasts remain useful. The existing schedule and score-hiding rules still apply.
-Dummy sports data bypasses the live caches entirely. Edit `dummy_data.py` to adjust
+Dummy sports data bypasses the live caches entirely. Edit `utils/dummy_data.py` to adjust
 the samples. Omitting `--dummy-data` uses the normal live services. The emulator
 preview and optional MQTT connection continue to work in dummy mode.
 
@@ -262,15 +262,18 @@ preview and optional MQTT connection continue to work in dummy mode.
 
 ```
 ├── main.py                 # Main application (display logic, API integrations, game classes)
-├── samplebase.py           # Base class for RGB matrix initialization
-├── matrix_backend.py       # Shared emulator/native driver selection
-├── mqtt_listener.py        # MQTT queue and console listener (also runnable alone)
-├── matterbridge_controls.py # Virtual control registration and Matterbridge commands
-├── dummy_data.py           # Local MTA, OWM, RAPI, and SGO fixtures
-├── display_control.py      # Queued display commands and interruptible waits
+├── mqtt_listener.py        # Standalone MQTT console listener entry point
 ├── weather.py              # Weather API experimentation script
 ├── utils/
-│   └── colors.py           # Image color extraction utilities
+│   ├── __init__.py
+│   ├── colors.py           # Image color extraction utilities
+│   ├── console_logging.py  # Timestamped console output and error logs
+│   ├── display_control.py  # Queued display commands and interruptible waits
+│   ├── dummy_data.py       # Local MTA, OWM, RAPI, and SGO fixtures
+│   ├── matrix_backend.py   # Shared emulator/native driver selection
+│   ├── matterbridge_controls.py # Virtual control registration and commands
+│   ├── mqtt_listener.py    # MQTT reception, reporting, and shared arguments
+│   └── samplebase.py       # Base class for RGB matrix initialization
 ├── fonts/                  # BDF bitmap fonts for the LED display
 ├── icons/32/               # 32×32 PNG icons (weather, sports teams)
 ├── images/                 # Seasonal animated GIFs and PNGs

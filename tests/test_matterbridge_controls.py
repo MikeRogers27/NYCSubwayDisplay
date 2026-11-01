@@ -9,9 +9,9 @@ from unittest.mock import Mock, patch
 import paho.mqtt.client as mqtt
 
 import main
-from display_control import DisplayControl, DisplayMode
-from matterbridge_controls import CONTROLS, MatterbridgeControls
-from mqtt_listener import MQTTListener
+from utils.display_control import DisplayControl, DisplayMode
+from utils.matterbridge_controls import CONTROLS, MatterbridgeControls
+from utils.mqtt_listener import MQTTListener
 
 
 class MatterbridgeTests(unittest.TestCase):
