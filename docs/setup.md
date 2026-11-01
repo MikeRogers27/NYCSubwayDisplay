@@ -161,7 +161,7 @@ export SGO_API_KEYS=<Key from https://sportsgameodds.com/, comma separated>
 export RPA_API_KEY=<Key from https://rapidapi.com/>
 cd ${HOME}/src/NYCSubwayDisplay
 sudo /home/pi/.local/bin/uv sync --extra pi --no-dev --locked
-sudo --preserve-env=PYTHONPATH,OWM_API_KEY,SGO_API_KEYS,RPA_API_KEY /home/pi/.local/bin/uv run --extra pi --no-dev --locked python main.py --led-gpio-mapping=adafruit-hat-pwm --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=40 --led-slowdown-gpio=1  --led-no-drop-privs
+sudo --preserve-env=PYTHONPATH,OWM_API_KEY,SGO_API_KEYS,RPA_API_KEY /home/pi/.local/bin/uv run --extra pi --no-dev --locked python main.py --led-gpio-mapping=adafruit-hat-pwm --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=40 --led-slowdown-gpio=1  --led-no-drop-privs --log WARNING
 ```
 
 Now change to executable permissions:
@@ -204,6 +204,21 @@ StandardError=append:/home/pi/logs/matrix_err.log
 [Install]
 WantedBy=multi-user.target
 ```
+
+After logging is initialized, Python console output in both files includes a
+timestamp with the Pi's local timezone offset, for example:
+
+```text
+2026-11-01T01:08:30-05:00 WARNING:Example warning
+```
+
+This includes printed status messages, logging records, and each line of Python
+tracebacks. `--log WARNING` filters logging records to warning and above; use
+`--log INFO` for more detail. Printed status messages are unaffected by this
+filter. The launch command and service output paths do not need to change.
+Output from shell commands in `run-matrix.sh`, native libraries writing directly
+to file descriptors, or failures before Python logging initializes is not
+timestamped by the app.
 
 Then enable the service
     

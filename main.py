@@ -31,6 +31,7 @@ from pyowm.commons.exceptions import TimeoutError
 from pyowm.weatherapi30.observation import Observation
 
 import dummy_data
+from console_logging import configure_console_logging
 from display_control import DisplayControl, DisplayMode
 from matrix_backend import graphics
 from mqtt_listener import MQTTListener, add_mqtt_arguments
@@ -2159,12 +2160,8 @@ def logger_setup(args) -> None:
     if not isinstance(numeric_level, int):
         raise TypeError(f"Invalid log level: {loglevel}")
 
-    # logs to the command (which gets captured if we're a service)
-    logging.basicConfig(
-        level=numeric_level,
-        format="%(asctime)s %(levelname)s:%(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    # Timestamp both streams, including prints and uncaught exception tracebacks.
+    configure_console_logging(numeric_level)
 
 
 def mta_local_time(date_time: datetime) -> datetime:
