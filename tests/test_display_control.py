@@ -8,7 +8,7 @@ import paho.mqtt.client as mqtt
 
 import main
 from utils.display_control import DisplayControl, DisplayMode
-from utils.matrix_backend import FrameCanvas
+from utils.matrix_backend import FrameCanvas, graphics
 from utils.mqtt_listener import MQTTListener
 
 
@@ -68,11 +68,12 @@ class RenderInterruptionTests(unittest.TestCase):
         self.display = main.RunMatrix.__new__(main.RunMatrix)
         self.display.display_control = DisplayControl()
         self.display._remaining_rotation = []
-        self.display.matrix = Mock()
+        self.matrix = Mock()
+        self.display.matrix = self.matrix
         self.canvas = Mock()
         self.swapped_canvas = Mock()
-        self.display.matrix.CreateFrameCanvas.return_value = self.canvas
-        self.display.matrix.SwapOnVSync.return_value = self.swapped_canvas
+        self.matrix.CreateFrameCanvas.return_value = self.canvas
+        self.matrix.SwapOnVSync.return_value = self.swapped_canvas
 
     def test_requested_mode_is_prepended_to_the_normal_rotation(self) -> None:
         with patch.object(self.display, "scheduled_display", return_value=([DisplayMode("clock")], [30])):
@@ -352,7 +353,7 @@ class RenderInterruptionTests(unittest.TestCase):
         ):
             _, canvas = self.display.draw_trains(trains, "F23N", self.canvas, 5)
         self.assertIs(canvas, self.swapped_canvas)
-        self.display.matrix.SwapOnVSync.assert_called_once()
+        self.matrix.SwapOnVSync.assert_called_once()
 
     def test_weather_returns_before_forecast_slides_when_interrupted(self) -> None:
         with (
@@ -364,7 +365,7 @@ class RenderInterruptionTests(unittest.TestCase):
             canvas = self.display.display_weather(self.canvas)
         self.assertIs(canvas, self.swapped_canvas)
         draw_weather.assert_not_called()
-        self.display.matrix.SwapOnVSync.assert_called_once()
+        self.matrix.SwapOnVSync.assert_called_once()
 
     def test_clock_returns_after_first_interrupted_tick(self) -> None:
         self.display.font = Mock()
@@ -372,13 +373,13 @@ class RenderInterruptionTests(unittest.TestCase):
         self.display.text_colour = Mock()
         with (
             patch.object(main, "DUMMY_DATA", True),
-            patch.object(main.graphics, "DrawText"),
+            patch.object(graphics, "DrawText"),
             patch.object(self.display, "wait_for_display_interrupt", return_value=True) as wait,
         ):
             canvas = self.display.display_clock(self.canvas, display_time=30)
         self.assertIs(canvas, self.swapped_canvas)
         wait.assert_called_once_with(0.5)
-        self.display.matrix.SwapOnVSync.assert_called_once()
+        self.matrix.SwapOnVSync.assert_called_once()
 
     def test_sports_returns_before_remaining_games_when_interrupted(self) -> None:
         with (
@@ -388,7 +389,7 @@ class RenderInterruptionTests(unittest.TestCase):
         ):
             canvas = self.display.display_sports(self.canvas)
         self.assertIs(canvas, self.swapped_canvas)
-        self.display.matrix.SwapOnVSync.assert_called_once()
+        self.matrix.SwapOnVSync.assert_called_once()
 
     def test_seasonal_animations_return_after_first_interrupted_frame(self) -> None:
         for renderer in (self.display.draw_seasonal_scroll_up, self.display.draw_seasonal_scroll_up_animate_centre):
@@ -396,10 +397,10 @@ class RenderInterruptionTests(unittest.TestCase):
                 self.subTest(renderer=renderer.__name__),
                 patch.object(self.display, "wait_for_display_interrupt", return_value=True),
             ):
-                self.display.matrix.SwapOnVSync.reset_mock()
+                self.matrix.SwapOnVSync.reset_mock()
                 canvas = renderer(self.canvas, "images/halloween_anim.gif", 5)
                 self.assertIs(canvas, self.swapped_canvas)
-                self.display.matrix.SwapOnVSync.assert_called_once()
+                self.matrix.SwapOnVSync.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -260,20 +260,22 @@ preview and optional MQTT connection continue to work in dummy mode.
 
 ### Type Checking
 
-Run strict mypy checks for the utilities, standalone MQTT entry point, and tests:
+Run strict mypy checks for the application, utilities, standalone MQTT entry
+point, and tests:
 
 ```bash
 uvx --python .venv/bin/python \
   --with paho-mqtt==2.1.0 --with pillow==11.1.0 \
   --with pyowm==3.5.0 --with nyct-gtfs==2.0.0 \
-  --with types-requests --with types-pytz mypy
+  --with holidays==0.63 \
+  --with types-requests --with types-pytz --with types-python-dateutil mypy
 ```
 
 This uses an isolated tool environment without changing the app's dependencies.
-The checked files are configured in `pyproject.toml`. `main.py` is temporarily
-excluded from import analysis until its typing pass, so calls into that module
-are not yet type-checked. PyOWM and nyct-gtfs lack type stubs; their import
-boundaries are explicitly marked where needed.
+The checked files are configured in `pyproject.toml`, including `main.py` and
+calls into it. PyOWM, nyct-gtfs, and the installed protobuf package lack type
+stubs; their import boundaries are explicitly marked where needed. External API
+and cached JSON data are not validated at runtime by these annotations.
 
 ## Project Structure
 

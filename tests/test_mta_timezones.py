@@ -77,3 +77,16 @@ class MTATimezoneTests(unittest.TestCase):
                 wall_time = datetime(2026, 11, 1, 1, 8, 30)  # noqa: DTZ001 -- Test both localizations of a naive time.
                 aware = main.LOCAL_TZ.localize(wall_time, is_dst=is_dst)
                 self.assertEqual(main.mta_local_time(aware).timestamp(), aware.timestamp())
+
+    def test_missing_arrival_is_skipped_instead_of_converted(self) -> None:
+        instant = datetime(2026, 11, 1, 6, 8, 30, tzinfo=UTC)
+        missing = StopTimeUpdate(
+            SimpleNamespace(stop_id="F23N", HasField=lambda field: False), stops={}
+        )
+        train = SimpleNamespace(
+            location_status="IN_TRANSIT_TO",
+            stop_time_updates=[missing, self.arrival_update(instant)],
+        )
+        self.assertEqual(main.mta_arrival_time(train, "F23N").astimezone(UTC), instant)
+        train.stop_time_updates = [missing]
+        self.assertEqual(main.mta_arrival_time(train, "F23N").year, 9999)
