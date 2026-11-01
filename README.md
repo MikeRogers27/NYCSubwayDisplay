@@ -57,7 +57,7 @@ The display automatically decides what to show based on day and time:
 
 ## Software Requirements
 
-- Python 3.10+
+- Python 3.13
 - [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) library (for Raspberry Pi)
 - [RGBMatrixEmulator](https://github.com/ty-porter/RGBMatrixEmulator) (for Windows/desktop development)
 
@@ -86,8 +86,8 @@ See [docs/setup.md](docs/setup.md) for full step-by-step instructions covering:
 git clone git@github.com:MikeRogers27/NYCSubwayDisplay.git
 cd NYCSubwayDisplay
 
-# Create and sync the uv environment
-uv sync --group dev
+# Install development dependencies, including the emulator (Linux/macOS/Windows)
+uv sync --group dev --frozen
 
 # Activate the environment (optional, but useful for local shells)
 source .venv/bin/activate  # Linux/Mac
@@ -102,7 +102,24 @@ export RPA_API_KEY=your_key
 python main.py
 ```
 
-On Windows, the emulator serves a browser-based preview at `http://localhost:8888` (configurable in `emulator_config.json`).
+The emulator serves a browser-based preview at `http://localhost:8888` (configurable in `emulator_config.json`).
+
+The `dev` group installs the emulator on every platform and is included by default
+by uv. Windows always installs and uses the emulator, even with `--no-dev`.
+Use `--frozen` on development machines to install from the committed lockfile
+without needing the local Pi driver checkout to validate or resolve dependencies.
+On Linux, the application uses the emulator when it is installed; otherwise it uses
+the native `rgbmatrix` driver. For Raspberry Pi deployment, install only the Pi
+dependencies and use the same selection when running:
+
+```bash
+uv sync --extra pi --no-dev --locked
+uv run --extra pi --no-dev --locked python main.py
+```
+
+The Pi installation expects the native driver checkout at
+`../rpi-rgb-led-matrix/bindings/python`; see [docs/setup.md](docs/setup.md).
+Updating the lockfile with `uv lock` also requires this checkout.
 
 ## Usage
 
@@ -153,11 +170,104 @@ The `HIDE_SCORES` dictionary lets you hide scores for specific teams/competition
 ### Emulator
 Adjust `emulator_config.json` to change pixel size, style, browser port, and FPS for the desktop emulator.
 
+### MQTT Listener
+
+MQTT is optional and uses `paho-mqtt` 2.x. Enable it alongside the display with:
+
+```bash
+uv run --group dev --frozen python main.py --mqtt
+```
+
+Or run just the listener, without the matrix or API keys:
+
+```bash
+uv run --group dev --frozen python mqtt_listener.py
+```
+
+An MQTT broker must be running separately. The defaults are `127.0.0.1:1883`
+and subscription filter `matrix/display/+/set`. Both commands accept `--mqtt-host`,
+`--mqtt-port`, and `--mqtt-topic` to override these. This basic interface uses
+an unauthenticated TCP connection. If the broker is unavailable, the listener
+retries in the background.
+
+With Mosquitto's command-line clients installed, publish from another terminal:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/train/set -m ON
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/f-trains/set -m ON
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/r-trains/set -m ON
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/clock/set -m ON
+mosquitto_pub -h 127.0.0.1 -p 1883 -t matrix/display/weather/set -m ON
+```
+
+Each received message goes into a `SimpleQueue`, then a console worker consumes
+it and prints its topic and raw payload. For `ON`, the output also identifies the
+`trains` command:
+
+```text
+MQTT topic='matrix/display/train/set' payload=b'ON' -> command='trains'
+```
+
+In the app, `ON` interrupts the current display wait and selects trains, clock,
+or weather according to the topic, then returns to the
+interrupted rotation entry and continues with the remaining entries. The resumed
+entry starts its usual duration again; the time-based schedule is refreshed once
+that rotation finishes. `OFF` and other payloads are
+reported but do not interrupt the display. The standalone listener only reports
+messages. Pending commands are coalesced so the latest command wins.
+Requested modes use their duration from the pending rotation; if absent, defaults
+are trains 5 seconds, clock 30 seconds, and weather 5 seconds, with existing
+multi-view timings preserved. See [MQTT.md](MQTT.md) for examples.
+The `f-trains` and `r-trains` topics show only `F23N` or `R33N`, respectively,
+without changing the stops used by later scheduled displays. Modes carry optional
+stop selections as immutable `DisplayMode` objects.
+Use `--matterbridge` to enable MQTT and automatically register these five display
+controls with the `matterbridge-mqtt` plugin. Each acts as a momentary virtual
+outlet: activation requests a display mode and resets its reported state to off.
+See [the Matterbridge setup instructions](docs/mqtt-setup.md#6-install-and-configure-matterbridge-on-the-laptop).
+Console reporting runs independently of display sleeps. Ctrl+C stops the listener
+and its network thread; the display also cleans up MQTT when it exits.
+Display sleeps and animations can be interrupted; an in-progress synchronous API
+request must finish before the renderer can switch modes. Use `--dummy-data` to
+try switching without external requests.
+
+### Development with Dummy Data
+
+Use `--dummy-data` to conserve external API quotas while developing:
+
+```bash
+uv run --group dev --frozen python main.py --dummy-data
+# Combine with MQTT if needed:
+uv run --group dev --frozen python main.py --dummy-data --mqtt
+```
+
+This mode needs no API keys and skips the SGO account-usage check. It uses local
+fixtures for every data service, including refreshes and football team metadata:
+
+| Service | Sample data |
+|---|---|
+| MTA | F/G/R trains arriving in 3, 8, 15, and 22 minutes, in both directions |
+| OWM | 18°C current weather and five days of three-hour forecasts |
+| RAPI football | Sunderland leading Manchester United 2–1 in a live game |
+| RAPI rugby | Wigan beating St Helens 24–18 in a completed game |
+| SGO | MLB, NHL, NFL, and MLS games covering completed, live, and upcoming events |
+
+The sample values are fixed; timestamps are relative to today so arrivals and
+forecasts remain useful. The existing schedule and score-hiding rules still apply.
+Dummy sports data bypasses the live caches entirely. Edit `dummy_data.py` to adjust
+the samples. Omitting `--dummy-data` uses the normal live services. The emulator
+preview and optional MQTT connection continue to work in dummy mode.
+
 ## Project Structure
 
 ```
 ├── main.py                 # Main application (display logic, API integrations, game classes)
 ├── samplebase.py           # Base class for RGB matrix initialization
+├── matrix_backend.py       # Shared emulator/native driver selection
+├── mqtt_listener.py        # MQTT queue and console listener (also runnable alone)
+├── matterbridge_controls.py # Virtual control registration and Matterbridge commands
+├── dummy_data.py           # Local MTA, OWM, RAPI, and SGO fixtures
+├── display_control.py      # Queued display commands and interruptible waits
 ├── weather.py              # Weather API experimentation script
 ├── utils/
 │   └── colors.py           # Image color extraction utilities
@@ -169,8 +279,8 @@ Adjust `emulator_config.json` to change pixel size, style, browser port, and FPS
 ├── docs/
 │   └── setup.md            # Raspberry Pi setup guide
 ├── emulator_config.json    # RGBMatrixEmulator settings
-├── requirements.txt        # Python dependencies (Raspberry Pi)
-└── requirements_win.txt    # Python dependencies (Windows/emulator)
+├── pyproject.toml          # Dependencies and development/Pi selections
+└── uv.lock                 # Locked dependency versions
 ```
 
 ## License
