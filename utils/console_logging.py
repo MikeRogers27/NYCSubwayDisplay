@@ -4,16 +4,16 @@ import logging
 import sys
 from datetime import datetime
 from threading import RLock
-from typing import Any, TextIO
+from typing import TextIO
 
 
 class TimestampedStream:
     """Prefix each output line without delaying partial writes or tracebacks."""
 
     def __init__(self, stream: TextIO) -> None:
-        self.stream = stream
-        self._line_start = True
-        self._lock = RLock()
+        self.stream: TextIO = stream
+        self._line_start: bool = True
+        self._lock: RLock = RLock()
 
     def write(self, text: str) -> int:
         """Write immediately, retaining line state across separate print writes."""
@@ -31,8 +31,21 @@ class TimestampedStream:
         with self._lock:
             self.stream.flush()
 
-    def __getattr__(self, name: str) -> Any:
-        """Preserve stream attributes such as encoding, isatty, and fileno."""
+    @property
+    def encoding(self) -> str | None:
+        """Expose the wrapped stream's encoding, if it has one."""
+        return self.stream.encoding
+
+    def isatty(self) -> bool:
+        """Report whether the wrapped stream is connected to a terminal."""
+        return self.stream.isatty()
+
+    def fileno(self) -> int:
+        """Return the wrapped descriptor, preserving errors for in-memory streams."""
+        return self.stream.fileno()
+
+    def __getattr__(self, name: str) -> object:
+        """Delegate extra attributes without disabling type checking for callers."""
         return getattr(self.stream, name)
 
 
