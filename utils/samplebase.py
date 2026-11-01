@@ -1,14 +1,47 @@
-import argparse
-import time
-from typing import Any
+"""Initialize the selected matrix driver from the application's LED arguments."""
 
-from utils.matrix_backend import USE_EMULATOR, RGBMatrix, RGBMatrixOptions
+import time
+from typing import Protocol
+
+from utils.matrix_backend import (
+    USE_EMULATOR,
+    Matrix,
+    MatrixOptions,
+    RGBMatrix,
+    RGBMatrixOptions,
+)
+
+
+class MatrixArguments(Protocol):
+    """Parsed LED arguments consumed by the matrix initialization code."""
+
+    led_gpio_mapping: str | None
+    led_rows: int
+    led_cols: int
+    led_chain: int
+    led_parallel: int
+    led_row_addr_type: int
+    led_multiplexing: int
+    led_pwm_bits: int
+    led_brightness: int
+    led_pwm_lsb_nanoseconds: int
+    led_rgb_sequence: str
+    led_pixel_mapper: str
+    led_panel_type: str
+    led_limit_refresh: int
+    led_show_refresh: bool
+    led_slowdown_gpio: int | None
+    # The current parser uses action="store", so this is a string or None.
+    led_no_hardware_pulse: str | None
+    drop_privileges: bool
 
 
 class SampleBase:
-    def __init__(self, args: argparse.Namespace) -> None:
-        self.args: argparse.Namespace = args
-        self.matrix: Any = None
+    """Configure a matrix before handing control to the display's run method."""
+
+    def __init__(self, args: MatrixArguments) -> None:
+        self.args: MatrixArguments = args
+        self.matrix: Matrix | None = None
 
     def usleep(self, value: int) -> None:
         time.sleep(value / 1000000.0)
@@ -17,7 +50,7 @@ class SampleBase:
         print("Running")
 
     def process(self) -> bool:
-        options: Any = RGBMatrixOptions()
+        options: MatrixOptions = RGBMatrixOptions()
 
         if self.args.led_gpio_mapping is not None:
             options.hardware_mapping = self.args.led_gpio_mapping
