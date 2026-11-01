@@ -4,15 +4,18 @@ import argparse
 from collections.abc import Callable
 from queue import Empty, SimpleQueue
 from threading import Event, Thread
-from typing import Any
+from typing import Final
 
 import paho.mqtt.client as mqtt
+from paho.mqtt.enums import CallbackAPIVersion
+from paho.mqtt.properties import Properties
+from paho.mqtt.reasoncodes import ReasonCode
 
 from utils.display_control import DisplayMode
 from utils.matterbridge_controls import CONTROLS, MatterbridgeControls
 
-DEFAULT_MQTT_TOPIC = "matrix/display/+/set"
-TOPIC_MODES = {name: control.mode for name, control in CONTROLS.items()}
+DEFAULT_MQTT_TOPIC: Final[str] = "matrix/display/+/set"
+TOPIC_MODES: Final[dict[str, DisplayMode]] = {name: control.mode for name, control in CONTROLS.items()}
 
 
 class MQTTListener:
@@ -27,15 +30,17 @@ class MQTTListener:
         matterbridge: bool = False,
         matterbridge_topic: str = "matterbridge",
     ) -> None:
-        self.host = host
-        self.port = port
-        self.topic = topic
-        self.on_command = on_command
-        self.matterbridge = MatterbridgeControls(matterbridge_topic) if matterbridge else None
+        self.host: str = host
+        self.port: int = port
+        self.topic: str = topic
+        self.on_command: Callable[[DisplayMode], None] | None = on_command
+        self.matterbridge: MatterbridgeControls | None = (
+            MatterbridgeControls(matterbridge_topic) if matterbridge else None
+        )
         self.display_commands: SimpleQueue[mqtt.MQTTMessage] = SimpleQueue()
-        self._stop = Event()
-        self._reporter = Thread(target=self._report_messages, name="mqtt-console", daemon=True)
-        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        self._stop: Event = Event()
+        self._reporter: Thread = Thread(target=self._report_messages, name="mqtt-console", daemon=True)
+        self.client: mqtt.Client = mqtt.Client(CallbackAPIVersion.VERSION2)
         self.client.on_connect = self._on_connect
         self.client.on_connect_fail = self._on_connect_fail
         self.client.on_message = self._on_message
@@ -43,10 +48,10 @@ class MQTTListener:
     def _on_connect(
         self,
         client: mqtt.Client,
-        userdata: Any,
+        userdata: object,
         flags: mqtt.ConnectFlags,
-        reason_code: mqtt.ReasonCode,
-        properties: mqtt.Properties | None,
+        reason_code: ReasonCode,
+        properties: Properties | None,
     ) -> None:
         if reason_code != 0:
             print(f"MQTT connection rejected: {reason_code}", flush=True)
@@ -59,10 +64,10 @@ class MQTTListener:
         if self.matterbridge is not None:
             self.matterbridge.register(client)
 
-    def _on_connect_fail(self, client: mqtt.Client, userdata: Any) -> None:
+    def _on_connect_fail(self, client: mqtt.Client, userdata: object) -> None:
         print(f"MQTT unable to connect to {self.host}:{self.port}; retrying", flush=True)
 
-    def _on_message(self, client: mqtt.Client, userdata: Any, message: mqtt.MQTTMessage) -> None:
+    def _on_message(self, client: mqtt.Client, userdata: object, message: mqtt.MQTTMessage) -> None:
         self.display_commands.put(message)
         mode = self._message_mode(message)
         if self.on_command is not None and mode is not None:
