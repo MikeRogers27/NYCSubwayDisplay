@@ -1,13 +1,129 @@
 """Local service fixtures with fixed values and dates relative to the current day."""
 
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
-from types import SimpleNamespace
-from typing import Any
+from datetime import datetime, time, timedelta, tzinfo
+from typing import TypedDict
 
-from pyowm.weatherapi30.forecast import Forecast
-from pyowm.weatherapi30.forecaster import Forecaster
-from pyowm.weatherapi30.weather import Weather
+# PyOWM 3.5.0 does not publish type stubs or a py.typed marker.
+from pyowm.weatherapi30.forecast import Forecast  # type: ignore[import-untyped]
+from pyowm.weatherapi30.forecaster import Forecaster  # type: ignore[import-untyped]
+from pyowm.weatherapi30.weather import Weather  # type: ignore[import-untyped]
+from pytz.tzinfo import DstTzInfo, StaticTzInfo
+
+
+@dataclass
+class DummyStopTimeUpdate:
+    """A predicted arrival at one stop."""
+
+    stop_id: str
+    arrival: datetime
+
+
+@dataclass
+class DummyTrain:
+    """Train fields consumed by the display and arrival calculations."""
+
+    route_id: str
+    headsign_text: str
+    location_status: str
+    location: str | None
+    underway: bool
+    last_position_update: datetime
+    stop_time_updates: list[DummyStopTimeUpdate]
+
+
+class HomeAway[T](TypedDict):
+    """Values for the home and away teams."""
+
+    home: T
+    away: T
+
+
+class League(TypedDict):
+    """Numeric league identity shared by football and rugby fixtures."""
+
+    id: int
+    name: str
+
+
+class FootballStatus(TypedDict):
+    """Football match phase and elapsed minutes."""
+
+    short: str
+    elapsed: int
+
+
+class FootballFixture(TypedDict):
+    """Football match identity, start time, and status."""
+
+    id: str
+    timestamp: int
+    status: FootballStatus
+
+
+class FootballTeam(TypedDict):
+    """Football team identity used for local team metadata."""
+
+    id: int
+    name: str
+
+
+class FootballGame(TypedDict):
+    """Football API payload consumed by GameRAPIFootball."""
+
+    fixture: FootballFixture
+    league: League
+    teams: HomeAway[FootballTeam]
+    goals: HomeAway[int]
+    score: dict[str, HomeAway[int | None]]
+
+
+class RugbyTeam(TypedDict):
+    """Rugby team abbreviation and display colors."""
+
+    nameCode: str
+    teamColors: dict[str, str]
+
+
+class RugbyGame(TypedDict):
+    """Rugby API payload consumed by GameRAPIRugby."""
+
+    id: str
+    startTimestamp: int
+    tournament: League
+    homeTeam: RugbyTeam
+    awayTeam: RugbyTeam
+    homeScore: dict[str, int]
+    awayScore: dict[str, int]
+    status: dict[str, str]
+    time: dict[str, int]
+
+
+class SGOTeam(TypedDict):
+    """SGO team identity, display metadata, and score."""
+
+    teamID: str
+    names: dict[str, str]
+    colors: dict[str, str]
+    score: int
+
+
+class SGOStatus(TypedDict):
+    """SGO event start time and lifecycle flags."""
+
+    startsAt: str
+    started: bool
+    ended: bool
+    displayShort: str
+
+
+class SGOEvent(TypedDict):
+    """SportsGameOdds event payload consumed by GameSGO."""
+
+    eventID: str
+    leagueID: str
+    teams: HomeAway[SGOTeam]
+    status: SGOStatus
 
 
 @dataclass
@@ -15,12 +131,12 @@ class DummyFeed:
     """Supply the subset of the NYCT feed interface used by the display."""
 
     route_id: str
-    timezone: Any
+    timezone: tzinfo
 
     def refresh(self) -> None:
         """Keep the feed local; trips are generated when requested."""
 
-    def filter_trips(self, headed_for_stop_id: str) -> list[SimpleNamespace]:
+    def filter_trips(self, headed_for_stop_id: str) -> list[DummyTrain]:
         """Return sample arrivals for either direction at the requested station."""
         if headed_for_stop_id.startswith("F23") and self.route_id == "R":
             return []
@@ -28,7 +144,7 @@ class DummyFeed:
             return []
         now = datetime.now(tz=self.timezone)
         return [
-            SimpleNamespace(
+            DummyTrain(
                 route_id=self.route_id,
                 headsign_text="Jamaica" if headed_for_stop_id.endswith("N") else "Coney Island",
                 location_status="IN_TRANSIT_TO",
@@ -36,7 +152,7 @@ class DummyFeed:
                 underway=True,
                 last_position_update=now,
                 stop_time_updates=[
-                    SimpleNamespace(stop_id=headed_for_stop_id, arrival=now + timedelta(minutes=minutes))
+                    DummyStopTimeUpdate(stop_id=headed_for_stop_id, arrival=now + timedelta(minutes=minutes))
                 ],
             )
             for minutes in (3, 8, 15, 22)
@@ -45,6 +161,9 @@ class DummyFeed:
 
 def weather(now: datetime) -> tuple[Weather, Forecaster]:
     """Return 18°C current weather and five days of three-hour forecasts."""
+    timezone = now.tzinfo
+    if timezone is None or now.utcoffset() is None:
+        raise ValueError("Dummy weather requires a timezone-aware datetime")
 
     def sample(at: datetime, code: int = 801) -> Weather:
         return Weather(
@@ -68,15 +187,19 @@ def weather(now: datetime) -> tuple[Weather, Forecaster]:
             heat_index=None,
         )
 
-    forecasts = [
-        sample(now.tzinfo.localize(datetime.combine(now.date() + timedelta(days=day), time(hour))))
-        for day in range(5)
-        for hour in range(0, 24, 3)
-    ]
+    forecasts: list[Weather] = []
+    for day in range(5):
+        for hour in range(0, 24, 3):
+            forecast_time = datetime.combine(now.date() + timedelta(days=day), time(hour))
+            if isinstance(timezone, (DstTzInfo, StaticTzInfo)):
+                forecast_time = timezone.localize(forecast_time)
+            else:
+                forecast_time = forecast_time.replace(tzinfo=timezone)
+            forecasts.append(sample(forecast_time))
     return sample(now), Forecaster(Forecast("3h", int(now.timestamp()), None, forecasts))
 
 
-def football(now: datetime, league_id: int, team_id: int) -> list[dict[str, Any]]:
+def football(now: datetime, league_id: int, team_id: int) -> list[FootballGame]:
     """Return a live Sunderland fixture in the football API's format."""
     return [
         {
@@ -93,7 +216,7 @@ def football(now: datetime, league_id: int, team_id: int) -> list[dict[str, Any]
     ]
 
 
-def rugby(now: datetime) -> list[dict[str, Any]]:
+def rugby(now: datetime) -> list[RugbyGame]:
     """Return a completed Wigan fixture in the rugby API's format."""
     return [
         {
@@ -110,7 +233,7 @@ def rugby(now: datetime) -> list[dict[str, Any]]:
     ]
 
 
-def sgo(now: datetime, league_id: str) -> list[dict[str, Any]]:
+def sgo(now: datetime, league_id: str) -> list[SGOEvent]:
     """Return sample MLB, NHL, NFL, or MLS events in SGO's format."""
     teams = {
         "MLB": ("NEW_YORK_METS_MLB", "NYM", "NEW_YORK_YANKEES_MLB", "NYY"),
