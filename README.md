@@ -258,12 +258,28 @@ Dummy sports data bypasses the live caches entirely. Edit `utils/dummy_data.py` 
 the samples. Omitting `--dummy-data` uses the normal live services. The emulator
 preview and optional MQTT connection continue to work in dummy mode.
 
+### Type Checking
+
+Run strict mypy checks for the utilities, standalone MQTT entry point, and tests:
+
+```bash
+uvx --python .venv/bin/python \
+  --with paho-mqtt==2.1.0 --with pillow==11.1.0 \
+  --with pyowm==3.5.0 --with nyct-gtfs==2.0.0 \
+  --with types-requests --with types-pytz mypy
+```
+
+This uses an isolated tool environment without changing the app's dependencies.
+The checked files are configured in `pyproject.toml`. `main.py` is temporarily
+excluded from import analysis until its typing pass, so calls into that module
+are not yet type-checked. PyOWM and nyct-gtfs lack type stubs; their import
+boundaries are explicitly marked where needed.
+
 ## Project Structure
 
 ```
 ├── main.py                 # Main application (display logic, API integrations, game classes)
 ├── mqtt_listener.py        # Standalone MQTT console listener entry point
-├── weather.py              # Weather API experimentation script
 ├── utils/
 │   ├── __init__.py
 │   ├── colors.py           # Image color extraction utilities

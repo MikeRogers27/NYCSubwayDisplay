@@ -46,3 +46,14 @@ package = false
 
 [tool.uv.sources]
 rgbmatrix = { path = "../rpi-rgb-led-matrix/bindings/python", editable = true, marker = "sys_platform == 'linux'" }
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["utils", "mqtt_listener.py", "tests"]
+
+# main.py is the next typing pass. Its API remains unchecked in callers until
+# this temporary boundary is removed; all selected modules and tests are checked.
+[[tool.mypy.overrides]]
+module = "main"
+follow_imports = "skip"

@@ -8,6 +8,7 @@ import paho.mqtt.client as mqtt
 
 import main
 from utils.display_control import DisplayControl, DisplayMode
+from utils.matrix_backend import FrameCanvas
 from utils.mqtt_listener import MQTTListener
 
 
@@ -15,7 +16,7 @@ class DisplayControlTests(unittest.TestCase):
     def test_command_wakes_a_long_wait_without_waiting_for_timeout(self) -> None:
         control = DisplayControl()
         started = Event()
-        results = []
+        results: list[bool] = []
 
         def wait() -> None:
             started.set()
@@ -138,9 +139,16 @@ class RenderInterruptionTests(unittest.TestCase):
                 self.display._remaining_rotation = []
                 killer = Mock(kill_now=False)
                 listener = MQTTListener(on_command=self.display.display_control.request)
-                rendered = []
+                rendered: list[tuple[str, tuple[str, ...] | None]] = []
 
-                def clock(canvas, display_time, *, rendered=rendered, topic=topic, listener=listener):
+                def clock(
+                    canvas: FrameCanvas,
+                    display_time: int,
+                    *,
+                    rendered: list[tuple[str, tuple[str, ...] | None]] = rendered,
+                    topic: str = topic,
+                    listener: MQTTListener = listener,
+                ) -> Mock:
                     rendered.append(("clock", None))
                     if len(rendered) == 1:
                         message = mqtt.MQTTMessage(topic=f"matrix/display/{topic}/set".encode())
@@ -148,7 +156,14 @@ class RenderInterruptionTests(unittest.TestCase):
                         listener._on_message(listener.client, None, message)
                     return self.swapped_canvas
 
-                def trains(canvas, display_time, stop_ids=None, *, rendered=rendered, killer=killer):
+                def trains(
+                    canvas: FrameCanvas,
+                    display_time: int,
+                    stop_ids: tuple[str, ...] | None = None,
+                    *,
+                    rendered: list[tuple[str, tuple[str, ...] | None]] = rendered,
+                    killer: Mock = killer,
+                ) -> Mock:
                     rendered.append(("trains", stop_ids))
                     if stop_ids is None:
                         killer.kill_now = True
@@ -204,9 +219,9 @@ class RenderInterruptionTests(unittest.TestCase):
 
     def test_overnight_wait_switches_to_trains_then_back_to_schedule(self) -> None:
         killer = Mock(kill_now=False)
-        waits = []
+        waits: list[float] = []
 
-        def wait(seconds):
+        def wait(seconds: float) -> bool:
             waits.append(seconds)
             if len(waits) == 1:
                 self.display.display_control.request(DisplayMode("trains"))
@@ -227,9 +242,9 @@ class RenderInterruptionTests(unittest.TestCase):
 
     def test_interrupt_resumes_current_mode_and_remaining_rotation(self) -> None:
         killer = Mock(kill_now=False)
-        rendered = []
+        rendered: list[tuple[str, int]] = []
 
-        def render(mode, canvas, display_time, **kwargs):
+        def render(mode: str, canvas: FrameCanvas, display_time: int, **kwargs: object) -> Mock:
             rendered.append((mode, display_time))
             if rendered == [("clock", 30), ("weather", 5)]:
                 self.display.display_control.request(DisplayMode("trains"))
@@ -256,9 +271,9 @@ class RenderInterruptionTests(unittest.TestCase):
 
     def test_interrupting_command_does_not_replace_saved_rotation(self) -> None:
         killer = Mock(kill_now=False)
-        rendered = []
+        rendered: list[str] = []
 
-        def render(mode, canvas, display_time, **kwargs):
+        def render(mode: str, canvas: FrameCanvas, display_time: int, **kwargs: object) -> Mock:
             rendered.append(mode)
             if len(rendered) in (1, 2):
                 self.display.display_control.request(DisplayMode("trains"))
@@ -282,9 +297,9 @@ class RenderInterruptionTests(unittest.TestCase):
 
     def test_completed_rotation_refreshes_the_time_based_schedule(self) -> None:
         killer = Mock(kill_now=False)
-        rendered = []
+        rendered: list[str] = []
 
-        def render(mode, canvas, display_time, **kwargs):
+        def render(mode: str, canvas: FrameCanvas, display_time: int, **kwargs: object) -> Mock:
             rendered.append(mode)
             if mode == "sports":
                 killer.kill_now = True
@@ -308,7 +323,7 @@ class RenderInterruptionTests(unittest.TestCase):
     def test_nested_train_rendering_preserves_canvas_and_skips_remaining_stations(self) -> None:
         self.display.stop_ids = ["F23N", "R33N"]
 
-        def draw(*args):
+        def draw(*args: object) -> tuple[bool, Mock]:
             self.display.display_control.request(DisplayMode("trains"))
             return (True, self.swapped_canvas)
 
@@ -321,6 +336,10 @@ class RenderInterruptionTests(unittest.TestCase):
         draw_trains.assert_called_once()
 
     def test_train_slides_return_after_first_interrupted_wait(self) -> None:
+        def interrupt(seconds: float) -> bool:
+            self.display.display_control.request(DisplayMode("trains"))
+            return True
+
         with patch.object(main, "DUMMY_DATA", True):
             trains = main.mta_get_next_trains(stop_id="F23N")
         with (
@@ -328,7 +347,7 @@ class RenderInterruptionTests(unittest.TestCase):
             patch.object(
                 self.display,
                 "wait_for_display_interrupt",
-                side_effect=lambda seconds: self.display.display_control.request(DisplayMode("trains")) or True,
+                side_effect=interrupt,
             ),
         ):
             _, canvas = self.display.draw_trains(trains, "F23N", self.canvas, 5)

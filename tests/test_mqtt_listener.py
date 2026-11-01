@@ -6,6 +6,8 @@ from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
 import paho.mqtt.client as mqtt
+from paho.mqtt.packettypes import PacketTypes
+from paho.mqtt.reasoncodes import ReasonCode
 
 from utils.display_control import DisplayMode
 from utils.mqtt_listener import MQTTListener
@@ -20,7 +22,7 @@ class MQTTListenerTests(unittest.TestCase):
         client.subscribe.return_value = (mqtt.MQTT_ERR_SUCCESS, 1)
         with redirect_stdout(io.StringIO()):
             for _ in range(2):
-                self.listener._on_connect(client, None, mqtt.ConnectFlags(False), 0, None)
+                self.listener._on_connect(client, None, mqtt.ConnectFlags(False), ReasonCode(PacketTypes.CONNACK), None)
         self.assertEqual(client.subscribe.call_count, 2)
         client.subscribe.assert_called_with("matrix/display/+/set")
 
@@ -83,7 +85,9 @@ class MQTTListenerTests(unittest.TestCase):
     def test_connection_rejection_does_not_subscribe(self) -> None:
         client = Mock()
         with redirect_stdout(io.StringIO()) as output:
-            self.listener._on_connect(client, None, mqtt.ConnectFlags(False), 135, None)
+            self.listener._on_connect(
+                client, None, mqtt.ConnectFlags(False), ReasonCode(PacketTypes.CONNACK, identifier=135), None
+            )
         client.subscribe.assert_not_called()
         self.assertIn("connection rejected", output.getvalue())
 

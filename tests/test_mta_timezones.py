@@ -7,7 +7,8 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from nyct_gtfs.stop_time_update import StopTimeUpdate
+# nyct-gtfs 2.0.0 has no type stubs or py.typed marker.
+from nyct_gtfs.stop_time_update import StopTimeUpdate  # type: ignore[import-untyped]
 
 import main
 

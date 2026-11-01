@@ -7,6 +7,8 @@ from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
 import paho.mqtt.client as mqtt
+from paho.mqtt.packettypes import PacketTypes
+from paho.mqtt.reasoncodes import ReasonCode
 
 import main
 from utils.display_control import DisplayControl, DisplayMode
@@ -30,7 +32,9 @@ class MatterbridgeTests(unittest.TestCase):
         listener = MQTTListener(matterbridge=True)
         with redirect_stdout(io.StringIO()):
             for _ in range(2):
-                listener._on_connect(self.client, None, mqtt.ConnectFlags(False), 0, None)
+                listener._on_connect(
+                    self.client, None, mqtt.ConnectFlags(False), ReasonCode(PacketTypes.CONNACK), None
+                )
         subscriptions = [(f"matterbridge/{control.device_id}/write/root", 1) for control in CONTROLS.values()]
         self.assertEqual(self.client.subscribe.call_args_list[1].args[0], subscriptions)
         self.assertEqual(self.client.subscribe.call_args_list[3].args[0], subscriptions)
@@ -100,7 +104,7 @@ class MatterbridgeTests(unittest.TestCase):
         callback = Mock()
         listener = MQTTListener(on_command=callback)
         with redirect_stdout(io.StringIO()):
-            listener._on_connect(self.client, None, mqtt.ConnectFlags(False), 0, None)
+            listener._on_connect(self.client, None, mqtt.ConnectFlags(False), ReasonCode(PacketTypes.CONNACK), None)
         listener._on_message(self.client, None, self.message("matrix-f-trains", b'{"OnOff":{"onOff":true}}'))
         self.client.subscribe.assert_called_once_with("matrix/display/+/set")
         self.client.publish.assert_not_called()
