@@ -44,7 +44,7 @@ class DummyDataTests(unittest.TestCase):
                     self.assertLessEqual(main.mta_arrival_minutes(train, stop), 25)
                     self.assertTrue(train.underway)
                     self.assertLess(
-                        datetime.now(tz=main.LOCAL_TZ).replace(tzinfo=None) - train.last_position_update,
+                        datetime.now(tz=main.LOCAL_TZ) - train.last_position_update,
                         timedelta(minutes=1),
                     )
         self.assertEqual(main.mta_get_next_trains(max_arrival_mins=2), [])

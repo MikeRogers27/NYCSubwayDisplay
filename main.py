@@ -1490,7 +1490,7 @@ class RunMatrix(SampleBase):
                     train, "last_position_update", None
                 )
                 train_last_position_update = (
-                    LOCAL_TZ.localize(train_last_position_update, is_dst=None)
+                    mta_local_time(train_last_position_update)
                     if train_last_position_update is not None
                     else None
                 )
@@ -2167,12 +2167,22 @@ def logger_setup(args) -> None:
     )
 
 
+def mta_local_time(date_time: datetime) -> datetime:
+    """Convert an NYCT timestamp to New York time, preserving the repeated hour.
+
+    nyct-gtfs returns naive system-local datetimes from datetime.fromtimestamp().
+    astimezone() interprets these in the system timezone and respects their fold
+    flag during the autumn clock change. Already-aware fixture times also work.
+    """
+    return date_time.astimezone(LOCAL_TZ)
+
+
 def mta_arrival_time(train: Any, stop_id: str) -> datetime:
     if train.location_status == "STOPPED_AT" and train.location == stop_id:
         return datetime(9999, 1, 1, 0, 0, 0, tzinfo=LOCAL_TZ)
     return next(
         (
-            LOCAL_TZ.localize(stu.arrival, is_dst=None)
+            mta_local_time(stu.arrival)
             for stu in train.stop_time_updates
             if stu.stop_id == stop_id
         ),

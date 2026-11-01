@@ -26,7 +26,7 @@ class DummyFeed:
             return []
         if headed_for_stop_id.startswith("R33") and self.route_id != "R":
             return []
-        now = datetime.now(tz=self.timezone).replace(tzinfo=None)
+        now = datetime.now(tz=self.timezone)
         return [
             SimpleNamespace(
                 route_id=self.route_id,
