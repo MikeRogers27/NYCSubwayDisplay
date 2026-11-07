@@ -254,23 +254,44 @@ fixtures for every data service, including refreshes and football team metadata:
 
 The sample values are fixed; timestamps are relative to today so arrivals and
 forecasts remain useful. The existing schedule and score-hiding rules still apply.
-Dummy sports data bypasses the live caches entirely. Edit `dummy_data.py` to adjust
+Dummy sports data bypasses the live caches entirely. Edit `utils/dummy_data.py` to adjust
 the samples. Omitting `--dummy-data` uses the normal live services. The emulator
 preview and optional MQTT connection continue to work in dummy mode.
+
+### Type Checking
+
+Run strict mypy checks for the application, utilities, standalone MQTT entry
+point, and tests:
+
+```bash
+uvx --python .venv/bin/python \
+  --with paho-mqtt==2.1.0 --with pillow==11.1.0 \
+  --with pyowm==3.5.0 --with nyct-gtfs==2.0.0 \
+  --with holidays==0.63 \
+  --with types-requests --with types-pytz --with types-python-dateutil mypy
+```
+
+This uses an isolated tool environment without changing the app's dependencies.
+The checked files are configured in `pyproject.toml`, including `main.py` and
+calls into it. PyOWM, nyct-gtfs, and the installed protobuf package lack type
+stubs; their import boundaries are explicitly marked where needed. External API
+and cached JSON data are not validated at runtime by these annotations.
 
 ## Project Structure
 
 ```
 ├── main.py                 # Main application (display logic, API integrations, game classes)
-├── samplebase.py           # Base class for RGB matrix initialization
-├── matrix_backend.py       # Shared emulator/native driver selection
-├── mqtt_listener.py        # MQTT queue and console listener (also runnable alone)
-├── matterbridge_controls.py # Virtual control registration and Matterbridge commands
-├── dummy_data.py           # Local MTA, OWM, RAPI, and SGO fixtures
-├── display_control.py      # Queued display commands and interruptible waits
-├── weather.py              # Weather API experimentation script
+├── mqtt_listener.py        # Standalone MQTT console listener entry point
 ├── utils/
-│   └── colors.py           # Image color extraction utilities
+│   ├── __init__.py
+│   ├── colors.py           # Image color extraction utilities
+│   ├── console_logging.py  # Timestamped console output and error logs
+│   ├── display_control.py  # Queued display commands and interruptible waits
+│   ├── dummy_data.py       # Local MTA, OWM, RAPI, and SGO fixtures
+│   ├── matrix_backend.py   # Shared emulator/native driver selection
+│   ├── matterbridge_controls.py # Virtual control registration and commands
+│   ├── mqtt_listener.py    # MQTT reception, reporting, and shared arguments
+│   └── samplebase.py       # Base class for RGB matrix initialization
 ├── fonts/                  # BDF bitmap fonts for the LED display
 ├── icons/32/               # 32×32 PNG icons (weather, sports teams)
 ├── images/                 # Seasonal animated GIFs and PNGs

@@ -18,8 +18,8 @@ class DisplayControl:
 
     def __init__(self) -> None:
         self.commands: SimpleQueue[DisplayMode] = SimpleQueue()
-        self.interrupt = Event()
-        self._lock = Lock()
+        self.interrupt: Event = Event()
+        self._lock: Lock = Lock()
 
     def request(self, mode: DisplayMode) -> None:
         """Queue a mode and immediately wake an active display wait."""
@@ -30,7 +30,7 @@ class DisplayControl:
     def next_command(self) -> DisplayMode | None:
         """Consume pending commands, keeping the latest, and reset the wake signal."""
         with self._lock:
-            latest = None
+            latest: DisplayMode | None = None
             while True:
                 try:
                     latest = self.commands.get_nowait()

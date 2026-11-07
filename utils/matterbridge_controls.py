@@ -2,10 +2,13 @@
 
 import json
 from dataclasses import dataclass
+from typing import Final
 
 import paho.mqtt.client as mqtt
 
-from display_control import DisplayMode
+from utils.display_control import DisplayMode
+
+type JSONValue = None | bool | int | float | str | list[JSONValue] | dict[str, JSONValue]
 
 
 @dataclass(frozen=True)
@@ -17,7 +20,7 @@ class VirtualControl:
     mode: DisplayMode
 
 
-CONTROLS = {
+CONTROLS: Final[dict[str, VirtualControl]] = {
     "train": VirtualControl("matrix-trains", "All Trains", DisplayMode("trains")),
     "f-trains": VirtualControl(
         "matrix-f-trains", "F Trains", DisplayMode("trains", stop_ids=("F23N",))
@@ -36,7 +39,7 @@ class MatterbridgeControls:
     """Publish retained endpoint definitions and decode non-retained activations."""
 
     def __init__(self, topic: str = "matterbridge") -> None:
-        self.topic = topic.rstrip("/")
+        self.topic: str = topic.rstrip("/")
         if (
             not self.topic
             or "+" in self.topic
@@ -46,7 +49,7 @@ class MatterbridgeControls:
             raise ValueError(
                 "Matterbridge topic must be a nonempty prefix without MQTT wildcards"
             )
-        self.write_topics = {
+        self.write_topics: dict[str, VirtualControl] = {
             self.device_topic(control, "write"): control
             for control in CONTROLS.values()
         }
@@ -55,7 +58,7 @@ class MatterbridgeControls:
         """Return the plugin's topic for one endpoint and message kind."""
         return f"{self.topic}/{control.device_id}/{kind}/root"
 
-    def _publish(self, client: mqtt.Client, topic: str, payload: dict) -> None:
+    def _publish(self, client: mqtt.Client, topic: str, payload: dict[str, JSONValue]) -> None:
         result = client.publish(topic, json.dumps(payload), qos=1, retain=True)
         if result.rc != mqtt.MQTT_ERR_SUCCESS:
             print(
@@ -79,7 +82,7 @@ class MatterbridgeControls:
             )
             return
         for control in CONTROLS.values():
-            config = {
+            config: dict[str, JSONValue] = {
                 "deviceTypes": ["OnOffPlugInUnit"],
                 "clusters": {
                     "BridgedDeviceBasicInformation": {
@@ -106,12 +109,12 @@ class MatterbridgeControls:
         if control is None or message.retain:
             return None
         try:
-            payload = json.loads(message.payload)
+            payload: object = json.loads(message.payload)
         except (ValueError, UnicodeDecodeError):
             return None
         if not isinstance(payload, dict):
             return None
-        on_off = payload.get("OnOff")
+        on_off: object = payload.get("OnOff")
         if not isinstance(on_off, dict) or on_off.get("onOff") is not True:
             return None
         return control.mode

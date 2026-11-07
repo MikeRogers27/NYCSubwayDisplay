@@ -6,9 +6,15 @@ import unittest
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import cast
 from unittest.mock import Mock, patch
 
+import requests
+
 import main
+from utils import dummy_data
+from utils.colors import RGB, ColorResult
+from utils.matrix_backend import graphics
 
 
 class DummyDataTests(unittest.TestCase):
@@ -39,18 +45,22 @@ class DummyDataTests(unittest.TestCase):
         for stop in ("F23N", "F23S", "R33N", "R33S", "CUSTOMN"):
             with self.subTest(stop=stop):
                 trains = main.mta_get_next_trains(max_num_trains=3, stop_id=stop)
+                assert trains is not None
                 self.assertEqual(len(trains), 3)
                 for train in trains:
                     self.assertLessEqual(main.mta_arrival_minutes(train, stop), 25)
                     self.assertTrue(train.underway)
+                    last_update = train.last_position_update
+                    assert last_update is not None
                     self.assertLess(
-                        datetime.now(tz=main.LOCAL_TZ) - train.last_position_update,
+                        datetime.now(tz=main.LOCAL_TZ) - last_update,
                         timedelta(minutes=1),
                     )
         self.assertEqual(main.mta_get_next_trains(max_arrival_mins=2), [])
 
     def test_owm_current_weather_and_all_forecast_windows(self) -> None:
         weather, forecast = main.owm_get_weather()
+        assert weather is not None and forecast is not None
         self.assertEqual(main.k_to_c(weather.temp["temp"]), 18)
         self.assertTrue(Path(main.owm_weather_to_icon(weather)).is_file())
         self.assertEqual(len(forecast.forecast.weathers), 40)
@@ -71,7 +81,12 @@ class DummyDataTests(unittest.TestCase):
                 with self.subTest(service=service):
                     # Even an already-populated live cache must be ignored.
                     games, _, _, updates = main.sports_get_games(
-                        service, [object()], datetime.now(tz=main.LOCAL_TZ), None, {"live-game": None}, 60
+                        service,
+                        [cast("main.Game", Mock(spec=main.Game))],
+                        datetime.now(tz=main.LOCAL_TZ),
+                        None,
+                        {"live-game": datetime.now(tz=main.LOCAL_TZ)},
+                        60,
                     )
                     self.assertTrue(games)
                     self.assertEqual(set(updates), {game.id() for game in games})
@@ -89,6 +104,7 @@ class DummyDataTests(unittest.TestCase):
             self.assertIsInstance(game.away_team_score_str(), str)
             self.assertIsInstance(game.date_str(), str)
         football = games[0]
+        assert isinstance(football, main.GameRAPIFootball)
         with patch.object(football, "_save_team_info", side_effect=AssertionError("Team cache write")):
             football._update_team_info_from_api(999999, {"name": "Example"})
             self.assertEqual(football._get_team_info(999999, {"name": "Example"})["short_name"], "EXA")
@@ -96,13 +112,16 @@ class DummyDataTests(unittest.TestCase):
     def test_sample_data_can_be_drawn_with_existing_renderers(self) -> None:
         display = main.RunMatrix([], [], Mock())
         canvas = Mock()
-        with patch.object(main.graphics, "DrawText"), patch.object(main.graphics, "DrawLine"):
+        with patch.object(graphics, "DrawText"), patch.object(graphics, "DrawLine"):
             for game in main.rapi_football_get_games() + main.rapi_rugby_get_games() + main.sgo_get_games():
                 display.draw_game(canvas, game)
             weather, _ = main.owm_get_weather()
+            assert weather is not None
             display.draw_weather(canvas, weather)
             display.draw_weather_summary(canvas, main.owm_forecasts_tomorrow(), "Tom")
-            display.draw_train(0, 1, main.mta_get_next_trains()[0], "F23N", canvas)
+            trains = main.mta_get_next_trains()
+            assert trains is not None
+            display.draw_train(0, 1, trains[0], "F23N", canvas)
         canvas.SetImage.assert_called()
 
 
@@ -113,8 +132,8 @@ class LiveDataTests(unittest.TestCase):
         with (
             patch.object(main, "DUMMY_DATA", False),
             patch.dict(os.environ, {"RPA_API_KEY": "test-key", "SGO_API_KEY": "test-key"}),
-            patch.object(main.requests, "request", return_value=response) as request,
-            patch.object(main.requests, "get", return_value=response) as get,
+            patch.object(requests, "request", return_value=response) as request,
+            patch.object(requests, "get", return_value=response) as get,
         ):
             main.rapi_football_get_games_league(39, {})
             self.assertIn("api-football", request.call_args.args[1])
@@ -131,7 +150,9 @@ class LiveDataTests(unittest.TestCase):
             patch.object(main, "MTA_FEEDS", None),
             patch.object(main, "NYCTFeed") as feed,
         ):
-            self.assertEqual(len(main.mta_get_feeds()), 3)
+            feeds = main.mta_get_feeds()
+            assert feeds is not None
+            self.assertEqual(len(feeds), 3)
             self.assertEqual([call.args[0] for call in feed.call_args_list], ["F", "G", "R"])
         with (
             patch.object(main, "DUMMY_DATA", False),
@@ -145,6 +166,38 @@ class LiveDataTests(unittest.TestCase):
             main.owm_get_weather()
             owm.assert_called_once_with("test-key")
             owm.return_value.weather_manager.return_value.weather_at_place.assert_called_once_with("New York")
+
+    def test_team_logo_processing_handles_success_failure_and_missing_results(self) -> None:
+        results: list[tuple[ColorResult | None, RGB]] = [
+            (None, (74, 214, 9)),
+            ({"success": False, "error": "No bright pixels"}, (74, 214, 9)),
+            (
+                {
+                    "success": True,
+                    "rgb": (10, 20, 30),
+                    "hex": "#0a141e",
+                    "brightness": 0.1,
+                    "brightness_threshold": 0.05,
+                },
+                (10, 20, 30),
+            ),
+        ]
+        response = Mock(status_code=200)
+        response.json.return_value = {"response": [{"team": {"code": "EXA", "logo": "unused"}}]}
+        for color_info, expected in results:
+            with (
+                self.subTest(result=color_info),
+                patch.object(main, "DUMMY_DATA", False),
+                patch.object(main.GameRAPIFootball, "RAPI_TEAM_INFO", {}),
+                patch.dict(os.environ, {"RPA_API_KEY": "test-key"}),
+                patch.object(requests, "request", return_value=response),
+                patch("utils.colors.extract_dominant_color_from_url", return_value=color_info),
+                patch.object(main.GameRAPIFootball, "_save_team_info"),
+            ):
+                game = main.GameRAPIFootball(dummy_data.football(datetime.now(tz=main.LOCAL_TZ), 39, 746)[0])
+                game._update_team_info_from_api(746, {"name": "Example"})
+                assert main.GameRAPIFootball.RAPI_TEAM_INFO is not None
+                self.assertEqual(main.GameRAPIFootball.RAPI_TEAM_INFO["746"]["team_colour"], expected)
 
 
 if __name__ == "__main__":

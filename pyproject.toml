@@ -46,3 +46,8 @@ package = false
 
 [tool.uv.sources]
 rgbmatrix = { path = "../rpi-rgb-led-matrix/bindings/python", editable = true, marker = "sys_platform == 'linux'" }
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["main.py", "utils", "mqtt_listener.py", "tests"]

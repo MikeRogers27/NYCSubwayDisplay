@@ -4,9 +4,9 @@ import unittest
 from datetime import datetime
 from unittest.mock import Mock, patch
 
-import dummy_data
 import main
-from matrix_backend import graphics
+from utils import dummy_data
+from utils.matrix_backend import graphics
 
 
 class SGOColorTests(unittest.TestCase):
@@ -14,7 +14,7 @@ class SGOColorTests(unittest.TestCase):
         for primary in ("#000000", "#111111", "#001122", None, "invalid"):
             with self.subTest(primary=primary):
                 event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "NHL")[0]
-                for team in event["teams"].values():
+                for team in (event["teams"]["home"], event["teams"]["away"]):
                     team["teamID"] = "PITTSBURGH_PENGUINS_NHL"
                     team["colors"] = {"primary": primary, "secondary": "#FCB514"}
                 game = main.GameSGO(event)
@@ -25,7 +25,7 @@ class SGOColorTests(unittest.TestCase):
         for secondary in (None, "", "invalid", "#111111"):
             with self.subTest(secondary=secondary):
                 event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "NHL")[0]
-                for team in event["teams"].values():
+                for team in (event["teams"]["home"], event["teams"]["away"]):
                     team["colors"] = {"primary": "#000000", "secondary": secondary}
                 game = main.GameSGO(event)
                 for color in (game.home_team_colour(), game.away_team_colour()):
@@ -33,11 +33,14 @@ class SGOColorTests(unittest.TestCase):
 
     def test_missing_or_invalid_colors_do_not_prevent_rendering(self) -> None:
         display = main.RunMatrix([], [], Mock())
-        for colors in (None, {}, {"primary": None}, {"primary": ""}, {"primary": "invalid"}):
+        color_variants: tuple[dict[str, str | None] | None, ...] = (
+            None, {}, {"primary": None}, {"primary": ""}, {"primary": "invalid"}
+        )
+        for colors in color_variants:
             for omit_colors in (False, True):
                 with self.subTest(colors=colors, omit_colors=omit_colors):
                     event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "NHL")[0]
-                    for team in event["teams"].values():
+                    for team in (event["teams"]["home"], event["teams"]["away"]):
                         if omit_colors:
                             del team["colors"]
                         else:
@@ -64,7 +67,7 @@ class SGOColorTests(unittest.TestCase):
         ):
             with self.subTest(team_id=team_id):
                 event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "MLB")[0]
-                for team in event["teams"].values():
+                for team in (event["teams"]["home"], event["teams"]["away"]):
                     team["teamID"] = team_id
                     del team["colors"]
                 game = main.GameSGO(event)
