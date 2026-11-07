@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, tzinfo
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 # PyOWM 3.5.0 does not publish type stubs or a py.typed marker.
 from pyowm.weatherapi30.forecast import Forecast  # type: ignore[import-untyped]
@@ -104,7 +104,7 @@ class SGOTeam(TypedDict):
 
     teamID: str
     names: dict[str, str]
-    colors: dict[str, str]
+    colors: NotRequired[dict[str, str | None] | None]
     score: int
 
 
