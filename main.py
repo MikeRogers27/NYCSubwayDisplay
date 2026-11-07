@@ -964,18 +964,24 @@ class GameSGO(Game):
     def __init__(self, *args) -> None:
         super().__init__(*args)
 
+    def _team_colour(self, team: dict[str, Any]) -> graphics.Color:
+        """Use a readable fallback when SGO omits team color metadata."""
+        overrides = {
+            "CHICAGO_WHITE_SOX_MLB": "#FFFFFF",
+            "SAN_FRANCISCO_GIANTS_MLB": "#FD5A1E",
+            "PITTSBURGH_PIRATES_MLB": "#FDB827",
+        }
+        colors = team.get("colors") or {}
+        primary = overrides.get(team["teamID"]) or colors.get("primary")
+        if primary:
+            try:
+                return graphics.Color(*hex_to_rgb(primary))
+            except ValueError:
+                pass
+        return graphics.Color(255, 255, 255)
+
     def away_team_colour(self) -> graphics.Color:
-        # overrides
-        if self.away_team_id() == "CHICAGO_WHITE_SOX_MLB":
-            return graphics.Color(*hex_to_rgb("#FFFFFF"))
-        elif self.away_team_id() == "SAN_FRANCISCO_GIANTS_MLB":
-            return graphics.Color(*hex_to_rgb("#FD5A1E"))
-        elif self.away_team_id() == "PITTSBURGH_PIRATES_MLB":
-            return graphics.Color(*hex_to_rgb("#FDB827"))
-        # default
-        return graphics.Color(
-            *hex_to_rgb(self.game["teams"]["away"]["colors"]["primary"])
-        )
+        return self._team_colour(self.game["teams"]["away"])
 
     def away_team_id(self) -> str:
         return str(self.game["teams"]["away"]["teamID"])
@@ -1017,17 +1023,7 @@ class GameSGO(Game):
         return self.game["status"]["started"]
 
     def home_team_colour(self) -> graphics.Color:
-        # overrides
-        if self.home_team_id() == "CHICAGO_WHITE_SOX_MLB":
-            return graphics.Color(*hex_to_rgb("#FFFFFF"))
-        elif self.home_team_id() == "SAN_FRANCISCO_GIANTS_MLB":
-            return graphics.Color(*hex_to_rgb("#FD5A1E"))
-        elif self.home_team_id() == "PITTSBURGH_PIRATES_MLB":
-            return graphics.Color(*hex_to_rgb("#FDB827"))
-        # default
-        return graphics.Color(
-            *hex_to_rgb(self.game["teams"]["home"]["colors"]["primary"])
-        )
+        return self._team_colour(self.game["teams"]["home"])
 
     def home_team_id(self) -> str:
         return str(self.game["teams"]["home"]["teamID"])
