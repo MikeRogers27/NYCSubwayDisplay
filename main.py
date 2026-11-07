@@ -33,7 +33,7 @@ from pyowm import OWM  # type: ignore[import-untyped]
 from pyowm.commons.exceptions import TimeoutError  # type: ignore[import-untyped]
 
 from utils import dummy_data
-from utils.colors import RGB
+from utils.colors import RGB, rgb_to_brightness
 from utils.console_logging import configure_console_logging
 from utils.display_control import DisplayControl, DisplayMode
 from utils.matrix_backend import FrameCanvas, MatrixColor, graphics
@@ -1091,19 +1091,28 @@ class GameSGO(Game):
         self.game = game
 
     def _team_colour(self, team: dummy_data.SGOTeam) -> MatrixColor:
-        """Use a readable fallback when SGO omits team color metadata."""
+        """Prefer team colors bright enough to read on the black display."""
         overrides = {
             "CHICAGO_WHITE_SOX_MLB": "#FFFFFF",
             "SAN_FRANCISCO_GIANTS_MLB": "#FD5A1E",
             "PITTSBURGH_PIRATES_MLB": "#FDB827",
         }
         colors = team.get("colors") or {}
-        primary = overrides.get(team["teamID"]) or colors.get("primary")
-        if primary:
+        candidates = (
+            overrides.get(team["teamID"]),
+            colors.get("primary"),
+            colors.get("secondary"),
+        )
+        for candidate in candidates:
+            if not isinstance(candidate, str) or len(candidate.lstrip("#")) != 6:
+                continue
             try:
-                return graphics.Color(*hex_to_rgb(primary))
+                rgb = hex_to_rgb(candidate)
             except ValueError:
-                pass
+                continue
+            # Keep dark team branding from disappearing into the background.
+            if rgb_to_brightness(*rgb) >= 0.2:
+                return graphics.Color(*rgb)
         return graphics.Color(255, 255, 255)
 
     def away_team_colour(self) -> MatrixColor:
