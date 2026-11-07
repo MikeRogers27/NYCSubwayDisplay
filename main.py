@@ -36,6 +36,7 @@ from display_control import DisplayControl, DisplayMode
 from matrix_backend import graphics
 from mqtt_listener import MQTTListener, add_mqtt_arguments
 from samplebase import SampleBase
+from utils.colors import rgb_to_brightness
 
 LOCAL_TZ: Any = pytz.timezone("America/New_York")
 NOW: datetime = datetime.now(tz=LOCAL_TZ)
@@ -965,19 +966,28 @@ class GameSGO(Game):
         super().__init__(*args)
 
     def _team_colour(self, team: dict[str, Any]) -> graphics.Color:
-        """Use a readable fallback when SGO omits team color metadata."""
+        """Prefer team colors bright enough to read on the black display."""
         overrides = {
             "CHICAGO_WHITE_SOX_MLB": "#FFFFFF",
             "SAN_FRANCISCO_GIANTS_MLB": "#FD5A1E",
             "PITTSBURGH_PIRATES_MLB": "#FDB827",
         }
         colors = team.get("colors") or {}
-        primary = overrides.get(team["teamID"]) or colors.get("primary")
-        if primary:
+        candidates = (
+            overrides.get(team["teamID"]),
+            colors.get("primary"),
+            colors.get("secondary"),
+        )
+        for candidate in candidates:
+            if not isinstance(candidate, str) or len(candidate.lstrip("#")) != 6:
+                continue
             try:
-                return graphics.Color(*hex_to_rgb(primary))
+                rgb = hex_to_rgb(candidate)
             except ValueError:
-                pass
+                continue
+            # Keep dark team branding from disappearing into the background.
+            if rgb_to_brightness(*rgb) >= 0.2:
+                return graphics.Color(*rgb)
         return graphics.Color(255, 255, 255)
 
     def away_team_colour(self) -> graphics.Color:

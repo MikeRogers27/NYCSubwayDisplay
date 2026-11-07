@@ -10,6 +10,27 @@ from matrix_backend import graphics
 
 
 class SGOColorTests(unittest.TestCase):
+    def test_dark_primary_uses_secondary_for_home_and_away_teams(self) -> None:
+        for primary in ("#000000", "#111111", "#001122", None, "invalid"):
+            with self.subTest(primary=primary):
+                event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "NHL")[0]
+                for team in event["teams"].values():
+                    team["teamID"] = "PITTSBURGH_PENGUINS_NHL"
+                    team["colors"] = {"primary": primary, "secondary": "#FCB514"}
+                game = main.GameSGO(event)
+                for color in (game.home_team_colour(), game.away_team_colour()):
+                    self.assertEqual((color.red, color.green, color.blue), (252, 181, 20))
+
+    def test_dark_primary_falls_back_to_white_without_readable_secondary(self) -> None:
+        for secondary in (None, "", "invalid", "#111111"):
+            with self.subTest(secondary=secondary):
+                event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "NHL")[0]
+                for team in event["teams"].values():
+                    team["colors"] = {"primary": "#000000", "secondary": secondary}
+                game = main.GameSGO(event)
+                for color in (game.home_team_colour(), game.away_team_colour()):
+                    self.assertEqual((color.red, color.green, color.blue), (255, 255, 255))
+
     def test_missing_or_invalid_colors_do_not_prevent_rendering(self) -> None:
         display = main.RunMatrix([], [], Mock())
         for colors in (None, {}, {"primary": None}, {"primary": ""}, {"primary": "invalid"}):
