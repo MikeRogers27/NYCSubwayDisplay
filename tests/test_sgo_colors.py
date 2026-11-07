@@ -10,6 +10,20 @@ from matrix_backend import graphics
 
 
 class SGOColorTests(unittest.TestCase):
+    def test_eagles_and_jets_primary_colors_are_readable(self) -> None:
+        for team_id, primary, expected in (
+            ("PHILADELPHIA_EAGLES_NFL", "#013D3D", (1, 61, 61)),
+            ("NEW_YORK_JETS_NFL", "#0C371D", (12, 55, 29)),
+        ):
+            with self.subTest(team_id=team_id):
+                event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "NFL")[0]
+                for team in event["teams"].values():
+                    team["teamID"] = team_id
+                    team["colors"] = {"primary": primary, "secondary": "#FFFFFF"}
+                game = main.GameSGO(event)
+                for color in (game.home_team_colour(), game.away_team_colour()):
+                    self.assertEqual((color.red, color.green, color.blue), expected)
+
     def test_dark_primary_uses_secondary_for_home_and_away_teams(self) -> None:
         for primary in ("#000000", "#111111", "#001122", None, "invalid"):
             with self.subTest(primary=primary):

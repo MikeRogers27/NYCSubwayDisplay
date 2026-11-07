@@ -986,7 +986,7 @@ class GameSGO(Game):
             except ValueError:
                 continue
             # Keep dark team branding from disappearing into the background.
-            if rgb_to_brightness(*rgb) >= 0.2:
+            if rgb_to_brightness(*rgb) >= 0.15:
                 return graphics.Color(*rgb)
         return graphics.Color(255, 255, 255)
 
