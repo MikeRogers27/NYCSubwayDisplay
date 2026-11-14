@@ -143,7 +143,9 @@ class LiveDataTests(unittest.TestCase):
             patch.object(main, "OWM") as owm,
         ):
             main.owm_get_weather()
-            owm.assert_called_once_with("test-key")
+            owm.assert_called_once()
+            self.assertEqual(owm.call_args.args, ("test-key",))
+            self.assertEqual(owm.call_args.kwargs["config"]["connection"]["timeout_secs"], 5)
             owm.return_value.weather_manager.return_value.weather_at_place.assert_called_once_with("New York")
 
 

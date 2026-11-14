@@ -23,7 +23,6 @@ import pytz
 import requests
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
-from nyct_gtfs import NYCTFeed
 from PIL import Image
 from PIL.ImageFile import ImageFile
 from pyowm import OWM
@@ -31,8 +30,11 @@ from pyowm.commons.exceptions import TimeoutError
 from pyowm.weatherapi30.observation import Observation
 
 import dummy_data
+from api_clients import HTTP_TIMEOUT, weather_config
+from api_clients import TimedNYCTFeed as NYCTFeed
 from console_logging import configure_console_logging
 from display_control import DisplayControl, DisplayMode
+from display_diagnostics import DisplayDiagnostics
 from matrix_backend import graphics
 from mqtt_listener import MQTTListener, add_mqtt_arguments
 from samplebase import SampleBase
@@ -660,10 +662,10 @@ class GameRAPIFootball(Game):
             }
             url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
             response: requests.Response = requests.request(
-                "GET", url, headers=headers, params=querystring
+                "GET", url, headers=headers, params=querystring, timeout=HTTP_TIMEOUT
             )
-        except requests.exceptions.ConnectionError as e:
-            LOG.error(f"GameRAPIFootball::update - ConnectionError {e}")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            LOG.error(f"GameRAPIFootball::update - ConnectionError/Timeout {e}")
             return self, games_last_update
 
         try:
@@ -763,12 +765,12 @@ class GameRAPIFootball(Game):
         url = "https://api-football-v1.p.rapidapi.com/v3/teams"
         try:
             response: requests.Response = requests.request(
-                "GET", url, headers=headers, params=querystring
+                "GET", url, headers=headers, params=querystring, timeout=HTTP_TIMEOUT
             )
             data = response.json()
-        except requests.exceptions.ConnectionError as e:
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             LOG.error(
-                f"GameRAPIFootball._update_team_info_from_api - ConnectionError {e}"
+                f"GameRAPIFootball._update_team_info_from_api - ConnectionError/Timeout {e}"
             )
             assert GameRAPIFootball.RAPI_TEAM_INFO is not None
             GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = default_team_info
@@ -935,9 +937,11 @@ class GameRAPIRugby(Game):
             url: str = (
                 f"https://rugbyapi2.p.rapidapi.com/api/rugby/match/{querystring['id']}"
             )
-            response: requests.Response = requests.request("GET", url, headers=headers)
-        except requests.exceptions.ConnectionError as e:
-            LOG.error(f"GameRAPIRugby::update - ConnectionError {e}")
+            response: requests.Response = requests.request(
+                "GET", url, headers=headers, timeout=HTTP_TIMEOUT
+            )
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            LOG.error(f"GameRAPIRugby::update - ConnectionError/Timeout {e}")
             return self, games_last_update
 
         try:
@@ -1085,6 +1089,7 @@ class GameSGO(Game):
                     "eventID": self.id(),
                     "oddIDs": "points-home-game-sp-home",
                 },
+                timeout=HTTP_TIMEOUT,
             )
 
             if response.status_code == 429:
@@ -1110,8 +1115,8 @@ class GameSGO(Game):
             self.game = data["data"][0]
             games_last_update[self.id()] = datetime.now(tz=LOCAL_TZ)
 
-        except requests.exceptions.ConnectionError as e:
-            LOG.error(f"GameSGO.update - ConnectionError {e}")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            LOG.error(f"GameSGO.update - ConnectionError/Timeout {e}")
             return self, games_last_update
 
         except requests.exceptions.RequestException as error:
@@ -2000,7 +2005,14 @@ class RunMatrix(SampleBase):
 
     def wait_for_display_interrupt(self, seconds: float) -> bool:
         """Return True when a command or shutdown interrupts a display wait."""
-        return self.display_control.wait(seconds)
+        diagnostics = getattr(self, "_diagnostics", None)
+        if diagnostics is not None:
+            diagnostics.progress(expected_wait=seconds)
+        try:
+            return self.display_control.wait(seconds)
+        finally:
+            if diagnostics is not None:
+                diagnostics.progress()
 
     def what_should_we_display(self) -> tuple[list[DisplayMode], list[int]]:
         """Prepend a requested mode to the pending rotation."""
@@ -2078,10 +2090,19 @@ class RunMatrix(SampleBase):
             return [DisplayMode("off")], [600]
 
     def run(self) -> None:
+        self._diagnostics = DisplayDiagnostics()
+        print(
+            f"Display stall diagnostics enabled (pid={os.getpid()}, "
+            f"timeout={self._diagnostics.stall_seconds}s; stacks go to stderr)",
+            flush=True,
+        )
+        self._run_rotation()
 
+    def _run_rotation(self) -> None:
         canvas = self.matrix.CreateFrameCanvas()
 
         graceful_killer = GracefulKiller(self.display_control.interrupt)
+        display_item = None
         while not graceful_killer.kill_now:
             try:
                 display_items, display_times = self.what_should_we_display()
@@ -2092,37 +2113,46 @@ class RunMatrix(SampleBase):
                         or self.display_control.interrupt.is_set()
                     ):
                         break
-                    if display_item.name == "trains":
-                        canvas = self.display_trains(
-                            canvas, display_time=display_time, stop_ids=display_item.stop_ids
-                        )
-                    elif display_item.name == "trains_uptown":
-                        canvas = self.display_trains(
-                            canvas, display_time=display_time, uptown_only=True
-                        )
-                    elif display_item.name == "clock":
-                        canvas = self.display_clock(canvas, display_time=display_time)
-                    elif display_item.name == "weather":
-                        canvas = self.display_weather(canvas, display_time=display_time)
-                    elif display_item.name == "sports":
-                        canvas = self.display_sports(canvas, display_time=display_time)
-                    elif display_item.name == "seasonal":
-                        canvas = self.display_seasonal(
-                            canvas, display_time=display_time
-                        )
-                    else:
-                        # nothing
-                        canvas.Clear()
-                        canvas = self.matrix.SwapOnVSync(canvas)
-                        if self.wait_for_display_interrupt(display_time):
-                            break
+                    with self._diagnostics.mode(display_item.name):
+                        if display_item.name == "trains":
+                            canvas = self.display_trains(
+                                canvas,
+                                display_time=display_time,
+                                stop_ids=display_item.stop_ids,
+                            )
+                        elif display_item.name == "trains_uptown":
+                            canvas = self.display_trains(
+                                canvas, display_time=display_time, uptown_only=True
+                            )
+                        elif display_item.name == "clock":
+                            canvas = self.display_clock(
+                                canvas, display_time=display_time
+                            )
+                        elif display_item.name == "weather":
+                            canvas = self.display_weather(
+                                canvas, display_time=display_time
+                            )
+                        elif display_item.name == "sports":
+                            canvas = self.display_sports(
+                                canvas, display_time=display_time
+                            )
+                        elif display_item.name == "seasonal":
+                            canvas = self.display_seasonal(
+                                canvas, display_time=display_time
+                            )
+                        else:
+                            # nothing
+                            canvas.Clear()
+                            canvas = self.matrix.SwapOnVSync(canvas)
+                            if self.wait_for_display_interrupt(display_time):
+                                break
                     if self.display_control.interrupt.is_set():
                         break
                     self._remaining_rotation.pop(0)
-            except TypeError as err:
-                LOG.error(f"{err=}")
-            except Exception as err:
-                print(f"Unexpected {err=}, {type(err)=}")
+            except TypeError:
+                LOG.exception("Display rotation TypeError; mode=%s", display_item)
+            except Exception:
+                LOG.exception("Display rotation failed; mode=%s", display_item)
                 raise
 
     @staticmethod
@@ -2232,8 +2262,8 @@ def mta_get_feeds() -> None | list[NYCTFeed]:
                 NYCTFeed("R"),
             ]
             MTA_FEEDS = feeds_list
-        except requests.exceptions.ConnectionError as e:
-            LOG.error(f"mta_get_feeds - ConnectionError: {e}")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            LOG.error(f"mta_get_feeds - ConnectionError/Timeout: {e}")
             return None
 
     return MTA_FEEDS
@@ -2294,8 +2324,11 @@ def mta_update_feeds() -> None:
                 try:
                     feed.refresh()
                     LOG.info(f"mta_update_feeds - feed updated {feed}")
-                except requests.exceptions.ConnectionError as e:
-                    LOG.error(f"mta_update_feeds - ConnectionError: {e}")
+                except (
+                    requests.exceptions.ConnectionError,
+                    requests.exceptions.Timeout,
+                ) as e:
+                    LOG.error(f"mta_update_feeds - ConnectionError/Timeout: {e}")
                 except pb_message.DecodeError as e:
                     LOG.error(f"mta_update_feeds - DecodeError: {e}")
                 except RuntimeError as e:
@@ -2355,7 +2388,7 @@ def owm_get_weather():
     global OWN_TIMESTAMP
 
     if OWM_MGR is None:
-        owm: OWM[str] = OWM(os.environ["OWM_API_KEY"])
+        owm: OWM[str] = OWM(os.environ["OWM_API_KEY"], config=weather_config())
         OWM_MGR = owm.weather_manager()
 
     # we only get the weather every 0.5 hours
@@ -2799,11 +2832,11 @@ def rapi_football_get_games_league(league_id, games_last_update):
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
     try:
         response: requests.Response = requests.request(
-            "GET", url, headers=headers, params=querystring
+            "GET", url, headers=headers, params=querystring, timeout=HTTP_TIMEOUT
         )
         data = response.json()
-    except requests.exceptions.ConnectionError as e:
-        LOG.error(f"rapi_football_get_games_league - ConnectionError {e}")
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+        LOG.error(f"rapi_football_get_games_league - ConnectionError/Timeout {e}")
         return [], games_last_update
 
     if response.status_code != 200:
@@ -2894,9 +2927,11 @@ def rapi_rugby_get_games_league(league_ids, games_last_update):
         # get all competitions for the day
         url: str = f"https://rugbyapi2.p.rapidapi.com/api/rugby/scheduled-tournaments/{querystring['day']}/{querystring['month']}/{querystring['year']}/page/1"
         try:
-            response: requests.Response = requests.request("GET", url, headers=headers)
-        except requests.exceptions.ConnectionError as e:
-            LOG.error(f"rapi_rugby_get_games_league - ConnectionError {e}")
+            response: requests.Response = requests.request(
+                "GET", url, headers=headers, timeout=HTTP_TIMEOUT
+            )
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            LOG.error(f"rapi_rugby_get_games_league - ConnectionError/Timeout {e}")
             return [], games_last_update
 
         if response.status_code == 204:
@@ -2946,10 +2981,13 @@ def rapi_rugby_get_games_league(league_ids, games_last_update):
             url: str = f"https://rugbyapi2.p.rapidapi.com/api/rugby/tournament/{tournament_id}/schedules/{querystring['day']}/{querystring['month']}/{querystring['year']}"
             try:
                 response: requests.Response = requests.request(
-                    "GET", url, headers=headers
+                    "GET", url, headers=headers, timeout=HTTP_TIMEOUT
                 )
-            except requests.exceptions.ConnectionError as e:
-                LOG.error(f"rapi_rugby_get_games_league - ConnectionError {e}")
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+            ) as e:
+                LOG.error(f"rapi_rugby_get_games_league - ConnectionError/Timeout {e}")
                 return [], games_last_update
 
             if response.status_code == 204:
@@ -3016,6 +3054,7 @@ def setup_env() -> None:
             response: requests.Response = requests.get(
                 "https://api.sportsgameodds.com/v2/account/usage",
                 headers={"X-Api-Key": sgo_api_key},
+                timeout=HTTP_TIMEOUT,
             )
             data = response.json()
             if not data["data"]["isActive"]:
@@ -3034,8 +3073,8 @@ def setup_env() -> None:
                 os.environ["SGO_API_KEY"] = sgo_api_key
                 break
 
-        except requests.exceptions.ConnectionError:
-            LOG.exception("setup_env - ConnectionError")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            LOG.exception("setup_env - ConnectionError/Timeout")
 
     if "SGO_API_KEY" not in os.environ:
         LOG.error("setup_env - SGO_API_KEY is not found")
@@ -3109,6 +3148,7 @@ def sgo_get_games_league(league_id, games_last_update):
                     "limit": 10,
                     "cursor": next_cursor,
                 },
+                timeout=HTTP_TIMEOUT,
             )
 
             if response.status_code == 429:
@@ -3137,8 +3177,8 @@ def sgo_get_games_league(league_id, games_last_update):
             if not next_cursor:
                 break
 
-        except requests.exceptions.ConnectionError as e:
-            LOG.error(f"sgo_get_games_league - ConnectionError {e}")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            LOG.error(f"sgo_get_games_league - ConnectionError/Timeout {e}")
             return [], games_last_update
 
         except requests.exceptions.RequestException as error:

@@ -220,6 +220,30 @@ Output from shell commands in `run-matrix.sh`, native libraries writing directly
 to file descriptors, or failures before Python logging initializes is not
 timestamped by the app.
 
+Display stall diagnostics run at every log level. If a mode makes no progress
+for 120 seconds, Python's native watchdog writes all thread stacks directly to
+`matrix_err.log`, repeating until progress resumes. Intentional screen holds
+(including the overnight off period) extend this deadline by their wait time.
+These stack dumps bypass the timestamp wrapper and start with `Timeout`.
+The watchdog records stalls; it does not restart the process or cancel requests.
+It cannot capture a process that has exited or an unresponsive operating system.
+
+For investigating freezes, set `--log INFO` in `run-matrix.sh` and restart the
+service. This also logs each mode's start, end, elapsed time, and process ID,
+so a weather screen left visible while the following sports fetch hangs can be
+distinguished from a stall in weather rendering. Exceptions in the display
+rotation include the mode and a full traceback even at `--log WARNING`.
+After the next freeze, copy both logs before restarting the service; also save
+`systemctl status matrix.service` and `journalctl -u matrix.service` to help
+distinguish a stalled process from a process exit or service restart.
+
+Sports and MTA HTTP requests use a five-second connection timeout and a
+fifteen-second read timeout. OpenWeather requests keep their five-second timeout;
+image downloads keep their ten-second timeout. Timeouts use the existing
+network-error fallbacks so a failed refresh can return control to the rotation.
+These limits apply to connection attempts and read inactivity, rather than the
+total duration of a mode that makes several requests.
+
 Then enable the service
     
 ```
