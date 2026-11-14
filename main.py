@@ -2113,44 +2113,45 @@ class RunMatrix(SampleBase):
                         or self.display_control.interrupt.is_set()
                     ):
                         break
-                    with self._diagnostics.mode(display_item.name):
-                        if display_item.name == "trains":
-                            canvas = self.display_trains(
-                                canvas,
-                                display_time=display_time,
-                                stop_ids=display_item.stop_ids,
-                            )
-                        elif display_item.name == "trains_uptown":
-                            canvas = self.display_trains(
-                                canvas, display_time=display_time, uptown_only=True
-                            )
-                        elif display_item.name == "clock":
-                            canvas = self.display_clock(
-                                canvas, display_time=display_time
-                            )
-                        elif display_item.name == "weather":
-                            canvas = self.display_weather(
-                                canvas, display_time=display_time
-                            )
-                        elif display_item.name == "sports":
-                            canvas = self.display_sports(
-                                canvas, display_time=display_time
-                            )
-                        elif display_item.name == "seasonal":
-                            canvas = self.display_seasonal(
-                                canvas, display_time=display_time
-                            )
-                        else:
-                            # nothing
-                            canvas.Clear()
-                            canvas = self.matrix.SwapOnVSync(canvas)
-                            if self.wait_for_display_interrupt(display_time):
-                                break
+                    try:
+                        with self._diagnostics.mode(display_item.name):
+                            if display_item.name == "trains":
+                                canvas = self.display_trains(
+                                    canvas,
+                                    display_time=display_time,
+                                    stop_ids=display_item.stop_ids,
+                                )
+                            elif display_item.name == "trains_uptown":
+                                canvas = self.display_trains(
+                                    canvas, display_time=display_time, uptown_only=True
+                                )
+                            elif display_item.name == "clock":
+                                canvas = self.display_clock(
+                                    canvas, display_time=display_time
+                                )
+                            elif display_item.name == "weather":
+                                canvas = self.display_weather(
+                                    canvas, display_time=display_time
+                                )
+                            elif display_item.name == "sports":
+                                canvas = self.display_sports(
+                                    canvas, display_time=display_time
+                                )
+                            elif display_item.name == "seasonal":
+                                canvas = self.display_seasonal(
+                                    canvas, display_time=display_time
+                                )
+                            else:
+                                # nothing
+                                canvas.Clear()
+                                canvas = self.matrix.SwapOnVSync(canvas)
+                                if self.wait_for_display_interrupt(display_time):
+                                    break
+                    except TypeError:
+                        LOG.exception("Display mode TypeError; mode=%s", display_item)
                     if self.display_control.interrupt.is_set():
                         break
                     self._remaining_rotation.pop(0)
-            except TypeError:
-                LOG.exception("Display rotation TypeError; mode=%s", display_item)
             except Exception:
                 LOG.exception("Display rotation failed; mode=%s", display_item)
                 raise

@@ -280,6 +280,85 @@ class RenderInterruptionTests(unittest.TestCase):
             self.display.run()
         self.assertEqual(rendered, ["clock", "trains", "trains", "clock", "weather"])
 
+    def test_type_error_skips_failed_mode_and_runs_next_mode(self) -> None:
+        killer = Mock(kill_now=False)
+        rendered = []
+
+        def sports(canvas, display_time):
+            rendered.append("sports")
+            # Bound the test if a regression retries this mode forever.
+            if rendered.count("sports") > 1:
+                killer.kill_now = True
+            raise TypeError("invalid sports data")
+
+        def clock(canvas, display_time):
+            rendered.append("clock")
+            killer.kill_now = True
+            return self.swapped_canvas
+
+        with (
+            patch.object(main, "GracefulKiller", return_value=killer),
+            patch.object(
+                self.display, "scheduled_display",
+                return_value=([DisplayMode("sports"), DisplayMode("clock")], [3, 30]),
+            ),
+            patch.object(self.display, "display_sports", side_effect=sports),
+            patch.object(self.display, "display_clock", side_effect=clock),
+            self.assertLogs("NYCSubwayDisplay", level="ERROR") as logs,
+        ):
+            self.display.run()
+        self.assertEqual(rendered, ["sports", "clock"])
+        self.assertEqual(self.display._remaining_rotation, [])
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn("sports", logs.output[0])
+        self.assertIn("Traceback", logs.output[0])
+
+    def test_type_error_with_pending_command_preserves_interrupted_rotation(self) -> None:
+        killer = Mock(kill_now=False)
+        rendered = []
+
+        def sports(canvas, display_time):
+            rendered.append("sports")
+            if rendered == ["sports"]:
+                self.display.display_control.request(DisplayMode("trains"))
+                raise TypeError("invalid sports data")
+            return self.swapped_canvas
+
+        def trains(canvas, display_time, **kwargs):
+            rendered.append("trains")
+            return self.swapped_canvas
+
+        def clock(canvas, display_time):
+            rendered.append("clock")
+            killer.kill_now = True
+            return self.swapped_canvas
+
+        with (
+            patch.object(main, "GracefulKiller", return_value=killer),
+            patch.object(
+                self.display, "scheduled_display",
+                return_value=([DisplayMode("sports"), DisplayMode("clock")], [3, 30]),
+            ),
+            patch.object(self.display, "display_sports", side_effect=sports),
+            patch.object(self.display, "display_trains", side_effect=trains),
+            patch.object(self.display, "display_clock", side_effect=clock),
+            self.assertLogs("NYCSubwayDisplay", level="ERROR"),
+        ):
+            self.display.run()
+        self.assertEqual(rendered, ["sports", "trains", "sports", "clock"])
+        self.assertEqual(self.display._remaining_rotation, [])
+
+    def test_scheduling_type_error_propagates_without_removing_pending_mode(self) -> None:
+        self.display._remaining_rotation = [(DisplayMode("clock"), 30)]
+        with (
+            patch.object(main, "GracefulKiller", return_value=Mock(kill_now=False)),
+            patch.object(self.display, "what_should_we_display", side_effect=TypeError("invalid schedule")),
+            self.assertLogs("NYCSubwayDisplay", level="ERROR"),
+            self.assertRaisesRegex(TypeError, "invalid schedule"),
+        ):
+            self.display.run()
+        self.assertEqual(self.display._remaining_rotation, [(DisplayMode("clock"), 30)])
+
     def test_completed_rotation_refreshes_the_time_based_schedule(self) -> None:
         killer = Mock(kill_now=False)
         rendered = []
