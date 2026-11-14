@@ -161,7 +161,7 @@ export SGO_API_KEYS=<Key from https://sportsgameodds.com/, comma separated>
 export RPA_API_KEY=<Key from https://rapidapi.com/>
 cd ${HOME}/src/NYCSubwayDisplay
 sudo /home/pi/.local/bin/uv sync --extra pi --no-dev --locked
-sudo --preserve-env=PYTHONPATH,OWM_API_KEY,SGO_API_KEYS,RPA_API_KEY /home/pi/.local/bin/uv run python main.py --led-gpio-mapping=adafruit-hat-pwm --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=40 --led-slowdown-gpio=1  --led-no-drop-privs
+sudo --preserve-env=PYTHONPATH,OWM_API_KEY,SGO_API_KEYS,RPA_API_KEY /home/pi/.local/bin/uv run --extra pi --no-dev --locked python main.py --led-gpio-mapping=adafruit-hat-pwm --led-rows=32 --led-cols=64 --led-rgb-sequence=RBG --led-brightness=40 --led-slowdown-gpio=1  --led-no-drop-privs --log WARNING
 ```
 
 Now change to executable permissions:
@@ -204,6 +204,45 @@ StandardError=append:/home/pi/logs/matrix_err.log
 [Install]
 WantedBy=multi-user.target
 ```
+
+After logging is initialized, Python console output in both files includes a
+timestamp with the Pi's local timezone offset, for example:
+
+```text
+2026-11-01T01:08:30-05:00 WARNING:Example warning
+```
+
+This includes printed status messages, logging records, and each line of Python
+tracebacks. `--log WARNING` filters logging records to warning and above; use
+`--log INFO` for more detail. Printed status messages are unaffected by this
+filter. The launch command and service output paths do not need to change.
+Output from shell commands in `run-matrix.sh`, native libraries writing directly
+to file descriptors, or failures before Python logging initializes is not
+timestamped by the app.
+
+Display stall diagnostics run at every log level. If a mode makes no progress
+for 120 seconds, Python's native watchdog writes all thread stacks directly to
+`matrix_err.log`, repeating until progress resumes. Intentional screen holds
+(including the overnight off period) extend this deadline by their wait time.
+These stack dumps bypass the timestamp wrapper and start with `Timeout`.
+The watchdog records stalls; it does not restart the process or cancel requests.
+It cannot capture a process that has exited or an unresponsive operating system.
+
+For investigating freezes, set `--log INFO` in `run-matrix.sh` and restart the
+service. This also logs each mode's start, end, elapsed time, and process ID,
+so a weather screen left visible while the following sports fetch hangs can be
+distinguished from a stall in weather rendering. Exceptions in the display
+rotation include the mode and a full traceback even at `--log WARNING`.
+After the next freeze, copy both logs before restarting the service; also save
+`systemctl status matrix.service` and `journalctl -u matrix.service` to help
+distinguish a stalled process from a process exit or service restart.
+
+Sports and MTA HTTP requests use a five-second connection timeout and a
+fifteen-second read timeout. OpenWeather requests keep their five-second timeout;
+image downloads keep their ten-second timeout. Timeouts use the existing
+network-error fallbacks so a failed refresh can return control to the rotation.
+These limits apply to connection attempts and read inactivity, rather than the
+total duration of a mode that makes several requests.
 
 Then enable the service
     

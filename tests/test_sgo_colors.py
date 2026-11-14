@@ -1,0 +1,86 @@
+"""Keep SGO games drawable when optional team colors are absent."""
+
+import unittest
+from datetime import datetime
+from unittest.mock import Mock, patch
+
+import dummy_data
+import main
+from matrix_backend import graphics
+
+
+class SGOColorTests(unittest.TestCase):
+    def test_eagles_and_jets_primary_colors_are_readable(self) -> None:
+        for team_id, primary, expected in (
+            ("PHILADELPHIA_EAGLES_NFL", "#013D3D", (1, 61, 61)),
+            ("NEW_YORK_JETS_NFL", "#0C371D", (12, 55, 29)),
+        ):
+            with self.subTest(team_id=team_id):
+                event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "NFL")[0]
+                for team in event["teams"].values():
+                    team["teamID"] = team_id
+                    team["colors"] = {"primary": primary, "secondary": "#FFFFFF"}
+                game = main.GameSGO(event)
+                for color in (game.home_team_colour(), game.away_team_colour()):
+                    self.assertEqual((color.red, color.green, color.blue), expected)
+
+    def test_dark_primary_uses_secondary_for_home_and_away_teams(self) -> None:
+        for primary in ("#000000", "#111111", "#001122", None, "invalid"):
+            with self.subTest(primary=primary):
+                event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "NHL")[0]
+                for team in event["teams"].values():
+                    team["teamID"] = "PITTSBURGH_PENGUINS_NHL"
+                    team["colors"] = {"primary": primary, "secondary": "#FCB514"}
+                game = main.GameSGO(event)
+                for color in (game.home_team_colour(), game.away_team_colour()):
+                    self.assertEqual((color.red, color.green, color.blue), (252, 181, 20))
+
+    def test_dark_primary_falls_back_to_white_without_readable_secondary(self) -> None:
+        for secondary in (None, "", "invalid", "#111111"):
+            with self.subTest(secondary=secondary):
+                event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "NHL")[0]
+                for team in event["teams"].values():
+                    team["colors"] = {"primary": "#000000", "secondary": secondary}
+                game = main.GameSGO(event)
+                for color in (game.home_team_colour(), game.away_team_colour()):
+                    self.assertEqual((color.red, color.green, color.blue), (255, 255, 255))
+
+    def test_missing_or_invalid_colors_do_not_prevent_rendering(self) -> None:
+        display = main.RunMatrix([], [], Mock())
+        for colors in (None, {}, {"primary": None}, {"primary": ""}, {"primary": "invalid"}):
+            for omit_colors in (False, True):
+                with self.subTest(colors=colors, omit_colors=omit_colors):
+                    event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "NHL")[0]
+                    for team in event["teams"].values():
+                        if omit_colors:
+                            del team["colors"]
+                        else:
+                            team["colors"] = colors
+                    game = main.GameSGO(event)
+                    for color in (game.home_team_colour(), game.away_team_colour()):
+                        self.assertEqual((color.red, color.green, color.blue), (255, 255, 255))
+                    with patch.object(graphics, "DrawText"), patch.object(graphics, "DrawLine"):
+                        display.draw_game(Mock(), game)
+
+    def test_valid_team_colors_are_preserved(self) -> None:
+        event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "NHL")[0]
+        game = main.GameSGO(event)
+        home = game.home_team_colour()
+        away = game.away_team_colour()
+        self.assertEqual((home.red, home.green, home.blue), (0, 90, 156))
+        self.assertEqual((away.red, away.green, away.blue), (204, 0, 0))
+
+    def test_team_overrides_work_without_api_colors(self) -> None:
+        for team_id, expected in (
+            ("CHICAGO_WHITE_SOX_MLB", (255, 255, 255)),
+            ("SAN_FRANCISCO_GIANTS_MLB", (253, 90, 30)),
+            ("PITTSBURGH_PIRATES_MLB", (253, 184, 39)),
+        ):
+            with self.subTest(team_id=team_id):
+                event = dummy_data.sgo(datetime.now(tz=main.LOCAL_TZ), "MLB")[0]
+                for team in event["teams"].values():
+                    team["teamID"] = team_id
+                    del team["colors"]
+                game = main.GameSGO(event)
+                for color in (game.home_team_colour(), game.away_team_colour()):
+                    self.assertEqual((color.red, color.green, color.blue), expected)

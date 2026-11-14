@@ -1,6 +1,5 @@
 import argparse
 import glob
-import importlib
 import json
 import logging
 import os
@@ -9,14 +8,13 @@ import random
 import signal
 import sys
 import tempfile
-import time
 import warnings
 from abc import ABC, abstractmethod
 from datetime import date as dt_date
 from datetime import datetime, timedelta
 from datetime import time as dt_time
 from logging import Logger
-from types import ModuleType
+from threading import Event
 from typing import Any, Literal, NamedTuple
 
 import google.protobuf.message as pb_message
@@ -25,27 +23,29 @@ import pytz
 import requests
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
-from nyct_gtfs import NYCTFeed
 from PIL import Image
 from PIL.ImageFile import ImageFile
 from pyowm import OWM
-from pyowm.weatherapi30.observation import Observation
 from pyowm.commons.exceptions import TimeoutError
+from pyowm.weatherapi30.observation import Observation
 
-if os.name == "nt":
-    graphics: ModuleType = importlib.import_module("RGBMatrixEmulator", "graphics")
-else:
-    from rgbmatrix import graphics as graphics_module
-
-    graphics: Any = graphics_module
-
+import dummy_data
+from api_clients import HTTP_TIMEOUT, weather_config
+from api_clients import TimedNYCTFeed as NYCTFeed
+from console_logging import configure_console_logging
+from display_control import DisplayControl, DisplayMode
+from display_diagnostics import DisplayDiagnostics
+from matrix_backend import graphics
+from mqtt_listener import MQTTListener, add_mqtt_arguments
 from samplebase import SampleBase
+from utils.colors import rgb_to_brightness
 
 LOCAL_TZ: Any = pytz.timezone("America/New_York")
 NOW: datetime = datetime.now(tz=LOCAL_TZ)
 
 LOG: Logger = logging.getLogger("NYCSubwayDisplay")
 MIN_DISPLAY_TIME: int = 3
+DUMMY_DATA: bool = False
 
 MTA_FEEDS: list[Any] | None = None
 MTA_TIMESTAMP: datetime | None = None
@@ -159,7 +159,9 @@ SEASONAL_DATA: list[Seasonal] = [
     Seasonal(
         name="thanksgiving",
         date=datetime.combine(
-            _us_holidays.get_named("Thanksgiving")[0], datetime.min.time(), tzinfo=LOCAL_TZ
+            _us_holidays.get_named("Thanksgiving")[0],
+            datetime.min.time(),
+            tzinfo=LOCAL_TZ,
         ),
         display_days_before=3,
         display_days_after=3,
@@ -447,7 +449,9 @@ class Game(ABC):
         pass
 
     @abstractmethod
-    def update(self, games_last_update: dict[str, datetime]) -> tuple["Game", dict[str, datetime]]:
+    def update(
+        self, games_last_update: dict[str, datetime]
+    ) -> tuple["Game", dict[str, datetime]]:
         """Update game data from external API.
 
         Args:
@@ -516,7 +520,7 @@ class GameRAPIFootball(Game):
     def __init__(self, *args) -> None:
         super().__init__(*args)
         self.text_colour = (74, 214, 9)
-        if GameRAPIFootball.RAPI_TEAM_INFO is None:
+        if not DUMMY_DATA and GameRAPIFootball.RAPI_TEAM_INFO is None:
             GameRAPIFootball.RAPI_TEAM_INFO = GameRAPIFootball._load_team_info()
 
     def away_team_colour(self) -> graphics.Color:
@@ -643,7 +647,11 @@ class GameRAPIFootball(Game):
     def start_time(self) -> datetime:
         return datetime.fromtimestamp(self.game["fixture"]["timestamp"], tz=LOCAL_TZ)
 
-    def update(self, games_last_update: dict[str, datetime]) -> tuple["GameRAPIFootball", dict[str, datetime]]:
+    def update(
+        self, games_last_update: dict[str, datetime]
+    ) -> tuple["GameRAPIFootball", dict[str, datetime]]:
+        if DUMMY_DATA:
+            return self, games_last_update
         try:
             querystring = {
                 "id": self.id(),
@@ -654,10 +662,10 @@ class GameRAPIFootball(Game):
             }
             url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
             response: requests.Response = requests.request(
-                "GET", url, headers=headers, params=querystring
+                "GET", url, headers=headers, params=querystring, timeout=HTTP_TIMEOUT
             )
-        except requests.exceptions.ConnectionError as e:
-            LOG.error(f"GameRAPIFootball::update - ConnectionError {e}")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            LOG.error(f"GameRAPIFootball::update - ConnectionError/Timeout {e}")
             return self, games_last_update
 
         try:
@@ -681,6 +689,11 @@ class GameRAPIFootball(Game):
         return game, games_last_update
 
     def _get_team_info(self, team_id, game_team):
+        if DUMMY_DATA:
+            return {
+                "short_name": game_team["name"][:3].upper(),
+                "team_colour": self.text_colour,
+            }
         assert GameRAPIFootball.RAPI_TEAM_INFO is not None
         if str(team_id) not in GameRAPIFootball.RAPI_TEAM_INFO:
             self._update_team_info_from_api(team_id, game_team)
@@ -734,6 +747,8 @@ class GameRAPIFootball(Game):
         return team_info_json_file
 
     def _update_team_info_from_api(self, team_id: int, game_team: dict) -> None:
+        if DUMMY_DATA:
+            return
         default_team_info = {
             "id": team_id,
             "short_name": game_team["name"][:3].upper(),
@@ -750,12 +765,12 @@ class GameRAPIFootball(Game):
         url = "https://api-football-v1.p.rapidapi.com/v3/teams"
         try:
             response: requests.Response = requests.request(
-                "GET", url, headers=headers, params=querystring
+                "GET", url, headers=headers, params=querystring, timeout=HTTP_TIMEOUT
             )
             data = response.json()
-        except requests.exceptions.ConnectionError as e:
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             LOG.error(
-                f"GameRAPIFootball._update_team_info_from_api - ConnectionError {e}"
+                f"GameRAPIFootball._update_team_info_from_api - ConnectionError/Timeout {e}"
             )
             assert GameRAPIFootball.RAPI_TEAM_INFO is not None
             GameRAPIFootball.RAPI_TEAM_INFO[str(team_id)] = default_team_info
@@ -906,7 +921,11 @@ class GameRAPIRugby(Game):
     def start_time(self) -> datetime:
         return datetime.fromtimestamp(self.game["startTimestamp"], tz=LOCAL_TZ)
 
-    def update(self, games_last_update: dict[str, datetime]) -> tuple["GameRAPIRugby", dict[str, datetime]]:
+    def update(
+        self, games_last_update: dict[str, datetime]
+    ) -> tuple["GameRAPIRugby", dict[str, datetime]]:
+        if DUMMY_DATA:
+            return self, games_last_update
         try:
             querystring = {
                 "id": self.id(),
@@ -918,9 +937,11 @@ class GameRAPIRugby(Game):
             url: str = (
                 f"https://rugbyapi2.p.rapidapi.com/api/rugby/match/{querystring['id']}"
             )
-            response: requests.Response = requests.request("GET", url, headers=headers)
-        except requests.exceptions.ConnectionError as e:
-            LOG.error(f"GameRAPIRugby::update - ConnectionError {e}")
+            response: requests.Response = requests.request(
+                "GET", url, headers=headers, timeout=HTTP_TIMEOUT
+            )
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            LOG.error(f"GameRAPIRugby::update - ConnectionError/Timeout {e}")
             return self, games_last_update
 
         try:
@@ -948,18 +969,33 @@ class GameSGO(Game):
     def __init__(self, *args) -> None:
         super().__init__(*args)
 
-    def away_team_colour(self) -> graphics.Color:
-        # overrides
-        if self.away_team_id() == "CHICAGO_WHITE_SOX_MLB":
-            return graphics.Color(*hex_to_rgb("#FFFFFF"))
-        elif self.away_team_id() == "SAN_FRANCISCO_GIANTS_MLB":
-            return graphics.Color(*hex_to_rgb("#FD5A1E"))
-        elif self.away_team_id() == "PITTSBURGH_PIRATES_MLB":
-            return graphics.Color(*hex_to_rgb("#FDB827"))
-        # default
-        return graphics.Color(
-            *hex_to_rgb(self.game["teams"]["away"]["colors"]["primary"])
+    def _team_colour(self, team: dict[str, Any]) -> graphics.Color:
+        """Prefer team colors bright enough to read on the black display."""
+        overrides = {
+            "CHICAGO_WHITE_SOX_MLB": "#FFFFFF",
+            "SAN_FRANCISCO_GIANTS_MLB": "#FD5A1E",
+            "PITTSBURGH_PIRATES_MLB": "#FDB827",
+        }
+        colors = team.get("colors") or {}
+        candidates = (
+            overrides.get(team["teamID"]),
+            colors.get("primary"),
+            colors.get("secondary"),
         )
+        for candidate in candidates:
+            if not isinstance(candidate, str) or len(candidate.lstrip("#")) != 6:
+                continue
+            try:
+                rgb = hex_to_rgb(candidate)
+            except ValueError:
+                continue
+            # Keep dark team branding from disappearing into the background.
+            if rgb_to_brightness(*rgb) >= 0.15:
+                return graphics.Color(*rgb)
+        return graphics.Color(255, 255, 255)
+
+    def away_team_colour(self) -> graphics.Color:
+        return self._team_colour(self.game["teams"]["away"])
 
     def away_team_id(self) -> str:
         return str(self.game["teams"]["away"]["teamID"])
@@ -1001,17 +1037,7 @@ class GameSGO(Game):
         return self.game["status"]["started"]
 
     def home_team_colour(self) -> graphics.Color:
-        # overrides
-        if self.home_team_id() == "CHICAGO_WHITE_SOX_MLB":
-            return graphics.Color(*hex_to_rgb("#FFFFFF"))
-        elif self.home_team_id() == "SAN_FRANCISCO_GIANTS_MLB":
-            return graphics.Color(*hex_to_rgb("#FD5A1E"))
-        elif self.home_team_id() == "PITTSBURGH_PIRATES_MLB":
-            return graphics.Color(*hex_to_rgb("#FDB827"))
-        # default
-        return graphics.Color(
-            *hex_to_rgb(self.game["teams"]["home"]["colors"]["primary"])
-        )
+        return self._team_colour(self.game["teams"]["home"])
 
     def home_team_id(self) -> str:
         return str(self.game["teams"]["home"]["teamID"])
@@ -1050,7 +1076,11 @@ class GameSGO(Game):
     def start_time(self) -> datetime:
         return to_local_tz(parse(self.game["status"]["startsAt"]))
 
-    def update(self, games_last_update: dict[str, datetime]) -> tuple["GameSGO", dict[str, datetime]]:
+    def update(
+        self, games_last_update: dict[str, datetime]
+    ) -> tuple["GameSGO", dict[str, datetime]]:
+        if DUMMY_DATA:
+            return self, games_last_update
         try:
             response: requests.Response = requests.get(
                 "https://api.sportsgameodds.com/v2/events",
@@ -1059,6 +1089,7 @@ class GameSGO(Game):
                     "eventID": self.id(),
                     "oddIDs": "points-home-game-sp-home",
                 },
+                timeout=HTTP_TIMEOUT,
             )
 
             if response.status_code == 429:
@@ -1084,8 +1115,8 @@ class GameSGO(Game):
             self.game = data["data"][0]
             games_last_update[self.id()] = datetime.now(tz=LOCAL_TZ)
 
-        except requests.exceptions.ConnectionError as e:
-            LOG.error(f"GameSGO.update - ConnectionError {e}")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            LOG.error(f"GameSGO.update - ConnectionError/Timeout {e}")
             return self, games_last_update
 
         except requests.exceptions.RequestException as error:
@@ -1100,18 +1131,23 @@ class GameSGO(Game):
 
 
 class GracefulKiller:
-    def __init__(self) -> None:
+    def __init__(self, interrupt: Event | None = None) -> None:
         self.kill_now = False
+        self.interrupt = interrupt
         signal.signal(signal.SIGINT, self.exit_gracefully)
         signal.signal(signal.SIGTERM, self.exit_gracefully)
 
     def exit_gracefully(self, signum, frame) -> None:
         self.kill_now = True
+        if self.interrupt is not None:
+            self.interrupt.set()
 
 
 class RunMatrix(SampleBase):
     def __init__(self, stop_ids, uptown_stop_ids, args) -> None:
         super().__init__(args)
+        self.display_control = DisplayControl()
+        self._remaining_rotation: list[tuple[DisplayMode, int]] = []
 
         self.stop_ids: Any = stop_ids
         self.uptown_stop_ids: Any = uptown_stop_ids
@@ -1455,14 +1491,21 @@ class RunMatrix(SampleBase):
             canvas.Clear()
             self.draw_train_no_data(stop_id, canvas)
             canvas = self.matrix.SwapOnVSync(canvas)
-            time.sleep(display_time)
+            if self.wait_for_display_interrupt(display_time):
+                return True, canvas
         elif len(trains):
             # check we don't have stale data
             now: datetime = datetime.now(tz=LOCAL_TZ)
             last_update_time: datetime = now - timedelta(minutes=60)
             for train in trains:
-                train_last_position_update = getattr(train, "last_position_update", None)
-                train_last_position_update = LOCAL_TZ.localize(train_last_position_update, is_dst=None) if train_last_position_update is not None else None
+                train_last_position_update = getattr(
+                    train, "last_position_update", None
+                )
+                train_last_position_update = (
+                    mta_local_time(train_last_position_update)
+                    if train_last_position_update is not None
+                    else None
+                )
                 if (
                     train.underway
                     and train_last_position_update is not None
@@ -1474,13 +1517,15 @@ class RunMatrix(SampleBase):
                 canvas.Clear()
                 self.draw_train_no_data(stop_id, canvas)
                 canvas = self.matrix.SwapOnVSync(canvas)
-                time.sleep(display_time)
+                if self.wait_for_display_interrupt(display_time):
+                    return True, canvas
             else:
                 if len(trains) == 1:
                     canvas.Clear()
                     self.draw_train(0, 1, trains[0], stop_id, canvas)
                     canvas = self.matrix.SwapOnVSync(canvas)
-                    time.sleep(display_time)
+                    if self.wait_for_display_interrupt(display_time):
+                        return True, canvas
                 else:
                     swap_time: int = max(
                         display_time / len(trains) - 1, MIN_DISPLAY_TIME
@@ -1490,12 +1535,14 @@ class RunMatrix(SampleBase):
                         self.draw_train(0, 1, trains[0], stop_id, canvas)
                         self.draw_train(1, i + 1, trains[i], stop_id, canvas)
                         canvas = self.matrix.SwapOnVSync(canvas)
-                        time.sleep(swap_time)
+                        if self.wait_for_display_interrupt(swap_time):
+                            return True, canvas
         else:
             canvas.Clear()
             self.draw_trains_none(stop_id, canvas)
             canvas = self.matrix.SwapOnVSync(canvas)
-            time.sleep(display_time)
+            if self.wait_for_display_interrupt(display_time):
+                return True, canvas
 
         return True, canvas
 
@@ -1553,7 +1600,9 @@ class RunMatrix(SampleBase):
                 frame_ind = (frame_ind + 1) % im.n_frames  # type: ignore
                 fstart: datetime = datetime.now(tz=LOCAL_TZ)
 
-            time.sleep(sleep_time)
+            if self.wait_for_display_interrupt(sleep_time):
+                im.close()
+                return canvas
             if offset_y == center_offset:
                 if center_counter < n_center_frames:
                     offset_y += 1
@@ -1561,6 +1610,7 @@ class RunMatrix(SampleBase):
 
             offset_y -= 1
 
+        im.close()
         return canvas
 
     def draw_seasonal_scroll_up_animate_centre(self, canvas, image_file, display_time):
@@ -1568,6 +1618,7 @@ class RunMatrix(SampleBase):
         is_animated: Any | bool = getattr(im, "is_animated", False)
         if not is_animated:
             warnings.warn(f"{image_file} is not animated")
+            im.close()
             return canvas
 
         n_rows_display: int = 32 * 2 + im.height
@@ -1601,16 +1652,20 @@ class RunMatrix(SampleBase):
 
                     canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
                     canvas = self.matrix.SwapOnVSync(canvas)
-                    time.sleep(im.info["duration"] / 1000)
+                    if self.wait_for_display_interrupt(im.info["duration"] / 1000):
+                        im.close()
+                        return canvas
             else:
                 canvas.Clear()
                 canvas.SetImage(im_disp, offset_x=0, offset_y=offset_y)
                 canvas = self.matrix.SwapOnVSync(canvas)
-                time.sleep(sleep_time)
+                if self.wait_for_display_interrupt(sleep_time):
+                    im.close()
+                    return canvas
 
-                if (datetime.now(tz=LOCAL_TZ) - fstart).total_seconds() * 1000 >= im.info[
-                    "duration"
-                ]:
+                if (
+                    datetime.now(tz=LOCAL_TZ) - fstart
+                ).total_seconds() * 1000 >= im.info["duration"]:
                     im.seek(frame_ind)
                     im_disp: Image.Image = im.convert("RGB")
                     frame_ind = (frame_ind + 1) % im.n_frames  # type: ignore
@@ -1618,6 +1673,7 @@ class RunMatrix(SampleBase):
 
             offset_y -= 1
 
+        im.close()
         return canvas
 
     def draw_weather(self, canvas, w):
@@ -1843,18 +1899,20 @@ class RunMatrix(SampleBase):
 
             canvas = self.matrix.SwapOnVSync(canvas)
             show_colon: bool = not show_colon
-            time.sleep(0.5)
+            if self.wait_for_display_interrupt(0.5):
+                return canvas
 
         return canvas
 
-    def display_trains(self, canvas, display_time=10, uptown_only=False):
+    def display_trains(self, canvas, display_time=10, uptown_only=False, stop_ids: tuple[str, ...] | None = None):
         LOG.debug(f"RunMatrix.display_trains - uptown_only {uptown_only}")
 
         mta_update_feeds()
-        stop_ids: Any = self.stop_ids
-        if uptown_only:
-            stop_ids: Any = self.uptown_stop_ids
+        if stop_ids is None:
+            stop_ids = self.uptown_stop_ids if uptown_only else self.stop_ids
         for stop_id in stop_ids:
+            if self.display_control.interrupt.is_set():
+                return canvas
             trains = mta_get_next_trains(
                 stop_id=stop_id, max_num_trains=5, max_arrival_mins=25
             )
@@ -1871,6 +1929,8 @@ class RunMatrix(SampleBase):
 
         now: datetime = datetime.now(tz=LOCAL_TZ)
         for seasonal in SEASONAL_DATA:
+            if self.display_control.interrupt.is_set():
+                return canvas
             start_date = seasonal.date - timedelta(days=seasonal.display_days_before)
             end_date = seasonal.date + timedelta(days=seasonal.display_days_after)
             if start_date < now < end_date:
@@ -1883,7 +1943,11 @@ class RunMatrix(SampleBase):
 
         games = []
         games.extend(sgo_get_games())
+        if self.display_control.interrupt.is_set():
+            return canvas
         games.extend(rapi_football_get_games())
+        if self.display_control.interrupt.is_set():
+            return canvas
         games.extend(rapi_rugby_get_games())
         if not len(games):
             return canvas
@@ -1894,7 +1958,8 @@ class RunMatrix(SampleBase):
             canvas.Clear()
             canvas = self.draw_game(canvas, game)
             canvas = self.matrix.SwapOnVSync(canvas)
-            time.sleep(game_time)
+            if self.wait_for_display_interrupt(game_time):
+                return canvas
         return canvas
 
     def display_weather(self, canvas, display_time=10):
@@ -1919,25 +1984,60 @@ class RunMatrix(SampleBase):
             canvas.Clear()
             canvas = self.draw_weather_summary(canvas, forecasts, title_str)
             canvas = self.matrix.SwapOnVSync(canvas)
-            time.sleep(weather_time * 2)
+            if self.wait_for_display_interrupt(weather_time * 2):
+                return canvas
 
             for forecast in forecasts:
                 canvas.Clear()
                 canvas = self.draw_weather(canvas, forecast)
                 canvas = self.matrix.SwapOnVSync(canvas)
-                time.sleep(weather_time)
+                if self.wait_for_display_interrupt(weather_time):
+                    return canvas
 
         else:
             canvas.Clear()
             canvas = self.draw_weather_no_data(canvas)
             canvas = self.matrix.SwapOnVSync(canvas)
-            time.sleep(display_time)
+            if self.wait_for_display_interrupt(display_time):
+                return canvas
 
         return canvas
 
+    def wait_for_display_interrupt(self, seconds: float) -> bool:
+        """Return True when a command or shutdown interrupts a display wait."""
+        diagnostics = getattr(self, "_diagnostics", None)
+        if diagnostics is not None:
+            diagnostics.progress(expected_wait=seconds)
+        try:
+            return self.display_control.wait(seconds)
+        finally:
+            if diagnostics is not None:
+                diagnostics.progress()
+
+    def what_should_we_display(self) -> tuple[list[DisplayMode], list[int]]:
+        """Prepend a requested mode to the pending rotation."""
+        command = self.display_control.next_command()
+        if not self._remaining_rotation:
+            items, durations = self.scheduled_display()
+            self._remaining_rotation = list(zip(items, durations))
+        command_durations = {"trains": 5, "clock": 30, "weather": 5}
+        if command is not None and command.name in command_durations:
+            duration = next(
+                (duration for mode, duration in self._remaining_rotation if mode.name == command.name),
+                command_durations[command.name],
+            )
+            entry = (command, duration)
+            # Repeated requests restart the current entry without stacking copies.
+            if not self._remaining_rotation or self._remaining_rotation[0] != entry:
+                self._remaining_rotation.insert(0, entry)
+        return (
+            [mode for mode, _ in self._remaining_rotation],
+            [duration for _, duration in self._remaining_rotation],
+        )
+
     @staticmethod
-    def what_should_we_display() -> tuple[list[str], list[int]]:
-        # return ["sports"], [5]
+    def scheduled_display() -> tuple[list[DisplayMode], list[int]]:
+        # return [DisplayMode("sports")], [5]
 
         now = datetime.now(tz=LOCAL_TZ)
         timestamp = now.time()
@@ -1947,13 +2047,18 @@ class RunMatrix(SampleBase):
         if weekday < 5:
             # morning between 7am and 10am
             if dt_time(7, 0) <= timestamp < dt_time(10, 0):
-                return ["trains_uptown", "clock", "weather"], [5, 5, 5]
+                return [DisplayMode("trains_uptown"), DisplayMode("clock"), DisplayMode("weather")], [5, 5, 5]
             # day between 10am and 8pm
             if dt_time(10, 0) <= timestamp < dt_time(20, 0):
-                return ["trains", "clock", "weather"], [5, 10, 5]
+                return [DisplayMode("trains"), DisplayMode("clock"), DisplayMode("weather")], [5, 10, 5]
             # evening after 8pm til midnight
             if timestamp > dt_time(19, 30):
-                return ["clock", "weather", "sports", "seasonal"], [
+                return [
+                    DisplayMode("clock"),
+                    DisplayMode("weather"),
+                    DisplayMode("sports"),
+                    DisplayMode("seasonal"),
+                ], [
                     30,
                     5,
                     MIN_DISPLAY_TIME,
@@ -1961,13 +2066,19 @@ class RunMatrix(SampleBase):
                 ]
 
             # off after midnight
-            return ["off"], [600]
+            return [DisplayMode("off")], [600]
 
         # weekends
         else:
             # all day between 9am and midnight
             if timestamp > dt_time(9, 0):
-                return ["trains", "clock", "weather", "sports", "seasonal"], [
+                return [
+                    DisplayMode("trains"),
+                    DisplayMode("clock"),
+                    DisplayMode("weather"),
+                    DisplayMode("sports"),
+                    DisplayMode("seasonal"),
+                ], [
                     5,
                     30,
                     5,
@@ -1976,45 +2087,73 @@ class RunMatrix(SampleBase):
                 ]
 
             # off after midnight
-            return ["off"], [600]
+            return [DisplayMode("off")], [600]
 
     def run(self) -> None:
+        self._diagnostics = DisplayDiagnostics()
+        print(
+            f"Display stall diagnostics enabled (pid={os.getpid()}, "
+            f"timeout={self._diagnostics.stall_seconds}s; stacks go to stderr)",
+            flush=True,
+        )
+        self._run_rotation()
 
+    def _run_rotation(self) -> None:
         canvas = self.matrix.CreateFrameCanvas()
 
-        graceful_killer = GracefulKiller()
+        graceful_killer = GracefulKiller(self.display_control.interrupt)
+        display_item = None
         while not graceful_killer.kill_now:
             try:
                 display_items, display_times = self.what_should_we_display()
                 for display_item, display_time in zip(display_items, display_times):
                     # break out early if required
-                    if graceful_killer.kill_now:
+                    if (
+                        graceful_killer.kill_now
+                        or self.display_control.interrupt.is_set()
+                    ):
                         break
-                    if display_item == "trains":
-                        canvas = self.display_trains(canvas, display_time=display_time)
-                    elif display_item == "trains_uptown":
-                        canvas = self.display_trains(
-                            canvas, display_time=display_time, uptown_only=True
-                        )
-                    elif display_item == "clock":
-                        canvas = self.display_clock(canvas, display_time=display_time)
-                    elif display_item == "weather":
-                        canvas = self.display_weather(canvas, display_time=display_time)
-                    elif display_item == "sports":
-                        canvas = self.display_sports(canvas, display_time=display_time)
-                    elif display_item == "seasonal":
-                        canvas = self.display_seasonal(
-                            canvas, display_time=display_time
-                        )
-                    else:
-                        # nothing
-                        canvas.Clear()
-                        canvas = self.matrix.SwapOnVSync(canvas)
-                        time.sleep(display_time)  # check again in 10 mins
-            except TypeError as err:
-                LOG.error(f"{err=}")
-            except Exception as err:
-                print(f"Unexpected {err=}, {type(err)=}")
+                    try:
+                        with self._diagnostics.mode(display_item.name):
+                            if display_item.name == "trains":
+                                canvas = self.display_trains(
+                                    canvas,
+                                    display_time=display_time,
+                                    stop_ids=display_item.stop_ids,
+                                )
+                            elif display_item.name == "trains_uptown":
+                                canvas = self.display_trains(
+                                    canvas, display_time=display_time, uptown_only=True
+                                )
+                            elif display_item.name == "clock":
+                                canvas = self.display_clock(
+                                    canvas, display_time=display_time
+                                )
+                            elif display_item.name == "weather":
+                                canvas = self.display_weather(
+                                    canvas, display_time=display_time
+                                )
+                            elif display_item.name == "sports":
+                                canvas = self.display_sports(
+                                    canvas, display_time=display_time
+                                )
+                            elif display_item.name == "seasonal":
+                                canvas = self.display_seasonal(
+                                    canvas, display_time=display_time
+                                )
+                            else:
+                                # nothing
+                                canvas.Clear()
+                                canvas = self.matrix.SwapOnVSync(canvas)
+                                if self.wait_for_display_interrupt(display_time):
+                                    break
+                    except TypeError:
+                        LOG.exception("Display mode TypeError; mode=%s", display_item)
+                    if self.display_control.interrupt.is_set():
+                        break
+                    self._remaining_rotation.pop(0)
+            except Exception:
+                LOG.exception("Display rotation failed; mode=%s", display_item)
                 raise
 
     @staticmethod
@@ -2058,19 +2197,29 @@ def logger_setup(args) -> None:
     if not isinstance(numeric_level, int):
         raise TypeError(f"Invalid log level: {loglevel}")
 
-    # logs to the command (which gets captured if we're a service)
-    logging.basicConfig(
-        level=numeric_level,
-        format="%(asctime)s %(levelname)s:%(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    # Timestamp both streams, including prints and uncaught exception tracebacks.
+    configure_console_logging(numeric_level)
+
+
+def mta_local_time(date_time: datetime) -> datetime:
+    """Convert an NYCT timestamp to New York time, preserving the repeated hour.
+
+    nyct-gtfs returns naive system-local datetimes from datetime.fromtimestamp().
+    astimezone() interprets these in the system timezone and respects their fold
+    flag during the autumn clock change. Already-aware fixture times also work.
+    """
+    return date_time.astimezone(LOCAL_TZ)
 
 
 def mta_arrival_time(train: Any, stop_id: str) -> datetime:
     if train.location_status == "STOPPED_AT" and train.location == stop_id:
         return datetime(9999, 1, 1, 0, 0, 0, tzinfo=LOCAL_TZ)
     return next(
-        (LOCAL_TZ.localize(stu.arrival, is_dst=None) for stu in train.stop_time_updates if stu.stop_id == stop_id),
+        (
+            mta_local_time(stu.arrival)
+            for stu in train.stop_time_updates
+            if stu.stop_id == stop_id
+        ),
         datetime(9999, 1, 1, 0, 0, 0, tzinfo=LOCAL_TZ),
     )
 
@@ -2100,6 +2249,8 @@ def mta_find_next_trains(
 
 
 def mta_get_feeds() -> None | list[NYCTFeed]:
+    if DUMMY_DATA:
+        return [dummy_data.DummyFeed(route, LOCAL_TZ) for route in ("F", "G", "R")]
     import requests
 
     global MTA_FEEDS
@@ -2112,8 +2263,8 @@ def mta_get_feeds() -> None | list[NYCTFeed]:
                 NYCTFeed("R"),
             ]
             MTA_FEEDS = feeds_list
-        except requests.exceptions.ConnectionError as e:
-            LOG.error(f"mta_get_feeds - ConnectionError: {e}")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            LOG.error(f"mta_get_feeds - ConnectionError/Timeout: {e}")
             return None
 
     return MTA_FEEDS
@@ -2138,9 +2289,7 @@ def mta_get_next_trains(max_arrival_mins=25, max_num_trains=9, stop_id="F23N"):
 
 def mta_get_stop_name_and_direction(
     stop_id,
-) -> tuple[
-    Literal["4 Av", "9 St", "?"], Literal["↑", "↓"]
-]:
+) -> tuple[Literal["4 Av", "9 St", "?"], Literal["↑", "↓"]]:
     # stop_id reference here:
     # https://openmobilitydata-data.s3-us-west-1.amazonaws.com/public/feeds/mta/79/20240103/original/stops.txt
 
@@ -2166,7 +2315,8 @@ def mta_update_feeds() -> None:
     # update all feeds at the interval specified
     if (
         MTA_TIMESTAMP is None
-        or (datetime.now(tz=LOCAL_TZ) - MTA_TIMESTAMP).total_seconds() > MTA_REFRESH_RATE
+        or (datetime.now(tz=LOCAL_TZ) - MTA_TIMESTAMP).total_seconds()
+        > MTA_REFRESH_RATE
     ):
         MTA_TIMESTAMP = datetime.now(tz=LOCAL_TZ)
         feeds: None | list[NYCTFeed] = mta_get_feeds()
@@ -2175,8 +2325,11 @@ def mta_update_feeds() -> None:
                 try:
                     feed.refresh()
                     LOG.info(f"mta_update_feeds - feed updated {feed}")
-                except requests.exceptions.ConnectionError as e:
-                    LOG.error(f"mta_update_feeds - ConnectionError: {e}")
+                except (
+                    requests.exceptions.ConnectionError,
+                    requests.exceptions.Timeout,
+                ) as e:
+                    LOG.error(f"mta_update_feeds - ConnectionError/Timeout: {e}")
                 except pb_message.DecodeError as e:
                     LOG.error(f"mta_update_feeds - DecodeError: {e}")
                 except RuntimeError as e:
@@ -2185,7 +2338,9 @@ def mta_update_feeds() -> None:
 
 def owm_forecasts_evening():
     # evening forecast is between 7pm and midnight
-    start_time: datetime = datetime.now(tz=LOCAL_TZ).replace(hour=19, minute=0, second=0)
+    start_time: datetime = datetime.now(tz=LOCAL_TZ).replace(
+        hour=19, minute=0, second=0
+    )
     end_time: datetime = datetime.now(tz=LOCAL_TZ).replace(
         hour=0, minute=0, second=0
     ) + timedelta(days=1)
@@ -2226,20 +2381,23 @@ def owm_forecasts_tomorrow():
 
 
 def owm_get_weather():
+    if DUMMY_DATA:
+        return dummy_data.weather(datetime.now(tz=LOCAL_TZ))
     global OWM_MGR
     global OWM_WEATHER
     global OWM_FORECAST
     global OWN_TIMESTAMP
 
     if OWM_MGR is None:
-        owm: OWM[str] = OWM(os.environ["OWM_API_KEY"])
+        owm: OWM[str] = OWM(os.environ["OWM_API_KEY"], config=weather_config())
         OWM_MGR = owm.weather_manager()
 
     # we only get the weather every 0.5 hours
     if (
         OWM_WEATHER is None
         or OWN_TIMESTAMP is None
-        or (datetime.now(tz=LOCAL_TZ) - OWN_TIMESTAMP).total_seconds() > OWM_REFRESH_RATE
+        or (datetime.now(tz=LOCAL_TZ) - OWN_TIMESTAMP).total_seconds()
+        > OWM_REFRESH_RATE
     ):
         LOG.debug("owm_get_weather - updating weather")
         OWN_TIMESTAMP = datetime.now(tz=LOCAL_TZ)
@@ -2252,12 +2410,12 @@ def owm_get_weather():
             OWM_FORECAST = OWM_MGR.forecast_at_place("New York", "3h")
             LOG.info("owm_get_weather - weather and forecast updated")
         except (
-            requests.exceptions.SSLError, 
-            requests.exceptions.RequestException, 
-            KeyError, 
-            TimeoutError, 
-            TypeError, 
-            ValueError
+            requests.exceptions.SSLError,
+            requests.exceptions.RequestException,
+            KeyError,
+            TimeoutError,
+            TypeError,
+            ValueError,
         ) as e:
             LOG.error(f"owm_get_weather - Failed {type(e)} {e}")
             OWM_WEATHER = None
@@ -2600,6 +2758,17 @@ def parse_args() -> argparse.Namespace:
         help="Log Level: DEBUG, INFO, WARNING, ERROR, CRITICAL",
         default="ERROR",
     )
+    parser.add_argument(
+        "--dummy-data",
+        action="store_true",
+        help="Use local sample data for MTA, OWM, RAPI, and SGO without API requests or keys",
+    )
+    parser.add_argument(
+        "--mqtt",
+        action="store_true",
+        help="Enable MQTT message queue and console reporting",
+    )
+    add_mqtt_arguments(parser)
     parser.set_defaults(drop_privileges=True)
 
     args: argparse.Namespace = parser.parse_args()
@@ -2629,6 +2798,17 @@ def rapi_football_get_games():
 
 
 def rapi_football_get_games_league(league_id, games_last_update):
+    if DUMMY_DATA:
+        games = [
+            GameRAPIFootball(game)
+            for game in dummy_data.football(
+                datetime.now(tz=LOCAL_TZ), league_id, RAPI_FOOTBALL_TEAMS[0]
+            )
+        ]
+        games_last_update.update(
+            {game.id(): datetime.now(tz=LOCAL_TZ) for game in games}
+        )
+        return games, games_last_update
     LOG.debug(f"rapi_football_get_games_league - league_id {league_id}")
 
     now: datetime = datetime.now(tz=LOCAL_TZ)
@@ -2653,11 +2833,11 @@ def rapi_football_get_games_league(league_id, games_last_update):
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
     try:
         response: requests.Response = requests.request(
-            "GET", url, headers=headers, params=querystring
+            "GET", url, headers=headers, params=querystring, timeout=HTTP_TIMEOUT
         )
         data = response.json()
-    except requests.exceptions.ConnectionError as e:
-        LOG.error(f"rapi_football_get_games_league - ConnectionError {e}")
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+        LOG.error(f"rapi_football_get_games_league - ConnectionError/Timeout {e}")
         return [], games_last_update
 
     if response.status_code != 200:
@@ -2707,6 +2887,14 @@ def rapi_rugby_get_games():
 
 
 def rapi_rugby_get_games_league(league_ids, games_last_update):
+    if DUMMY_DATA:
+        games = [
+            GameRAPIRugby(game) for game in dummy_data.rugby(datetime.now(tz=LOCAL_TZ))
+        ]
+        games_last_update.update(
+            {game.id(): datetime.now(tz=LOCAL_TZ) for game in games}
+        )
+        return games, games_last_update
     LOG.debug(f"rapi_rugby_get_games_league - league_ids {league_ids}")
 
     now: datetime = datetime.now(tz=LOCAL_TZ)
@@ -2740,9 +2928,11 @@ def rapi_rugby_get_games_league(league_ids, games_last_update):
         # get all competitions for the day
         url: str = f"https://rugbyapi2.p.rapidapi.com/api/rugby/scheduled-tournaments/{querystring['day']}/{querystring['month']}/{querystring['year']}/page/1"
         try:
-            response: requests.Response = requests.request("GET", url, headers=headers)
-        except requests.exceptions.ConnectionError as e:
-            LOG.error(f"rapi_rugby_get_games_league - ConnectionError {e}")
+            response: requests.Response = requests.request(
+                "GET", url, headers=headers, timeout=HTTP_TIMEOUT
+            )
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            LOG.error(f"rapi_rugby_get_games_league - ConnectionError/Timeout {e}")
             return [], games_last_update
 
         if response.status_code == 204:
@@ -2792,10 +2982,13 @@ def rapi_rugby_get_games_league(league_ids, games_last_update):
             url: str = f"https://rugbyapi2.p.rapidapi.com/api/rugby/tournament/{tournament_id}/schedules/{querystring['day']}/{querystring['month']}/{querystring['year']}"
             try:
                 response: requests.Response = requests.request(
-                    "GET", url, headers=headers
+                    "GET", url, headers=headers, timeout=HTTP_TIMEOUT
                 )
-            except requests.exceptions.ConnectionError as e:
-                LOG.error(f"rapi_rugby_get_games_league - ConnectionError {e}")
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+            ) as e:
+                LOG.error(f"rapi_rugby_get_games_league - ConnectionError/Timeout {e}")
                 return [], games_last_update
 
             if response.status_code == 204:
@@ -2843,6 +3036,8 @@ def rapi_rugby_get_games_league(league_ids, games_last_update):
 
 
 def setup_env() -> None:
+    if DUMMY_DATA:
+        return
     if "SGO_API_KEY" in os.environ:
         return
 
@@ -2860,6 +3055,7 @@ def setup_env() -> None:
             response: requests.Response = requests.get(
                 "https://api.sportsgameodds.com/v2/account/usage",
                 headers={"X-Api-Key": sgo_api_key},
+                timeout=HTTP_TIMEOUT,
             )
             data = response.json()
             if not data["data"]["isActive"]:
@@ -2867,9 +3063,10 @@ def setup_env() -> None:
 
             is_limited = False
             for limit in data["data"]["rateLimits"].values():
-                if isinstance(limit["max-entities"], int) and limit[
-                    "current-entities"
-                ] == limit["max-entities"]:
+                if (
+                    isinstance(limit["max-entities"], int)
+                    and limit["current-entities"] == limit["max-entities"]
+                ):
                     is_limited = True
                     break
 
@@ -2877,8 +3074,8 @@ def setup_env() -> None:
                 os.environ["SGO_API_KEY"] = sgo_api_key
                 break
 
-        except requests.exceptions.ConnectionError:
-            LOG.exception("setup_env - ConnectionError")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            LOG.exception("setup_env - ConnectionError/Timeout")
 
     if "SGO_API_KEY" not in os.environ:
         LOG.error("setup_env - SGO_API_KEY is not found")
@@ -2903,6 +3100,15 @@ def sgo_get_games():
 
 
 def sgo_get_games_league(league_id, games_last_update):
+    if DUMMY_DATA:
+        games = [
+            GameSGO(game)
+            for game in dummy_data.sgo(datetime.now(tz=LOCAL_TZ), league_id)
+        ]
+        games_last_update.update(
+            {game.id(): datetime.now(tz=LOCAL_TZ) for game in games}
+        )
+        return games, games_last_update
     LOG.debug(f"sgo_get_games_league - league_id {league_id}")
 
     now: datetime = datetime.now(tz=LOCAL_TZ)
@@ -2943,6 +3149,7 @@ def sgo_get_games_league(league_id, games_last_update):
                     "limit": 10,
                     "cursor": next_cursor,
                 },
+                timeout=HTTP_TIMEOUT,
             )
 
             if response.status_code == 429:
@@ -2971,8 +3178,8 @@ def sgo_get_games_league(league_id, games_last_update):
             if not next_cursor:
                 break
 
-        except requests.exceptions.ConnectionError as e:
-            LOG.error(f"sgo_get_games_league - ConnectionError {e}")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            LOG.error(f"sgo_get_games_league - ConnectionError/Timeout {e}")
             return [], games_last_update
 
         except requests.exceptions.RequestException as error:
@@ -2996,6 +3203,22 @@ def sgo_get_games_league(league_id, games_last_update):
 def sports_get_games(
     type, games, timestamp, next_refresh, games_last_update, refresh_rate
 ):
+    if DUMMY_DATA:
+        now = datetime.now(tz=LOCAL_TZ)
+        if type == "RAPI_FOOTBALL":
+            games, updates = rapi_football_get_games_league(
+                RAPI_FOOTBALL_PREMIER_LEAGUE_ID, {}
+            )
+        elif type == "RAPI_RUGBY":
+            games, updates = rapi_rugby_get_games_league(RAPI_RUGBY_LEAGUE_NAMES, {})
+        elif type == "SGO":
+            games, updates = [], {}
+            for league in ("MLB", "NHL", "NFL", "MLS"):
+                league_games, updates = sgo_get_games_league(league, updates)
+                games.extend(league_games)
+        else:
+            raise ValueError(f"Unknown sports service: {type}")
+        return games, now, now + timedelta(seconds=refresh_rate), updates
     LOG.debug(f"sports_get_games - type {type}")
 
     if timestamp is not None:
@@ -3137,8 +3360,16 @@ def to_local_tz(date_time: datetime) -> datetime:
 
 
 def main() -> None:
+    global DUMMY_DATA
     args: argparse.Namespace = parse_args()
+    DUMMY_DATA = args.dummy_data
     logger_setup(args)
+
+    if DUMMY_DATA:
+        print(
+            "Dummy data enabled: MTA, OWM, RAPI, and SGO API requests are disabled.",
+            flush=True,
+        )
 
     setup_env()
 
@@ -3147,8 +3378,25 @@ def main() -> None:
         uptown_stop_ids=["F23N", "R33N"],
         args=args,
     )
-    led_display_trains.process()
-
+    mqtt_listener = (
+        MQTTListener(
+            args.mqtt_host,
+            args.mqtt_port,
+            args.mqtt_topic,
+            on_command=led_display_trains.display_control.request,
+            matterbridge=args.matterbridge,
+            matterbridge_topic=args.matterbridge_topic,
+        )
+        if args.mqtt or args.matterbridge
+        else None
+    )
+    try:
+        if mqtt_listener is not None:
+            mqtt_listener.start()
+        led_display_trains.process()
+    finally:
+        if mqtt_listener is not None:
+            mqtt_listener.stop()
 
 
 if __name__ == "__main__":

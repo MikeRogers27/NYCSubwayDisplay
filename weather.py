@@ -3,9 +3,11 @@ from typing import Any
 from pyowm import OWM
 from pyowm.utils import timestamps
 
+from api_clients import weather_config
+
 # ---------- FREE API KEY examples ---------------------
 
-owm: OWM = OWM("09e258070bffcd29e09274a8e3c53ada")
+owm: OWM = OWM("09e258070bffcd29e09274a8e3c53ada", config=weather_config())
 mgr: Any = owm.weather_manager()
 
 
@@ -24,4 +26,3 @@ _ = w.clouds
 # Will it be clear tomorrow at this time in Milan (Italy) ?
 forecast: Any = mgr.forecast_at_place("New York", "3h")
 answer: bool = forecast.will_be_clear_at(timestamps.tomorrow())
-
